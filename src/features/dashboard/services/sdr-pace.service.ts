@@ -24,8 +24,8 @@ export async function fetchSdrIds(supabase: SupabaseClient, orgId: string): Prom
  * Realizado × meta de UM SDR no mês — os 5 volumes da seção "SDR selecionado".
  * Cada número usa a mesma fonte do card equivalente do ranking, então a seção
  * e o ranking nunca divergem:
- *  - Leads Abertos: `fetchLeadsOpenedRows` (RPC `_daily`; 1º toque humano do lead OU
- *    1º toque após nova inscrição em cadência = reabertura; dono do lead);
+ *  - Leads Abertos: `fetchLeadsOpenedRows` (RPC `_daily`; 1º toque humano do lead
+ *    na vida — reabertura não conta; dono do lead);
  *  - Reuniões Marcadas: `fetchScheduledLeadsForRanking` (cada marcação da timeline
  *    no mês, 1 por lead por dia; sem arquivado/deletado; dono do lead);
  *  - Reuniões Realizadas: `meeting_held_at` + `meetingsHeldWindowFilter`;

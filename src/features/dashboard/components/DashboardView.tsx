@@ -155,6 +155,7 @@ export function DashboardView({ data, filters, ranking, insights, responseTime, 
           labelTooltip={
             'Quantos leads tiveram o 1º contato humano neste mês.\n\n' +
             '• Conta uma vez por lead, no mês do primeiro contato (não a cada atividade).\n' +
+            '• Lead que volta para uma cadência (reabertura) não conta de novo.\n' +
             '• Vale qualquer canal humano: e-mail, WhatsApp, telefone, LinkedIn ou pesquisa — fazer a pesquisa do lead já o abre.\n' +
             '• É creditado ao SDR dono do lead.\n\n' +
             'Não conta: notas importadas, leads arquivados, leads sem responsável, e o que não é um contato enviado (abertura, clique, resposta).\n\n' +

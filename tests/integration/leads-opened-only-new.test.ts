@@ -1,11 +1,12 @@
 // @vitest-environment node
 /**
  * Regra de "lead aberto" num Postgres de verdade
- * (migration 20260918121458_leads_opened_count_cadence_reopen.sql).
+ * (migration 20261115033217_leads_opened_only_new_leads.sql).
  *
- * Uma ABERTURA é um toque humano qualificado que seja o 1º do lead na vida OU
- * o 1º depois de uma nova inscrição em cadência (REABERTURA). Os cenários abaixo
- * são escritos à mão, um por regra, para que a expectativa seja óbvia na leitura.
+ * Uma ABERTURA é o 1º toque humano qualificado do lead NA VIDA. Reabertura (1º
+ * toque depois de nova inscrição em cadência) contou de 18/09 a 15/11/2026 e
+ * deixou de contar. Os cenários abaixo são escritos à mão, um por regra, para
+ * que a expectativa seja óbvia na leitura.
  *
  * Reaproveita a fixture e o runner de `statistics-rpcs.test.ts`. Roda só com
  * STATS_TEST_PG_URL apontando para um Postgres LOCAL (superusuário).
@@ -100,7 +101,7 @@ const CENARIOS: Cenario[] = [
     esperadoSetembro: 1,
   },
   {
-    nome: 'lead tocado em maio, reinscrito e tocado em setembro conta de novo (caso Giovani)',
+    nome: 'lead tocado em maio, reinscrito e tocado em setembro NÃO conta (reabertura não conta)',
     lead: 2,
     toques: [
       [MAI(10), 'research', 'sent', CAD1],
@@ -110,7 +111,7 @@ const CENARIOS: Cenario[] = [
       [MAI(9), CAD1],
       [SET(8), CAD2],
     ],
-    esperadoSetembro: 1,
+    esperadoSetembro: 0,
   },
   {
     nome: 'lead tocado em maio e tocado de novo em setembro SEM reinscrição não conta',
@@ -123,16 +124,14 @@ const CENARIOS: Cenario[] = [
     esperadoSetembro: 0,
   },
   {
-    nome: 'mesmo toque pelos dois caminhos com cadências diferentes conta 1 vez só',
+    nome: '1º toque sem cadência no mesmo instante da inscrição conta 1 vez só',
     lead: 4,
-    // 1º toque da vida tem cadence_id NULL; a inscrição aponta CAD1. Sem o
-    // DISTINCT na função, este lead contaria 2x.
     toques: [[SET(4), 'phone', 'sent', null]],
     inscricoes: [[SET(4), CAD1]],
     esperadoSetembro: 1,
   },
   {
-    nome: 'duas reinscrições no mesmo mês contam 2 aberturas',
+    nome: 'duas inscrições no mesmo mês contam 1 abertura só',
     lead: 5,
     toques: [
       [SET(2), 'phone', 'sent', CAD1],
@@ -142,7 +141,7 @@ const CENARIOS: Cenario[] = [
       [SET(1), CAD1],
       [SET(19), CAD2],
     ],
-    esperadoSetembro: 2,
+    esperadoSetembro: 1,
   },
   {
     nome: 'nota importada não abre lead',
@@ -180,7 +179,7 @@ const CENARIOS: Cenario[] = [
 
 const ESPERADO_SETEMBRO = CENARIOS.reduce((a, c) => a + c.esperadoSetembro, 0);
 
-describe.skipIf(!RUN)('regra de lead aberto (abertura + reabertura) num Postgres de verdade', () => {
+describe.skipIf(!RUN)('regra de lead aberto (só lead novo) num Postgres de verdade', () => {
   beforeAll(() => {
     psqlOrThrow('postgres', `create database ${DB};`);
     const schema = fs.readFileSync(
@@ -246,11 +245,12 @@ describe.skipIf(!RUN)('regra de lead aberto (abertura + reabertura) num Postgres
     psql('postgres', `drop database if exists ${DB} with (force);`);
   });
 
-  it('aplica as migrations da regra nova', () => {
+  it('aplica as migrations da regra (inclusive a de só lead novo)', () => {
     expect(MIGRATIONS.map((f) => path.basename(f))).toEqual(
       expect.arrayContaining([
         '20260918121458_leads_opened_count_cadence_reopen.sql',
         '20260918122225_leads_opened_events_grant_service_role.sql',
+        '20261115033217_leads_opened_only_new_leads.sql',
       ]),
     );
   });
@@ -297,21 +297,23 @@ describe.skipIf(!RUN)('regra de lead aberto (abertura + reabertura) num Postgres
     expect(Number(out)).toBe(ESPERADO_SETEMBRO);
   });
 
-  it('o filtro de cadência considera a cadência da inscrição que reabriu', () => {
-    // Lead 2 reabriu pela CAD2 em setembro; filtrar por CAD2 mantém, por CAD1 remove.
-    const comCad = (cad: string) =>
+  it('o filtro de cadência considera a cadência do 1º toque do lead', () => {
+    // Lead 1 foi aberto por um toque da CAD1 em setembro; lead 2 foi reinscrito
+    // na CAD2 em setembro, mas reabertura não conta em cadência nenhuma.
+    const comCad = (n: number, cad: string) =>
       Number(
         psqlOrThrow(
           DB,
           `begin; set local role service_role;
            select count(*) from public.leads_opened_events('${ORG}'::uuid, array['${cad}']::uuid[]) e
-           where e.lead_id = '${lead(2)}'::uuid
+           where e.lead_id = '${lead(n)}'::uuid
              and e.opened_at >= '${SET_START}' and e.opened_at < '${SET_END}';
            rollback;`,
         ),
       );
-    expect(comCad(CAD2)).toBe(1);
-    expect(comCad(CAD1)).toBe(0);
+    expect(comCad(1, CAD1)).toBe(1);
+    expect(comCad(1, CAD2)).toBe(0);
+    expect(comCad(2, CAD2)).toBe(0);
   });
 
   // Pós-auditoria SECURITY DEFINER de 09/09/2026, estas funções saíram da
