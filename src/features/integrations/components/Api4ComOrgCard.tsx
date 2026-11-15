@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Check, Key, Pencil, RefreshCw, Unplug, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Key, Pencil, RefreshCw, Unplug, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -168,6 +168,8 @@ export function Api4ComOrgCard({ overview, standalone = false }: Api4ComOrgCardP
   const [showDisconnect, setShowDisconnect] = useState(false);
   const [pending, setPending] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
+  // Lista do time começa minimizada; abre ao clicar no resumo "X de Y prontos".
+  const [expanded, setExpanded] = useState(false);
 
   const { settings, team } = overview;
   const readyCount = team.filter((m) => memberState(m) === 'ready').length;
@@ -265,7 +267,14 @@ export function Api4ComOrgCard({ overview, standalone = false }: Api4ComOrgCardP
       </div>
 
       {settings.configured && team.length > 0 && (
-        <p className="mt-3 text-xs">
+        <button
+          type="button"
+          className="mt-3 inline-flex items-center gap-1 text-left text-xs hover:underline"
+          aria-expanded={expanded}
+          aria-controls="api4com-team-table"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           <span className="font-medium">
             {readyCount} de {team.length} prontos para ligar
           </span>
@@ -275,7 +284,10 @@ export function Api4ComOrgCard({ overview, standalone = false }: Api4ComOrgCardP
               · {attentionCount} sem ramal ou faltando sincronizar
             </span>
           )}
-        </p>
+          <span className="ml-1 text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+            · {expanded ? 'Ocultar equipe' : 'Ver equipe'}
+          </span>
+        </button>
       )}
 
       {pending.length > 0 && (
@@ -286,8 +298,8 @@ export function Api4ComOrgCard({ overview, standalone = false }: Api4ComOrgCardP
         </ul>
       )}
 
-      {settings.configured && team.length > 0 && (
-        <table className="mt-3 w-full text-xs">
+      {settings.configured && team.length > 0 && expanded && (
+        <table id="api4com-team-table" className="mt-3 w-full text-xs">
           <thead>
             <tr className="text-left text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               <th className="py-1 pr-3 font-medium">Pessoa</th>

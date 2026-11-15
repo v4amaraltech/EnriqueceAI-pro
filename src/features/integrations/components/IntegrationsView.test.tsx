@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Api4ComConnectionSafe, Api4ComOrgOverview, CalendarConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
@@ -298,6 +298,9 @@ describe('IntegrationsView', () => {
     expect(screen.queryByText(/Ramal 1014/)).not.toBeInTheDocument();
     expect(screen.queryByText('Gerenciar')).not.toBeInTheDocument();
     expect(screen.getByText('1 de 3 prontos para ligar')).toBeInTheDocument();
+    // Começa minimizado: a tabela do time só aparece ao clicar no resumo.
+    expect(screen.queryByText('Pronto')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /prontos para ligar/ }));
     expect(screen.getByText('Pronto')).toBeInTheDocument();
     expect(screen.getByText('Sem ramal')).toBeInTheDocument();
     expect(screen.getByText('Falta sincronizar')).toBeInTheDocument();
