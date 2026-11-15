@@ -17,6 +17,33 @@ const filtersSchema = z.object({
 
 export type FetchCadencesFilters = z.input<typeof filtersSchema>;
 
+type CadenceRow = {
+  id: string;
+  name: string;
+  origin: string | null;
+  total_steps: number;
+  priority: string | null;
+  created_by: string | null;
+  executor: string | null;
+};
+
+/**
+ * Cadences an SDR may enroll leads into from "Iniciar novos leads":
+ * the ones they created plus team cadences (created by a manager, or with no
+ * creator recorded). BDR IA cadences are never shown to SDRs.
+ */
+function filterCadencesForSdr(
+  cadences: CadenceRow[],
+  userId: string,
+  managerIds: Set<string>,
+): CadenceRow[] {
+  return cadences.filter((c) => {
+    if (c.executor === 'bdr_ai') return false;
+    if (!c.created_by) return true;
+    return c.created_by === userId || managerIds.has(c.created_by);
+  });
+}
+
 /**
  * Builds a PostgREST .or() expression matching the selected canais.
  * NO_SUB_ORIGIN matches leads with canal null or empty string.
@@ -86,20 +113,26 @@ export async function fetchCadencesWithAvailability(
 
   try {
     // 1. Get active cadences
-    const { data: cadences } = (await from(supabase, 'cadences')
-      .select('id, name, origin, total_steps, priority')
+    const { data: allCadences } = (await from(supabase, 'cadences')
+      .select('id, name, origin, total_steps, priority, created_by, executor')
       .eq('org_id', orgId)
       .eq('status', 'active')
       .is('deleted_at', null)
       .order('name')) as {
-      data: Array<{
-        id: string;
-        name: string;
-        origin: string | null;
-        total_steps: number;
-        priority: string | null;
-      }> | null;
+      data: CadenceRow[] | null;
     };
+
+    // SDRs only see their own cadences plus the team ones (created by a
+    // manager). BDR IA cadences and cadences created by other SDRs are hidden.
+    let cadences = allCadences;
+    if (!isManager && allCadences && allCadences.length > 0) {
+      const { data: managerRows } = (await from(supabase, 'organization_members')
+        .select('user_id')
+        .eq('org_id', orgId)
+        .eq('role', 'manager')) as { data: Array<{ user_id: string }> | null };
+      const managerIds = new Set((managerRows ?? []).map((r) => r.user_id));
+      cadences = filterCadencesForSdr(allCadences, userId, managerIds);
+    }
 
     if (!cadences || cadences.length === 0) {
       return {
