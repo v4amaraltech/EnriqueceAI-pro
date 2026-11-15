@@ -1,6 +1,15 @@
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import {
+  evaluateFlagRow,
+  flagRowHasAnyScope,
+  type FlagRow,
+  type FlagScope,
+} from '../../../../supabase/functions/_shared/flag-scope';
+
+export { evaluateFlagRow, flagRowHasAnyScope, type FlagRow, type FlagScope };
+
 /**
  * Leitura unica de flags do motor com escopo opcional (PR12).
  *
@@ -19,45 +28,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
  * completa limpa as listas (ver docs/runbooks/motor-contato-piloto.md).
  */
 
-export interface FlagScope {
-  orgId?: string | null;
-  userId?: string | null;
-}
-
 export type FlagState = 'on' | 'off' | 'error';
-
-export interface FlagRow {
-  enabled: boolean;
-  allow_org_ids?: string[] | null;
-  allow_user_ids?: string[] | null;
-}
-
-function normalizeIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((v): v is string => typeof v === 'string' && v.length > 0)
-    .map((v) => v.toLowerCase());
-}
-
-/** Decisao pura: a linha da flag vale como ligada para este escopo? */
-export function evaluateFlagRow(row: FlagRow | null | undefined, scope?: FlagScope): boolean {
-  if (!row) return false;
-  if (row.enabled === true) return true;
-  const orgId = scope?.orgId ? scope.orgId.toLowerCase() : null;
-  if (!orgId) return false;
-  if (!normalizeIds(row.allow_org_ids).includes(orgId)) return false;
-  const users = normalizeIds(row.allow_user_ids);
-  if (users.length === 0) return true;
-  const userId = scope?.userId ? scope.userId.toLowerCase() : null;
-  if (!userId) return true;
-  return users.includes(userId);
-}
-
-/** A flag pode estar ligada para alguem (global ou alguma lista)? Usado como portao barato de ciclos. */
-export function flagRowHasAnyScope(row: FlagRow | null | undefined): boolean {
-  if (!row) return false;
-  return row.enabled === true || normalizeIds(row.allow_org_ids).length > 0;
-}
 
 type RowsResult = { data: FlagRow[] | null; error?: { message: string } | null };
 

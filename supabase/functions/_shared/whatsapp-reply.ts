@@ -5,6 +5,7 @@
 // Meta path (src/app/api/webhooks/whatsapp/route.ts::processIncomingMessage):
 // record a 'replied' interaction, stop the lead's active cadences, and notify the
 // owning SDR (which also chimes client-side — 'whatsapp_reply' is a sound type).
+import { evaluateFlagRow, type FlagRow } from './flag-scope.ts';
 import { supabaseAdmin } from './supabase-admin.ts';
 
 import { type InboundReply, leadPhoneMatches, localPhoneVariants } from './evolution-events.ts';
@@ -33,16 +34,11 @@ export async function captureInboundReply(
   orgId: string,
   reply: InboundReply,
 ): Promise<ReplyCaptureResult> {
-  // Kill switch (app_flags, sem deploy). Nunca funcionou em prod até 04/10/2026
-  // (org errada + coluna errada); ligar muda o comportamento das cadências —
-  // resposta no WhatsApp passa a parar TODAS as inscrições ativas do lead e a
-  // notificar o SDR. Sem a linha = desligado.
-  const { data: flag } = await supabaseAdmin
-    .from('app_flags')
-    .select('enabled')
-    .eq('key', REPLY_CAPTURE_FLAG)
-    .maybeSingle();
-  if (!flag?.enabled) return { status: 'disabled' };
+  // Kill switch (app_flags, sem deploy). A decisão é a mesma do app:
+  // enabled=true liga para todos; enabled=false liga só para as orgs em
+  // allow_org_ids. Sem a linha, ou com erro de leitura, fica desligado.
+  const flag = await readReplyCaptureFlag();
+  if (!evaluateFlagRow(flag, { orgId })) return { status: 'disabled' };
 
   // Lead first: most inbound messages are not from leads, and the duplicate
   // check below is scoped to the leads (cheap) instead of scanning interactions.
@@ -166,4 +162,21 @@ export async function captureInboundReply(
   }
 
   return { status: 'recorded', leadId: lead.id };
+}
+
+async function readReplyCaptureFlag(): Promise<FlagRow | null> {
+  const scoped = await supabaseAdmin
+    .from('app_flags')
+    .select('enabled, allow_org_ids, allow_user_ids')
+    .eq('key', REPLY_CAPTURE_FLAG)
+    .maybeSingle();
+  if (!scoped.error) return (scoped.data as FlagRow | null) ?? null;
+
+  const plain = await supabaseAdmin
+    .from('app_flags')
+    .select('enabled')
+    .eq('key', REPLY_CAPTURE_FLAG)
+    .maybeSingle();
+  if (plain.error) return null;
+  return (plain.data as FlagRow | null) ?? null;
 }
