@@ -14,6 +14,7 @@ import { logLeadEvent, logLeadEventBulk } from '@/features/leads/actions/log-lea
 
 import { createCadenceSchema, createCadenceStepSchema, updateCadenceSchema } from '../cadence.schemas';
 import type { CadenceRow, CadenceStepRow } from '../types';
+import { skippedEnrollError } from '../utils/enroll-skip-format';
 
 export async function createCadence(
   input: Record<string, unknown>,
@@ -315,10 +316,30 @@ export async function duplicateCadence(
   return { success: true, data: newCadence };
 }
 
+/** Cadências que rodam em paralelo a outra por desenho (E-mail auto, BDR IA). */
+function runsInParallel(cadence: { type?: string | null; executor?: string | null } | null | undefined): boolean {
+  return cadence?.type === 'auto_email' || cadence?.executor === 'bdr_ai';
+}
+
+const ENROLL_CONFLICT_CHUNK = 200;
+
 export async function enrollLeads(
   cadenceId: string,
   leadIds: string[],
   initialStatus: 'active' | 'paused' = 'active',
+): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
+  return enrollLeadsInternal(cadenceId, leadIds, initialStatus, false);
+}
+
+/**
+ * `skipConflictCheck` só é usado pelo "Trocar cadência", que já encerrou todas
+ * as inscrições abertas do lead antes de inscrever.
+ */
+async function enrollLeadsInternal(
+  cadenceId: string,
+  leadIds: string[],
+  initialStatus: 'active' | 'paused',
+  skipConflictCheck: boolean,
 ): Promise<ActionResult<{ enrolled: number; errors: string[] }>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
@@ -326,11 +347,13 @@ export async function enrollLeads(
 
   // Verify cadence is active
   const { data: cadence } = (await from(supabase, 'cadences')
-    .select('id, name, status')
+    .select('id, name, status, type, executor')
     .eq('id', cadenceId)
     .eq('org_id', orgId)
     .is('deleted_at', null)
-    .single()) as { data: { id: string; name: string; status: string } | null };
+    .single()) as {
+    data: { id: string; name: string; status: string; type?: string | null; executor?: string | null } | null;
+  };
 
   if (!cadence) {
     return { success: false, error: 'Cadência não encontrada' };
@@ -350,9 +373,44 @@ export async function enrollLeads(
     .in('id', leadIds)) as { data: { id: string }[] | null };
   const ownLeadIds = new Set((ownLeads ?? []).map((l) => l.id));
 
+  // Lead já aberto em OUTRA cadência (active/paused) não entra numa segunda,
+  // salvo se uma das duas roda em paralelo por desenho (auto_email / bdr_ai).
+  const blockedBy = new Map<string, string>();
+  if (!skipConflictCheck && !runsInParallel(cadence)) {
+    const ids = leadIds.filter((id) => ownLeadIds.has(id));
+    for (let i = 0; i < ids.length; i += ENROLL_CONFLICT_CHUNK) {
+      const { data: open, error: openErr } = (await from(supabase, 'cadence_enrollments')
+        .select('lead_id, cadence_id, cadence:cadences(name, type, executor, deleted_at)')
+        .eq('org_id', orgId)
+        .in('lead_id', ids.slice(i, i + ENROLL_CONFLICT_CHUNK))
+        .in('status', ['active', 'paused'])) as {
+        data: Array<{
+          lead_id: string;
+          cadence_id: string;
+          cadence: { name: string; type?: string | null; executor?: string | null; deleted_at?: string | null } | null;
+        }> | null;
+        error: unknown;
+      };
+      if (openErr) {
+        // Falha fechada: sem saber onde o lead está, não inscreve ninguém.
+        console.error('[enrollLeads] Failed to check current enrollments:', openErr);
+        return { success: false, error: 'Não foi possível checar as cadências atuais dos leads. Tente de novo.' };
+      }
+      for (const row of open ?? []) {
+        if (row.cadence_id === cadenceId || !row.cadence || row.cadence.deleted_at || runsInParallel(row.cadence)) continue;
+        if (!blockedBy.has(row.lead_id)) blockedBy.set(row.lead_id, row.cadence.name);
+      }
+    }
+  }
+
   for (const leadId of leadIds) {
     if (!ownLeadIds.has(leadId)) {
       errors.push(`Lead ${leadId}: não encontrado`);
+      continue;
+    }
+    const otherCadence = blockedBy.get(leadId);
+    if (otherCadence) {
+      errors.push(skippedEnrollError(leadId, otherCadence));
       continue;
     }
     // Complete any existing active/paused enrollment for this lead in this cadence
@@ -490,5 +548,5 @@ export async function switchLeadsCadence(
   }
 
   // Now enroll in the target cadence
-  return enrollLeads(targetCadenceId, leadIds);
+  return enrollLeadsInternal(targetCadenceId, leadIds, 'active', true);
 }

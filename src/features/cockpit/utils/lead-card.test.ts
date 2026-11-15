@@ -111,7 +111,19 @@ describe('cartão do lead', () => {
     expect(openingLine('Deixou de responder', 'Willian')).toBe(
       'Willian, parece que a conversa com a V4 ficou parada no meio do caminho. Seria um problema retomarmos em 2 minutos?',
     );
-    expect(openingLine('  Nunca   Respondeu ', 'Ana')).toContain('Ana, a gente tentou falar');
+    expect(openingLine('  Nunca   Respondeu ', 'Ana')).toBe(
+      'Ana, você deixou seu contato com a V4 um tempo atrás. O que estava buscando resolver no marketing naquela época?',
+    );
+    expect(openingLine('Sem interesse', 'Ana')).toBe(
+      'Ana, parece que da última vez não era o momento. O que mudou por aí desde então?',
+    );
+    expect(openingLine('Sem budget', 'Ana')).toBe(
+      'Ana, me parece que o orçamento foi o que travou da última vez. Como está esse cenário hoje?',
+    );
+    expect(openingLine('Sem necessidade', 'Ana')).toBe(
+      'Ana, parece que vocês já resolveram o marketing por outro caminho. Como está o resultado disso hoje?',
+    );
+    expect(openingLine('Sem budget', null)).toMatch(/^Me parece que o orçamento/);
     expect(openingLine('Não ICP', null)).toMatch(/^A gente entendeu/);
     expect(openingLine('Blocklist', 'Ana')).toBeNull();
     expect(openingLine('SPAM', 'Ana')).toBeNull();
