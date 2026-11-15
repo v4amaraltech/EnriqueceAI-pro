@@ -93,6 +93,35 @@ describe('POST /api/webhooks/external-step', () => {
     expect(mockLost).toHaveBeenCalledWith({ orgId: ORG, leadId: 'l1', cadenceId: 'c1', enrollmentId: 'e1' });
   });
 
+  it('telefone inválido numa cadência com e-mail → 200, passo pulado, sem Perdido nem cadence_completed', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ ...baseRow, motivo: 'aplicado_pulado_telefone_invalido', interaction_id: 'i1', advanced: true, completed: false, new_step: 4 }],
+      error: null,
+    });
+    const res = await POST(req({ evento: 'chamada_falhou', event_id: EVENT, execution_id: EXEC, motivo: 'telefone_invalido' }));
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(res.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.aplicado).toBe(true);
+    expect(json.motivo).toBe('aplicado_pulado_telefone_invalido');
+    expect(json.new_step).toBe(4);
+    expect(mockLog).not.toHaveBeenCalled();
+    expect(mockLost).not.toHaveBeenCalled();
+  });
+
+  it('telefone inválido sem outro canal adiante → 200 encerrado, sem Perdido (completed=false de propósito)', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ ...baseRow, motivo: 'aplicado_encerrado_telefone_invalido', advanced: false, completed: false, new_step: null }],
+      error: null,
+    });
+    const res = await POST(req({ evento: 'chamada_falhou', event_id: EVENT, execution_id: EXEC, motivo: 'telefone_invalido' }));
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(res.status).toBe(200);
+    expect(json.motivo).toBe('aplicado_encerrado_telefone_invalido');
+    expect(mockLog).not.toHaveBeenCalled();
+    expect(mockLost).not.toHaveBeenCalled();
+  });
+
   it('erro na RPC → 500 (o chamador reenvia; a idempotência segura a repetição)', async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'boom' } });
     const res = await POST(req({ evento: 'chamada_finalizada', event_id: EVENT, execution_id: EXEC }));
