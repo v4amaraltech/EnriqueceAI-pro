@@ -19,12 +19,18 @@ const MODES = [
     label: 'Apenas seus leads',
     description: 'Cada membro só vê os leads atribuídos a ele.',
   },
-  {
-    value: 'team' as const,
-    label: 'Por equipe',
-    description: 'Membros veem apenas leads da sua equipe.',
-  },
 ] as const;
+
+// "Por equipe" não existe de fato: não há times no sistema, e o RLS de `leads`
+// trata `team` igual a `own` (só vê o lead quem é o `assigned_to`). Por isso a
+// opção não é oferecida. Só aparece se a organização JÁ estiver nesse modo, para
+// o gestor enxergar o estado atual e poder sair dele.
+const LEGACY_TEAM_MODE = {
+  value: 'team' as const,
+  label: 'Por equipe (indisponível)',
+  description:
+    'Esta opção não funciona como equipe: hoje equivale a "Apenas seus leads". Escolha uma das opções acima.',
+};
 
 interface LeadAccessSettingsProps {
   initialMode: 'all' | 'own' | 'team';
@@ -33,6 +39,7 @@ interface LeadAccessSettingsProps {
 export function LeadAccessSettings({ initialMode }: LeadAccessSettingsProps) {
   const [mode, setMode] = useState<'all' | 'own' | 'team'>(initialMode);
   const [isPending, startTransition] = useTransition();
+  const modes = initialMode === 'team' ? [...MODES, LEGACY_TEAM_MODE] : MODES;
 
   function handleSave() {
     startTransition(async () => {
@@ -55,7 +62,7 @@ export function LeadAccessSettings({ initialMode }: LeadAccessSettingsProps) {
       </div>
 
       <div className="space-y-3">
-        {MODES.map((m) => (
+        {modes.map((m) => (
           <label
             key={m.value}
             className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
