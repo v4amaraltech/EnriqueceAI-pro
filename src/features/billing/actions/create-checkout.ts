@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import type Stripe from 'stripe';
 
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
@@ -22,9 +23,17 @@ export async function createCheckoutSession(
 
   // Get the plan to find its Stripe price
   const { data: plan } = (await from(supabase, 'plans')
-    .select('id, name, slug, price_cents')
+    .select('id, name, slug, price_cents, stripe_price_id')
     .eq('id', planId)
-    .single()) as { data: { id: string; name: string; slug: string; price_cents: number } | null };
+    .single()) as {
+    data: {
+      id: string;
+      name: string;
+      slug: string;
+      price_cents: number;
+      stripe_price_id: string | null;
+    } | null;
+  };
 
   if (!plan) {
     return { success: false, error: 'Plano não encontrado' };
@@ -81,12 +90,23 @@ export async function createCheckoutSession(
     }
   }
 
-  // Create checkout session
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: 'subscription',
-    line_items: [
-      {
+  // Price do catálogo quando existir; senão, price_data inline.
+  //
+  // O inline cria um Product + Price NOVOS na Stripe a cada checkout, o que
+  // suja o catálogo e inutiliza os relatórios por produto. Com o Price de
+  // catálogo, o `price_id` também passa a resolver o plano no webhook sem
+  // depender do metadata.
+  //
+  // O fallback não é temporário: cobre o plano Internal (sem cobrança) e
+  // qualquer plano que ainda não tenha Price de catálogo gravado.
+  //
+  // Atenção: o fallback depende só de `stripe_price_id` estar nulo, não do
+  // modo da chave. Um Price de produção gravado com a chave de teste faz o
+  // `sessions.create` falhar com "No such price". Os Prices cadastrados
+  // precisam ser recorrentes, mensais e em BRL (mode: 'subscription').
+  const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = plan.stripe_price_id
+    ? { price: plan.stripe_price_id, quantity: 1 }
+    : {
         price_data: {
           currency: 'brl',
           product_data: {
@@ -97,8 +117,13 @@ export async function createCheckoutSession(
           recurring: { interval: 'month' },
         },
         quantity: 1,
-      },
-    ],
+      };
+
+  // Create checkout session
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    mode: 'subscription',
+    line_items: [lineItem],
     metadata: {
       org_id: org.id,
       plan_id: plan.id,
