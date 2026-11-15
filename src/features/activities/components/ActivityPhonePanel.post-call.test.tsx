@@ -99,6 +99,11 @@ async function finishCall(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole('button', { name: 'Encerrar ligação' });
   await user.click(screen.getByRole('button', { name: 'Encerrar ligação' }));
   await screen.findByRole('dialog', { name: /Resultado da Ligação/ });
+  // O diálogo abre enquanto a transição do encerramento ainda está pendente, e
+  // nesse intervalo o modal desabilita os desfechos e o "Concluir" (`isSending`).
+  // Sem esperar, um clique logo em seguida cai num controle desabilitado e é
+  // ignorado — a tela fica no desfecho padrão. Só falhava com a máquina cheia.
+  await waitFor(() => expect(screen.getByRole('button', { name: /Concluir atividade/ })).toBeEnabled());
 }
 
 describe('ActivityPhonePanel pós-ligação no cockpit', () => {
