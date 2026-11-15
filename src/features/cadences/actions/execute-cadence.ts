@@ -18,6 +18,16 @@ import { createNotification } from '@/features/notifications/services/notificati
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { markLeadLostOnCadenceEnd } from '../services/cadence-end-loss.service';
+import {
+  MIXED_AUTO_EMAIL_FLAG,
+  isMixedAutoEmailCadence,
+  mailboxAtDailyCap,
+  mailboxDailyCap,
+  mixedAutoEmailScopeFromFlag,
+  orgAllowsMixedAutoEmail,
+  pickDueMixedEmailEnrollments,
+  startOfBrtDay,
+} from '../services/mixed-auto-email.service';
 import { skipEmailStepsForBouncedLeads, skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
@@ -176,6 +186,7 @@ interface EnrollmentWithLead {
     name: string;
     type: string;
     created_by: string | null;
+    executor?: string | null;
   };
 }
 
@@ -274,7 +285,7 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   await skipEmailStepsForBouncedLeads(supabase);
 
   // Fetch active enrollments that are due — join cadences to ensure cadence is active too
-  const { data: enrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
+  const { data: autoEmailEnrollments, error: enrollError } = (await from(supabase, 'cadence_enrollments')
     .select('*, lead:leads(*), cadence:cadences!inner(status, name, type, created_by)')
     .eq('status', 'active')
     .eq('cadence.status', 'active')
@@ -289,6 +300,40 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   const qErr = handleQueryError(enrollError, 'Erro ao buscar enrollments pendentes', 'cadence-engine');
   if (qErr) return qErr;
 
+  // Cadência standard (mista): o e-mail automático só entra com a flag da org.
+  // Com a flag desligada, este bloco não busca nada e o motor fica idêntico.
+  const { data: mixedFlag, error: mixedFlagErr } = (await from(supabase, 'app_flags')
+    .select('enabled, allow_org_ids, allow_user_ids')
+    .eq('key', MIXED_AUTO_EMAIL_FLAG)
+    .maybeSingle()) as { data: { enabled: boolean; allow_org_ids?: string[] | null; allow_user_ids?: string[] | null } | null; error: { message: string } | null };
+  const mixedScope = mixedAutoEmailScopeFromFlag(mixedFlagErr ? null : mixedFlag);
+
+  let mixedCandidates: EnrollmentWithLead[] = [];
+  if (mixedScope.kind !== 'none') {
+    let mixedQuery = from(supabase, 'cadence_enrollments')
+      .select('*, lead:leads!inner(*), cadence:cadences!inner(status, name, type, created_by, executor)')
+      .eq('status', 'active')
+      .eq('cadence.status', 'active')
+      .eq('cadence.type', 'standard')
+      .neq('cadence.executor', 'bdr_ai')
+      .not('next_step_due', 'is', null)
+      .lte('next_step_due', new Date().toISOString())
+      .order('next_step_due', { ascending: true })
+      .limit(BATCH_SIZE);
+    if (mixedScope.kind === 'orgs') {
+      mixedQuery = mixedQuery.in('lead.org_id', mixedScope.orgIds);
+    }
+    const { data: mixedRows, error: mixedErr } = (await mixedQuery) as {
+      data: EnrollmentWithLead[] | null;
+      error: { message: string } | null;
+    };
+    if (mixedErr) {
+      console.error('[cadence-engine] Failed to fetch mixed auto-email enrollments:', mixedErr.message);
+    } else {
+      mixedCandidates = mixedRows ?? [];
+    }
+  }
+
   const result: ExecutionResult = {
     processed: 0,
     sent: 0,
@@ -298,16 +343,16 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
     errors: [],
   };
 
-  console.warn(`[cadence-engine] Found ${enrollments?.length ?? 0} due enrollments`);
+  const pendingCandidates = [...(autoEmailEnrollments ?? []), ...mixedCandidates];
 
   // Load blacklisted email domains for all orgs in this batch
-  const orgIds = [...new Set((enrollments ?? []).map((e) => e.lead.org_id))];
+  const orgIds = [...new Set(pendingCandidates.map((e) => e.lead.org_id))];
   const blacklistedDomains = new Set<string>();
   const suppressedEmails = new Set<string>(); // M9: `${org_id}:${lower(email)}` unsubscribed
 
   // Pre-fetch every cadence step for the batch's cadences in one query.
   // Avoids the N+1 of fetching the current step per enrollment inside the loop.
-  const cadenceIdsInBatch = [...new Set((enrollments ?? []).map((e) => e.cadence_id))];
+  const cadenceIdsInBatch = [...new Set(pendingCandidates.map((e) => e.cadence_id))];
   const stepsByCadence = new Map<string, Map<number, CadenceStepRow>>();
   if (cadenceIdsInBatch.length > 0) {
     const { data: allSteps } = (await from(supabase, 'cadence_steps')
@@ -322,6 +367,25 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       bucket.set(s.step_order, s);
     }
   }
+
+  const emailStepOrders = new Map<string, Set<number>>();
+  for (const [cadenceId, steps] of stepsByCadence) {
+    const orders = new Set<number>();
+    for (const step of steps.values()) {
+      if (step.channel === 'email') orders.add(step.step_order);
+    }
+    if (orders.size > 0) emailStepOrders.set(cadenceId, orders);
+  }
+  const mixedEnrollments = pickDueMixedEmailEnrollments(mixedCandidates, emailStepOrders, mixedScope);
+  const seenEnrollmentIds = new Set((autoEmailEnrollments ?? []).map((e) => e.id));
+  const enrollments: EnrollmentWithLead[] = [...(autoEmailEnrollments ?? [])];
+  for (const row of mixedEnrollments) {
+    if (seenEnrollmentIds.has(row.id)) continue;
+    seenEnrollmentIds.add(row.id);
+    enrollments.push(row);
+  }
+  console.warn(`[cadence-engine] Found ${enrollments.length} due enrollments`);
+
   if (orgIds.length > 0) {
     const { data: blacklistRows } = (await from(supabase, 'email_blacklist')
       .select('domain, org_id')
@@ -344,12 +408,52 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // do seu próprio SDR e as RESPOSTAS voltam pra caixa dele — não pra do criador.
   // Pré-carrega os Gmails conectados dos orgs do lote (evita N+1 no loop).
   const connectedGmailKeys = new Set<string>(); // `${org_id}:${user_id}`
+  const mailboxByKey = new Map<string, { daily_cap: number | null; paused_reason: string | null; created_at: string | null }>();
+  const mailboxSentToday = new Map<string, number>();
   if (orgIds.length > 0) {
     const { data: gmailRows } = (await from(supabase, 'gmail_connections')
-      .select('org_id, user_id')
+      .select('org_id, user_id, daily_cap, paused_reason, created_at')
       .eq('status', 'connected')
-      .in('org_id', orgIds)) as { data: Array<{ org_id: string; user_id: string }> | null };
-    for (const g of gmailRows ?? []) connectedGmailKeys.add(`${g.org_id}:${g.user_id}`);
+      .in('org_id', orgIds)) as {
+        data: Array<{
+          org_id: string;
+          user_id: string;
+          daily_cap: number | null;
+          paused_reason: string | null;
+          created_at: string;
+        }> | null;
+      };
+    for (const g of gmailRows ?? []) {
+      const key = `${g.org_id}:${g.user_id}`;
+      connectedGmailKeys.add(key);
+      mailboxByKey.set(key, {
+        daily_cap: g.daily_cap,
+        paused_reason: g.paused_reason,
+        created_at: g.created_at,
+      });
+    }
+
+    // Teto diário só entra no caminho da cadência mista, para não mudar o auto_email.
+    if (mixedEnrollments.length > 0) {
+      const since = startOfBrtDay().toISOString();
+      const { data: sentRows } = (await from(supabase, 'interactions')
+        .select('org_id, performed_by, metadata')
+        .in('org_id', orgIds)
+        .eq('channel', 'email')
+        .eq('type', 'sent')
+        .neq('channel', 'system')
+        .gte('created_at', since)) as {
+          data: Array<{ org_id: string; performed_by: string | null; metadata: Record<string, unknown> | null }> | null;
+        };
+      for (const row of sentRows ?? []) {
+        const sender = (typeof row.metadata?.sender_user_id === 'string' && row.metadata.sender_user_id)
+          ? row.metadata.sender_user_id
+          : row.performed_by;
+        if (!sender) continue;
+        const key = `${row.org_id}:${sender}`;
+        mailboxSentToday.set(key, (mailboxSentToday.get(key) ?? 0) + 1);
+      }
+    }
   }
 
   for (const enrollment of enrollments ?? []) {
@@ -554,6 +658,47 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         }
       }
 
+      // Remetente: SDR dono do lead se tiver Gmail conectado; senão o criador
+      // da cadência. Calculado antes do insert para o teto diário da cadência
+      // mista não gravar uma interação sent sem enviar.
+      if (!cadenceCreatedBy) cadenceCreatedBy = enrollment.cadence.created_by ?? null;
+      if (!cadenceCreatedBy) {
+        const { data: cadenceFallback } = (await from(supabase, 'cadences')
+          .select('created_by')
+          .eq('id', enrollment.cadence_id)
+          .single()) as { data: { created_by: string | null } | null };
+        cadenceCreatedBy = cadenceFallback?.created_by ?? null;
+      }
+      const assignedTo = enrollment.lead.assigned_to;
+      const senderId =
+        assignedTo && connectedGmailKeys.has(`${enrollment.lead.org_id}:${assignedTo}`)
+          ? assignedTo
+          : cadenceCreatedBy;
+
+      if (
+        isMixedAutoEmailCadence(enrollment.cadence)
+        && orgAllowsMixedAutoEmail(mixedScope, enrollment.lead.org_id)
+      ) {
+        if (!senderId) {
+          result.skipped++;
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} status=skipped reason=mixed_no_sender`);
+          continue;
+        }
+        const mailboxKey = `${enrollment.lead.org_id}:${senderId}`;
+        const mailbox = mailboxByKey.get(mailboxKey);
+        const cap = mailboxDailyCap({
+          dailyCap: mailbox?.daily_cap ?? null,
+          connectedAt: mailbox?.created_at ?? null,
+          pausedReason: mailbox?.paused_reason ?? null,
+        });
+        const sentToday = mailboxSentToday.get(mailboxKey) ?? 0;
+        if (mailboxAtDailyCap(sentToday, cap)) {
+          result.skipped++;
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} status=skipped reason=mailbox_daily_cap sent=${sentToday} cap=${cap}`);
+          continue;
+        }
+      }
+
       // Record interaction
       const interactionMeta: Record<string, unknown> = {};
       if (subject) interactionMeta.subject = subject;
@@ -661,14 +806,6 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
           cadenceCreatedBy = cadenceFallback?.created_by ?? null;
         }
 
-        // Remetente: SDR dono do lead se tiver Gmail conectado; senão o criador
-        // da cadência (comportamento antigo, como fallback).
-        const assignedTo = enrollment.lead.assigned_to;
-        const senderId =
-          assignedTo && connectedGmailKeys.has(`${enrollment.lead.org_id}:${assignedTo}`)
-            ? assignedTo
-            : cadenceCreatedBy;
-
         if (!senderId) {
           // Pause + notify. Left active, the enrollment was retried (and failed)
           // every 5 minutes forever — and with an unordered batch, a pile of
@@ -757,6 +894,10 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
             .update(updateData)
             .eq('id', interaction.id);
           sendSuccess = true;
+          if (isMixedAutoEmailCadence(enrollment.cadence)) {
+            const sentKey = `${enrollment.lead.org_id}:${senderId}`;
+            mailboxSentToday.set(sentKey, (mailboxSentToday.get(sentKey) ?? 0) + 1);
+          }
           dispatchWebhookEvent(supabase, enrollment.lead.org_id, 'email.sent', {
             lead_id: enrollment.lead_id,
             cadence_id: enrollment.cadence_id,
