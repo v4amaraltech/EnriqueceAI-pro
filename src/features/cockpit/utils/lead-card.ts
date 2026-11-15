@@ -90,11 +90,11 @@ function normalizeReason(value: string | null | undefined): string | null {
  */
 const OPENING_BODY: Record<string, string> = {
   'deixou de responder': 'parece que a conversa com a V4 ficou parada no meio do caminho. Seria um problema retomarmos em 2 minutos?',
-  'nunca respondeu': 'a gente tentou falar algumas vezes e não conseguiu. Seria um problema eu explicar em 2 minutos por que liguei?',
-  'sem interesse': 'da última vez o assunto não parecia prioridade. Seria um problema eu checar se algo mudou?',
+  'nunca respondeu': 'você deixou seu contato com a V4 um tempo atrás. O que estava buscando resolver no marketing naquela época?',
+  'sem interesse': 'parece que da última vez não era o momento. O que mudou por aí desde então?',
   'sem timing': 'na última conversa o momento não era agora. Seria um problema retomarmos por 2 minutos para ver se a janela abriu?',
-  'sem budget': 'orçamento foi o ponto que travou a conversa. Seria um problema eu entender se isso ainda vale?',
-  'sem necessidade': 'na época não havia uma necessidade clara. Seria um problema eu confirmar se isso continua igual?',
+  'sem budget': 'me parece que o orçamento foi o que travou da última vez. Como está esse cenário hoje?',
+  'sem necessidade': 'parece que vocês já resolveram o marketing por outro caminho. Como está o resultado disso hoje?',
   'sem autoridade': 'da última vez a decisão não estava com você. Seria um problema eu perguntar quem precisa ouvir isso agora?',
   'nao icp': 'a gente entendeu que o perfil não encaixava. Seria um problema eu confirmar isso em 1 minuto antes de encerrar?',
   'contatos invalidos': 'o contato que a gente tinha não funcionou. Seria um problema eu confirmar se este número é o melhor?',

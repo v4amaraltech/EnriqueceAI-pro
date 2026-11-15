@@ -14,6 +14,7 @@ import {
 } from '@/shared/components/ui/dialog';
 
 import { enrollLeads } from '@/features/cadences/actions/manage-cadences';
+import { notifyEnrollErrors } from '@/features/cadences/utils/enroll-errors';
 import { fetchActiveCadences } from '@/features/leads/actions/fetch-active-cadences';
 
 interface ActiveCadence {
@@ -66,11 +67,10 @@ export function StartProspectingDialog({ open, onOpenChange, leadIds, remaining 
           toast.success(
             `${result.data.enrolled} lead${result.data.enrolled > 1 ? 's' : ''} inscrito${result.data.enrolled > 1 ? 's' : ''} na cadência`,
           );
-          if (result.data.errors.length > 0) {
-            toast.warning(`${result.data.errors.length} erro(s) ao inscrever`);
-          }
+          notifyEnrollErrors(result.data.enrolled, result.data.errors, 'Erro ao inscrever');
         } else {
-          toast.error(result.data.errors[0] ?? 'Erro ao inscrever');
+          notifyEnrollErrors(0, result.data.errors, 'Erro ao inscrever');
+          if (result.data.errors.length === 0) toast.error('Erro ao inscrever');
         }
         onOpenChange(false);
         router.refresh();

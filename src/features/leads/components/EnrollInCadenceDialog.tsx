@@ -24,6 +24,7 @@ import {
 
 import { SKIP_NOTE_MAX, SWITCH_REASONS, type SwitchReason } from '@/features/activities/constants/skip-reasons';
 import { enrollLeads, switchLeadsCadence } from '@/features/cadences/actions/manage-cadences';
+import { notifyEnrollErrors } from '@/features/cadences/utils/enroll-errors';
 import { fetchActiveCadences } from '../actions/fetch-active-cadences';
 
 interface EnrollInCadenceDialogProps {
@@ -100,12 +101,11 @@ export function EnrollInCadenceDialog({ open, onOpenChange, leadIds, mode = 'enr
               ? `${result.data.enrolled} lead${result.data.enrolled > 1 ? 's' : ''} ${result.data.enrolled > 1 ? verbPlural : verb} na cadência`
               : `Lead ${verb} na cadência`,
           );
-          if (result.data.errors.length > 0) {
-            toast.warning(`${result.data.errors.length} erro(s)`);
-          }
+          notifyEnrollErrors(result.data.enrolled, result.data.errors, 'Erro ao processar');
           onSuccess?.();
         } else {
-          toast.error(result.data.errors[0] ?? 'Erro ao processar');
+          notifyEnrollErrors(0, result.data.errors, 'Erro ao processar');
+          if (result.data.errors.length === 0) toast.error('Erro ao processar');
         }
         handleOpenChange(false);
         router.refresh();
