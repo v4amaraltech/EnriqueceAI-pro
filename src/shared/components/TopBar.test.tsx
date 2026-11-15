@@ -26,7 +26,9 @@ vi.mock('./HelpCenter/HelpCenter', () => ({
   HelpCenter: () => <button data-testid="help-center" aria-label="Ajuda">Help</button>,
 }));
 
-import { TopBar, navSections } from './TopBar';
+import { OrgContext } from '@/features/auth/components/OrganizationProvider';
+
+import { TopBar, navSections, visibleNavSections } from './TopBar';
 
 describe('TopBar', () => {
   it('renders logo with link to dashboard', () => {
@@ -120,5 +122,41 @@ describe('TopBar', () => {
     expect(navSections[2]?.items).toHaveLength(4);
     expect(navSections[3]?.label).toBe('Estatísticas');
     expect(navSections[3]?.items).toHaveLength(4);
+  });
+});
+
+describe('TopBar — visão por papel (menus só do gestor)', () => {
+  const asRole = (isManager: boolean) => ({ isManager }) as unknown as import('@/features/auth/components/OrganizationProvider').OrgContextValue;
+
+  function renderAs(isManager: boolean) {
+    return render(
+      <OrgContext.Provider value={asRole(isManager)}>
+        <TopBar />
+      </OrgContext.Provider>,
+    );
+  }
+
+  it('gestor vê "Ligações" e "Estatísticas"', () => {
+    renderAs(true);
+    expect(screen.getByRole('button', { name: /Ligações/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Estatísticas/ })).toBeInTheDocument();
+  });
+
+  it('SDR não vê "Ligações" nem "Estatísticas"', () => {
+    renderAs(false);
+    expect(screen.queryByRole('button', { name: /Ligações/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Estatísticas/ })).not.toBeInTheDocument();
+  });
+
+  it('SDR continua vendo Dashboard, Prospecção (com Cockpit e Execução)', async () => {
+    renderAs(false);
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Prospecção/ })).toBeInTheDocument();
+  });
+
+  it('visibleNavSections esconde só as seções managerOnly para SDR', () => {
+    const labels = (isManager: boolean) => visibleNavSections(navSections, isManager).map((s) => s.label);
+    expect(labels(false)).toEqual(['Dashboard', 'Prospecção']);
+    expect(labels(true)).toEqual(['Dashboard', 'Prospecção', 'Ligações', 'Estatísticas']);
   });
 });

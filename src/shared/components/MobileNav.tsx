@@ -20,7 +20,7 @@ import {
 } from '@/shared/components/ui/sheet';
 
 import type { NavSection } from './TopBar';
-import { navSections } from './TopBar';
+import { navSections, useIsManagerNav, visibleNavSections } from './TopBar';
 
 function MobileNavSection({
   section,
@@ -90,6 +90,7 @@ function MobileNavSection({
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const isManager = useIsManagerNav();
 
   const handleNavigate = () => setOpen(false);
 
@@ -118,7 +119,7 @@ export function MobileNav() {
           </SheetHeader>
 
           <nav className="flex flex-col gap-1 p-2">
-            {navSections.map((section) =>
+            {visibleNavSections(navSections, isManager).map((section) =>
               section.href ? (
                 <Link
                   key={section.label}
