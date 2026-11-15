@@ -83,3 +83,33 @@ describe('LeadFilters — "Criado em"', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/leads?assigned_to=11111111-2222-3333-4444-555555555555'));
   });
 });
+
+describe('LeadFilters — "Responsável" e "Meus leads" (visão por papel)', () => {
+  const members = [
+    { userId: 'u-1', name: 'Ana' },
+    { userId: 'u-2', name: 'Bruno' },
+  ];
+
+  it('gestor vê o filtro "Responsável" e o botão "Meus leads"', () => {
+    render(<LeadFilters members={members} currentUserId="u-1" canFilterByOwner />);
+    expect(screen.getByText('Responsável')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Meus leads/ })).toBeInTheDocument();
+  });
+
+  it('por padrão (sem a prop) continua mostrando os dois, para não mudar quem já usa o componente', () => {
+    render(<LeadFilters members={members} currentUserId="u-1" />);
+    expect(screen.getByText('Responsável')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Meus leads/ })).toBeInTheDocument();
+  });
+
+  it('SDR não vê "Responsável" nem "Meus leads"', () => {
+    render(<LeadFilters members={members} currentUserId="u-1" canFilterByOwner={false} />);
+    expect(screen.queryByText('Responsável')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Meus leads/ })).not.toBeInTheDocument();
+  });
+
+  it('SDR continua com os outros filtros (ex.: "Criado em")', () => {
+    render(<LeadFilters members={members} currentUserId="u-1" canFilterByOwner={false} />);
+    expect(screen.getByRole('combobox', { name: 'Criado em' })).toBeInTheDocument();
+  });
+});

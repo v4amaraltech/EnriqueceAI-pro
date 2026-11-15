@@ -33,6 +33,8 @@ interface LeadListViewProps {
   userMap: Record<string, string>;
   currentUserId: string;
   members?: { userId: string; name: string }[];
+  /** Gestor filtra por responsável; SDR já vê só os leads dele. */
+  canFilterByOwner?: boolean;
   statusCounts?: LeadStatusCounts;
   cadences?: { id: string; name: string }[];
   cnaes?: string[];
@@ -41,7 +43,7 @@ interface LeadListViewProps {
   lossReasons?: LossReasonFilterOption[];
 }
 
-export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, statusCounts, cadences, cnaes, leadSourceOptions, canalOptions, lossReasons }: LeadListViewProps) {
+export function LeadListView({ result, hasFilters, cadenceInfo, userMap, currentUserId, members, canFilterByOwner = true, statusCounts, cadences, cnaes, leadSourceOptions, canalOptions, lossReasons }: LeadListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -148,7 +150,7 @@ export function LeadListView({ result, hasFilters, cadenceInfo, userMap, current
 
       {/* Filters */}
       <Suspense>
-        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} canalOptions={canalOptions} lossReasons={lossReasons} currentUserId={currentUserId} />
+        <LeadFilters members={members} cadences={cadences} cnaes={cnaes} leadSourceOptions={leadSourceOptions} canalOptions={canalOptions} lossReasons={lossReasons} currentUserId={currentUserId} canFilterByOwner={canFilterByOwner} />
       </Suspense>
 
       {/* Table or filtered empty */}
