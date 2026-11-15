@@ -4,6 +4,7 @@ import { ThemeProvider } from 'next-themes';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+import { effectiveRole, isDevViewAsAvailable } from '@/lib/auth/dev-view-as';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { resolveUserProfiles } from '@/lib/auth/user-directory';
 import { from } from '@/lib/supabase/from';
@@ -22,6 +23,7 @@ import { Api4ComWebphoneMount } from '@/features/integrations/webphone/Api4ComWe
 import { NotificationProvider } from '@/features/notifications/components/NotificationProvider';
 
 import { Breadcrumbs } from '@/shared/components/Breadcrumbs';
+import { DevViewAsToggle } from '@/shared/components/DevViewAsToggle';
 import { ChunkReloadFlagReset } from '@/shared/components/ChunkReloadFlagReset';
 import { PageSkeleton } from '@/shared/components/PageSkeleton';
 import { fetchPendingActivitiesCount } from '@/features/activities/actions/fetch-pending-count';
@@ -134,7 +136,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     id: memberData.id,
     org_id: memberData.org_id,
     user_id: memberData.user_id,
-    role: memberData.role,
+    role: await effectiveRole(memberData.role),
     status: memberData.status,
     invited_at: memberData.invited_at,
     accepted_at: memberData.accepted_at,
@@ -173,6 +175,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </SubscriptionGuard>
             <Toaster />
             <ChunkReloadFlagReset />
+            {isDevViewAsAvailable() && memberData.role === 'manager' && (
+              <DevViewAsToggle viewingAsSdr={currentMember.role === 'sdr'} />
+            )}
             {/* Webphone no navegador (API4COM): só monta para quem o gestor liberou. */}
             <Api4ComWebphoneMount />
           </NotificationProvider>
