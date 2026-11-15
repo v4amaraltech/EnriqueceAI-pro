@@ -51,7 +51,8 @@ const PROD_MD5 = {
    * leads_opened_events: o repo tem comentários que prod não tem; a lógica é a
    * mesma. Comparamos o md5 do código sem comentários nem linhas vazias.
    */
-  leadsOpenedEventsNoComments: '60bbea2e929467f3d7310168be8441a4',
+  // Regra "só lead novo" (20261115033217_leads_opened_only_new_leads.sql).
+  leadsOpenedEventsNoComments: '630a41294df66c56b78bda7505676eec',
   userOrgId: '6926a8470a00bcb575394b8166e2591a',
 };
 
@@ -197,7 +198,7 @@ describe.skipIf(!RUN)('get_sdr_leads_abertos_v2', () => {
     // [lead, quando (UTC), cadence_id, canal]
     const toques: Array<[number, string, string | null, string]> = [
       [1, '2026-09-10T14:00:00Z', CAD1, 'phone'], // 1º toque em set
-      [1, '2026-10-15T14:00:00Z', CAD2, 'email'], // reabertura em out (nova inscrição)
+      [1, '2026-10-15T14:00:00Z', CAD2, 'email'], // reinscrito em out: reabertura NÃO conta (regra de 15/11)
       [2, '2026-11-01T02:30:00Z', CAD1, 'phone'], // 31/out 23h30 BRT → outubro
       [3, '2026-11-01T03:30:00Z', CAD1, 'whatsapp'], // 01/nov 00h30 BRT → novembro
       [4, '2026-10-03T13:00:00Z', CAD1, 'phone'], // sdr convidado conta
@@ -330,7 +331,7 @@ describe.skipIf(!RUN)('get_sdr_leads_abertos_v2', () => {
   describe('equivalência com a legada (service_role)', () => {
     const MESES: Array<[number, number, string]> = [
       [2026, 9, 'setembro: 1º toque'],
-      [2026, 10, 'outubro: reabertura, convidado, sem e-mail, virada de mês'],
+      [2026, 10, 'outubro: reinscrição (não conta), convidado, sem e-mail, virada de mês'],
       [2026, 11, 'novembro: lado de lá da virada de mês'],
       [2026, 12, 'dezembro: último dia do ano no fuso'],
       [2027, 1, 'janeiro/2027: sem dados'],
@@ -349,17 +350,16 @@ describe.skipIf(!RUN)('get_sdr_leads_abertos_v2', () => {
       expect(r).toEqual({
         ok: true,
         json: {
-          total: 4,
+          total: 3,
           novos: 3,
-          reabertos: 1,
+          reabertos: 0,
           by_email: expect.arrayContaining([
-            { email: 'sdr.a@example.test', n: 2, novos: 1, reabertos: 1 },
+            { email: 'sdr.a@example.test', n: 1, novos: 1, reabertos: 0 },
             { email: 'sdr.b@example.test', n: 1, novos: 1, reabertos: 0 },
             { email: null, n: 1, novos: 1, reabertos: 0 },
           ]),
           daily: [
             { dia: '2026-10-03', opened: 2 },
-            { dia: '2026-10-15', opened: 1 },
             { dia: '2026-10-31', opened: 1 },
           ],
         },

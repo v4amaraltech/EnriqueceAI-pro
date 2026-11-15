@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { brtNowParts } from '../utils/brt-now';
 
 /**
- * Leads abertos (1º toque humano + reaberturas) — fonte única do Dashboard.
+ * Leads abertos (1º toque humano do lead na vida; reabertura não conta) — fonte única do Dashboard.
  *
  * `count_leads_opened_by_sdr` e `count_leads_opened_by_sdr_daily` calculam o
  * MESMO conjunto de aberturas sobre `leads_opened_events` (história inteira da

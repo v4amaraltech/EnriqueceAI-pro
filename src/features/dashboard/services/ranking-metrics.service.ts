@@ -445,9 +445,9 @@ export async function fetchLeadsOpenedRanking(
     .in('status', ['active', 'invited'])) as { data: Array<{ user_id: string }> | null };
   const sdrIds = new Set((sdrs ?? []).map((s) => s.user_id));
 
-  // OPENINGS in [start, end): a lead's first human-channel touch, plus the first
-  // touch after each new cadence enrollment (a reopening). See migration
-  // 20260918121458_leads_opened_count_cadence_reopen.sql. One row per opening —
+  // OPENINGS in [start, end): a lead's first-ever human-channel touch. Reopenings
+  // (first touch after a new cadence enrollment) stopped counting on 15/11/2026 —
+  // see 20261115033217_leads_opened_only_new_leads.sql. One row per opening —
   // the per-SDR total and the daily chart both come from these rows (one RPC
   // instead of count + daily in series; shared with the SDR pace panel).
   const { data: openedRows } = await fetchLeadsOpenedRows(
@@ -498,7 +498,7 @@ export async function fetchLeadsOpenedRanking(
 }
 
 /**
- * Per-day cumulative count of openings (first touch + reopenings). Built from the
+ * Per-day cumulative count of openings (first-ever touch per lead). Built from the
  * same rows as the ranking total, so the chart matches it exactly.
  */
 function buildLeadsOpenedDaily(
