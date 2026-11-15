@@ -26,6 +26,12 @@ export const dynamic = 'force-dynamic';
  *   200 { aplicado: true }                       → interaction gravada, passo avançado
  *   200 { aplicado: false, duplicado: true }     → event_id já processado; nada mudou
  *   200 { aplicado: false, motivo }              → execução já confirmada / passo já avançado / evento não terminal
+ *   200 { aplicado: true, motivo: 'aplicado_pulado_telefone_invalido', new_step }
+ *                                                → lead sem telefone numa cadência com e-mail/WhatsApp: ligação pulada,
+ *                                                  inscrição seguiu para o próximo passo de outro canal (não encerra)
+ *   200 { aplicado: true, motivo: 'aplicado_encerrado_*' } → cadência de contato encerrada (telefone inválido sem outro
+ *                                                  canal adiante, 2ª linha muda, 2ª caixa postal); `completed` vem false
+ *                                                  de propósito: o lead NÃO é marcado como perdido
  *   404 { motivo: 'execution_id_desconhecida' }  → o Enriquece nunca reservou essa execução
  *   400 payload inválido · 401 sem API key · 500 erro (o chamador reenvia)
  */
