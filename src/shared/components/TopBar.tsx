@@ -45,6 +45,8 @@ export interface NavDropdownItem {
   placeholder?: string;
   badge?: number;
   icon?: LucideIcon;
+  /** Só o gestor vê este item; o SDR não. */
+  managerOnly?: boolean;
 }
 
 export interface NavSection {
@@ -69,11 +71,11 @@ export const navSections: NavSection[] = [
     items: [
       { label: 'Execução', href: '/atividades', icon: PlayCircle },
       { label: 'Cockpit', href: '/cockpit', icon: Gauge },
-      { label: 'Atividades', href: '/activities', icon: ListChecks },
-      { label: 'Mensagens', href: '/templates', icon: Mail },
-      { label: 'Cadências', href: '/cadences', icon: Workflow },
+      { label: 'Atividades', href: '/activities', icon: ListChecks, managerOnly: true },
+      { label: 'Mensagens', href: '/templates', icon: Mail, managerOnly: true },
+      { label: 'Cadências', href: '/cadences', icon: Workflow, managerOnly: true },
       { label: 'Leads', href: '/leads', icon: Users },
-      { label: 'Ajustes', href: '/settings/prospecting', icon: Settings },
+      { label: 'Ajustes', href: '/settings/prospecting', icon: Settings, managerOnly: true },
     ],
   },
   {
@@ -102,7 +104,15 @@ export const navSections: NavSection[] = [
 
 /** Seções que o papel atual pode ver (SDR não vê as `managerOnly`). */
 export function visibleNavSections(sections: NavSection[], isManager: boolean): NavSection[] {
-  return sections.filter((section) => !section.managerOnly || isManager);
+  if (isManager) return sections;
+  return sections
+    .filter((section) => !section.managerOnly)
+    .map((section) =>
+      section.items
+        ? { ...section, items: section.items.filter((item) => !item.managerOnly) }
+        : section,
+    )
+    .filter((section) => !section.items || section.items.length > 0 || section.href);
 }
 
 /**

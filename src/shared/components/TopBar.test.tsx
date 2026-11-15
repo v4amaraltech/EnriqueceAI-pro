@@ -160,3 +160,20 @@ describe('TopBar — visão por papel (menus só do gestor)', () => {
     expect(labels(true)).toEqual(['Dashboard', 'Prospecção', 'Ligações', 'Estatísticas']);
   });
 });
+
+describe('TopBar — itens só do gestor dentro de "Prospecção"', () => {
+  const itemLabels = (isManager: boolean) =>
+    visibleNavSections(navSections, isManager)
+      .find((s) => s.label === 'Prospecção')
+      ?.items?.map((i) => i.label);
+
+  it('gestor vê Atividades, Mensagens, Cadências e Ajustes', () => {
+    expect(itemLabels(true)).toEqual(
+      expect.arrayContaining(['Atividades', 'Mensagens', 'Cadências', 'Ajustes']),
+    );
+  });
+
+  it('SDR não vê Atividades, Mensagens, Cadências nem Ajustes, mas mantém Execução, Cockpit e Leads', () => {
+    expect(itemLabels(false)).toEqual(['Execução', 'Cockpit', 'Leads']);
+  });
+});
