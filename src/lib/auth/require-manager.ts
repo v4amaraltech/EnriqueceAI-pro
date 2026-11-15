@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { effectiveRole } from './dev-view-as';
 import { requireAuth } from './require-auth';
 
 export async function requireManager() {
@@ -15,7 +16,7 @@ export async function requireManager() {
     .eq('status', 'active')
     .single()) as { data: { role: string } | null };
 
-  if (member?.role !== 'manager') redirect('/dashboard');
+  if (!member || (await effectiveRole(member.role)) !== 'manager') redirect('/dashboard');
   return user;
 }
 
@@ -37,5 +38,5 @@ export async function isManager(): Promise<boolean> {
     .eq('status', 'active')
     .single()) as { data: { role: string } | null };
 
-  return member?.role === 'manager';
+  return !!member && (await effectiveRole(member.role)) === 'manager';
 }

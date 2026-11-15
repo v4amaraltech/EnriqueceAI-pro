@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { effectiveRole } from './dev-view-as';
 import { requireAuth } from './require-auth';
 
 export type MemberRole = 'manager' | 'sdr';
@@ -25,5 +26,5 @@ export async function requireAuthWithMember(): Promise<AuthWithMember> {
 
   if (!member) redirect('/login');
 
-  return { userId: user.id, orgId: member.org_id, role: member.role };
+  return { userId: user.id, orgId: member.org_id, role: await effectiveRole(member.role) };
 }

@@ -2,6 +2,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+import { effectiveRole } from './dev-view-as';
 import type { MemberRole } from './require-auth-with-member';
 import { requireAuth } from './require-auth';
 import { requireManager } from './require-manager';
@@ -22,7 +23,7 @@ async function fetchMember(
     .eq('status', 'active')
     .single()) as { data: { org_id: string; role: MemberRole } | null };
 
-  return member ? { orgId: member.org_id, role: member.role } : null;
+  return member ? { orgId: member.org_id, role: await effectiveRole(member.role) } : null;
 }
 
 /**
