@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronDown, ChevronRight, Key, Pencil, RefreshCw, Unplug, X } from 'lucide-react';
+import { Check, Key, Pencil, RefreshCw, Unplug, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/shared/components/ui/badge';
@@ -26,6 +26,7 @@ import {
 } from '../actions/manage-api4com-org';
 import type { Api4ComOrgOverview, Api4ComSyncReport, Api4ComTeamMember } from '../types';
 import { Api4ComOrgTokenModal } from './Api4ComOrgTokenModal';
+import { RowExpandToggle } from './RowExpand';
 
 interface Api4ComOrgCardProps {
   overview: Api4ComOrgOverview;
@@ -168,7 +169,7 @@ export function Api4ComOrgCard({ overview, standalone = false }: Api4ComOrgCardP
   const [showDisconnect, setShowDisconnect] = useState(false);
   const [pending, setPending] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
-  // Lista do time começa minimizada; abre ao clicar no resumo "X de Y prontos".
+  // Começa minimizado; a seta abre os botões extras e a tabela do time.
   const [expanded, setExpanded] = useState(false);
 
   const { settings, team } = overview;
@@ -231,50 +232,58 @@ export function Api4ComOrgCard({ overview, standalone = false }: Api4ComOrgCardP
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {settings.configured && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isPending}
-              onClick={() =>
-                startTransition(async () => {
-                  const r = await syncApi4ComExtensions();
-                  if (r.success) handleReport(r.data);
-                  else toast.error(r.error);
-                })
-              }
-            >
-              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isPending ? 'animate-spin' : ''}`} />
-              Sincronizar ramais
-            </Button>
-          )}
-          <Button variant={settings.configured ? 'outline' : 'default'} size="sm" onClick={() => setShowTokenModal(true)}>
-            <Key className="mr-1.5 h-3.5 w-3.5" />
-            {settings.configured ? 'Trocar token' : 'Configurar token'}
-          </Button>
-          {settings.configured && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-              onClick={() => setShowDisconnect(true)}
-            >
-              <Unplug className="mr-1.5 h-3.5 w-3.5" />
-              Remover
+          {settings.configured ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                onClick={() => setShowDisconnect(true)}
+              >
+                <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                Remover
+              </Button>
+              <RowExpandToggle
+                open={expanded}
+                onToggle={() => setExpanded((v) => !v)}
+                label="API4Com"
+              />
+            </>
+          ) : (
+            <Button size="sm" onClick={() => setShowTokenModal(true)}>
+              <Key className="mr-1.5 h-3.5 w-3.5" />
+              Configurar token
             </Button>
           )}
         </div>
       </div>
 
+      {settings.configured && expanded && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 pl-[52px]">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isPending}
+            onClick={() =>
+              startTransition(async () => {
+                const r = await syncApi4ComExtensions();
+                if (r.success) handleReport(r.data);
+                else toast.error(r.error);
+              })
+            }
+          >
+            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isPending ? 'animate-spin' : ''}`} />
+            Sincronizar ramais
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowTokenModal(true)}>
+            <Key className="mr-1.5 h-3.5 w-3.5" />
+            Trocar token
+          </Button>
+        </div>
+      )}
+
       {settings.configured && team.length > 0 && (
-        <button
-          type="button"
-          className="mt-3 inline-flex items-center gap-1 text-left text-xs hover:underline"
-          aria-expanded={expanded}
-          aria-controls="api4com-team-table"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        <p className="mt-3 text-xs">
           <span className="font-medium">
             {readyCount} de {team.length} prontos para ligar
           </span>
@@ -284,10 +293,7 @@ export function Api4ComOrgCard({ overview, standalone = false }: Api4ComOrgCardP
               · {attentionCount} sem ramal ou faltando sincronizar
             </span>
           )}
-          <span className="ml-1 text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-            · {expanded ? 'Ocultar equipe' : 'Ver equipe'}
-          </span>
-        </button>
+        </p>
       )}
 
       {pending.length > 0 && (
@@ -299,7 +305,7 @@ export function Api4ComOrgCard({ overview, standalone = false }: Api4ComOrgCardP
       )}
 
       {settings.configured && team.length > 0 && expanded && (
-        <table id="api4com-team-table" className="mt-3 w-full text-xs">
+        <table className="mt-3 w-full text-xs">
           <thead>
             <tr className="text-left text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
               <th className="py-1 pr-3 font-medium">Pessoa</th>
