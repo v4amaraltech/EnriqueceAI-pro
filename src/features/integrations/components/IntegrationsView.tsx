@@ -46,6 +46,7 @@ import { Api4ComOrgCard } from './Api4ComOrgCard';
 import { ApolloConfigModal } from './ApolloConfigModal';
 import { CrmFieldMappingModal } from './CrmFieldMappingModal';
 import { RdStationTokenModal } from './RdStationTokenModal';
+import { RowExpandToggle, RowExtraActions, useExpandedRows } from './RowExpand';
 import { SignatureEditor } from './SignatureEditor';
 import { WhatsAppEvolutionModal } from './WhatsAppEvolutionModal';
 
@@ -195,7 +196,10 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
     });
   }
 
-  const whatsappConnected = evolution.step === 'connected' || evolutionInstance?.status === 'connected';
+  const rows = useExpandedRows();
+
+  const whatsappConnected =
+    evolution.step === 'connected' || evolutionInstance?.status === 'connected';
   const googleConnected = !!(gmail || calendar);
   const googleError = gmail?.status === 'error' || calendar?.status === 'error';
 
@@ -213,30 +217,42 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
         <h2 className="mb-3 text-lg font-semibold">Comunicação</h2>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
           {/* WhatsApp */}
-          <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-            <div className="flex w-10 shrink-0 items-center justify-center">
-              <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={32} height={32} className="rounded-lg" />
-            </div>
-            <div className="w-32 shrink-0 font-medium">WhatsApp</div>
-            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {whatsappConnected
-                ? (evolution.phone || evolutionInstance?.phone)
-                  ? `Conectado: ${evolution.phone || evolutionInstance?.phone}`
-                  : 'WhatsApp conectado'
-                : 'Integre o WhatsApp para enviar mensagens pela plataforma'}
-            </div>
-            {(whatsappConnected || whatsapp?.status === 'connected') && (
-              <StatusBadge status="connected" />
-            )}
-            <div className="ml-auto shrink-0 flex items-center gap-2">
-              {whatsappConnected ? (
-                <>
-                  {/* Reconectar: dispara o mesmo connect(), que no Evolution varre
-                      TODAS as instâncias do usuário (inclui sessões órfãs) e recria
-                      uma limpa com QR novo — resolve "Connection Closed" sem o
-                      vai-e-volta de Desconectar→Conectar. */}
+          <div className="group border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex w-10 shrink-0 items-center justify-center">
+                <Image src="/logos/whatsapp-logo.png" alt="WhatsApp" width={32} height={32} className="rounded-lg" />
+              </div>
+              <div className="w-32 shrink-0 font-medium">WhatsApp</div>
+              <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                {whatsappConnected
+                  ? (evolution.phone || evolutionInstance?.phone)
+                    ? `Conectado: ${evolution.phone || evolutionInstance?.phone}`
+                    : 'WhatsApp conectado'
+                  : 'Integre o WhatsApp para enviar mensagens pela plataforma'}
+              </div>
+              {(whatsappConnected || whatsapp?.status === 'connected') && (
+                <StatusBadge status="connected" />
+              )}
+              <div className="ml-auto shrink-0 flex items-center gap-2">
+                {whatsappConnected ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                      onClick={() => setShowDisconnect('whatsapp')}
+                    >
+                      <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                      Desconectar
+                    </Button>
+                    <RowExpandToggle
+                      open={rows.isOpen('whatsapp')}
+                      onToggle={() => rows.toggle('whatsapp')}
+                      label="WhatsApp"
+                    />
+                  </>
+                ) : whatsapp?.status === 'connected' ? null : (
                   <Button
-                    variant="outline"
                     size="sm"
                     onClick={() => {
                       setShowEvolutionModal(true);
@@ -244,21 +260,19 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                     }}
                     disabled={evolution.step === 'creating' || evolution.step === 'waiting_scan'}
                   >
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                    Reconectar
+                    Conectar
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                    onClick={() => setShowDisconnect('whatsapp')}
-                  >
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                    Desconectar
-                  </Button>
-                </>
-              ) : whatsapp?.status === 'connected' ? null : (
+                )}
+              </div>
+            </div>
+            {whatsappConnected && (
+              <RowExtraActions open={rows.isOpen('whatsapp')}>
+                {/* Reconectar: dispara o mesmo connect(), que no Evolution varre
+                    TODAS as instâncias do usuário (inclui sessões órfãs) e recria
+                    uma limpa com QR novo — resolve "Connection Closed" sem o
+                    vai-e-volta de Desconectar→Conectar. */}
                 <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => {
                     setShowEvolutionModal(true);
@@ -266,70 +280,79 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
                   }}
                   disabled={evolution.step === 'creating' || evolution.step === 'waiting_scan'}
                 >
-                  Conectar
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  Reconectar
                 </Button>
-              )}
-            </div>
+              </RowExtraActions>
+            )}
           </div>
 
           {/* API4Com — ramal individual. Com o token da org, o gestor vê só o cartão da organização
               (o ramal dele vira uma linha da tabela do time). */}
           {!orgApi4ComManaged && (
-            <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-              <div className="flex w-10 shrink-0 items-center justify-center">
-                <Image src="/logos/api4com-logo.png" alt="API4Com" width={32} height={32} className="rounded-lg" />
-              </div>
-              <div className="w-32 shrink-0 font-medium">API4Com</div>
-              <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                {api4com
-                  ? `Ramal ${api4com.ramal} \u00b7 ${api4comOrg?.settings.configured && !api4com.has_api_key ? 'via conta da organiza\u00e7\u00e3o' : `Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`}`
-                  : 'Integração automática com sistema de ligações'}
-              </div>
-              {api4com && <StatusBadge status={api4com.status} />}
-              <div className="ml-auto shrink-0 flex items-center gap-2">
-                {api4com ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        startTransition(async () => {
-                          const r = await testApi4ComConnection();
-                          if (r.success && r.data.ok) toast.success(`API4Com conectado (ramal ${r.data.ramal})`);
-                          else toast.error('Conexão com API4Com falhou — verifique o token');
-                        });
-                      }}
-                      disabled={isPending}
-                    >
-                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                      Testar
+            <div className="group border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex w-10 shrink-0 items-center justify-center">
+                  <Image src="/logos/api4com-logo.png" alt="API4Com" width={32} height={32} className="rounded-lg" />
+                </div>
+                <div className="w-32 shrink-0 font-medium">API4Com</div>
+                <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                  {api4com
+                    ? `Ramal ${api4com.ramal} \u00b7 ${api4comOrg?.settings.configured && !api4com.has_api_key ? 'via conta da organiza\u00e7\u00e3o' : `Conectado em ${new Date(api4com.created_at).toLocaleDateString('pt-BR')}`}`
+                    : 'Integração automática com sistema de ligações'}
+                </div>
+                {api4com && <StatusBadge status={api4com.status} />}
+                <div className="ml-auto shrink-0 flex items-center gap-2">
+                  {api4com ? (
+                    <>
+                      {(isManager || !api4com.org_managed) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                          onClick={() => setShowDisconnectApi4Com(true)}
+                        >
+                          <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                          Desconectar
+                        </Button>
+                      )}
+                      <RowExpandToggle
+                        open={rows.isOpen('api4com')}
+                        onToggle={() => rows.toggle('api4com')}
+                        label="API4Com"
+                      />
+                    </>
+                  ) : (
+                    <Button size="sm" onClick={() => setShowApi4ComConfig(true)}>
+                      Conectar
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowApi4ComConfig(true)}
-                    >
-                      <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                      Gerenciar
-                    </Button>
-                    {(isManager || !api4com.org_managed) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                        onClick={() => setShowDisconnectApi4Com(true)}
-                      >
-                        <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                        Desconectar
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  <Button size="sm" onClick={() => setShowApi4ComConfig(true)}>
-                    Conectar
+                  )}
+                </div>
+              </div>
+              {api4com && (
+                <RowExtraActions open={rows.isOpen('api4com')}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      startTransition(async () => {
+                        const r = await testApi4ComConnection();
+                        if (r.success && r.data.ok)
+                          toast.success(`API4Com conectado (ramal ${r.data.ramal})`);
+                        else toast.error('Conexão com API4Com falhou — verifique o token');
+                      });
+                    }}
+                    disabled={isPending}
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Testar
                   </Button>
-                )}
-              </div>
+                  <Button variant="outline" size="sm" onClick={() => setShowApi4ComConfig(true)}>
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Gerenciar
+                  </Button>
+                </RowExtraActions>
+              )}
             </div>
           )}
 
@@ -340,90 +363,107 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
               Gestor: gerencia os números de todos os SDRs.
               SDR: pareia o PRÓPRIO número via QR, igual ao WhatsApp da Evolution. */}
           {isManager ? (
-            <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-              <div className="flex w-10 shrink-0 items-center justify-center">
-                <WhatsAppGlyph className="h-8 w-8 text-emerald-600" />
+            <div className="group border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex w-10 shrink-0 items-center justify-center">
+                  <WhatsAppGlyph className="h-8 w-8 text-emerald-600" />
+                </div>
+                <div className="w-32 shrink-0 font-medium">WhatsApp Call</div>
+                <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                  Discador WhatsApp-nativo — pareie um número dedicado por SDR
+                </div>
+                <div className="ml-auto shrink-0 flex items-center gap-2">
+                  <RowExpandToggle
+                    open={rows.isOpen('whatsapp-call')}
+                    onToggle={() => rows.toggle('whatsapp-call')}
+                    label="WhatsApp Call"
+                  />
+                </div>
               </div>
-              <div className="w-32 shrink-0 font-medium">WhatsApp Call</div>
-              <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                Discador WhatsApp-nativo — pareie um número dedicado por SDR
-              </div>
-              <div className="ml-auto shrink-0 flex items-center gap-2">
+              <RowExtraActions open={rows.isOpen('whatsapp-call')}>
                 <Button asChild variant="outline" size="sm">
                   <Link href="/settings/whatsapp-numbers">
                     <Settings2 className="mr-1.5 h-3.5 w-3.5" />
                     Gerenciar números
                   </Link>
                 </Button>
-              </div>
+              </RowExtraActions>
             </div>
           ) : (
             <MyWhatsAppCallRow me={myWhatsAppCall} />
           )}
 
           {/* Google */}
-          <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-            <div className="flex w-10 shrink-0 items-center justify-center">
-              <Image src="/logos/google-logo.png" alt="Google" width={32} height={32} className="rounded-lg" />
-            </div>
-            <div className="w-32 shrink-0 flex items-center gap-2">
-              <span className="font-medium">Google</span>
-              {!checkFeature(planFeatures, 'calendar') && (
-                <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5">
-                  Cal: Pro
-                </Badge>
-              )}
-            </div>
-            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              {googleConnected
-                ? `${gmail?.email_address ?? calendar?.calendar_email} \u00b7 Conectado em ${new Date((gmail?.created_at ?? calendar?.created_at)!).toLocaleDateString('pt-BR')}`
-                : checkFeature(planFeatures, 'calendar')
-                  ? 'Sincronize e-mails e compromissos com sua conta Google'
-                  : 'Integre com sua conta Google para enviar e-mails'}
-            </div>
-            {googleConnected && <StatusBadge status={googleError ? 'error' : 'connected'} />}
-            <div className="ml-auto shrink-0 flex items-center gap-2">
-              {googleConnected ? (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      startTransition(async () => {
-                        const r = await testGmailConnection();
-                        if (r.success && r.data.ok) toast.success(`Gmail conectado (${r.data.email})`);
-                        else toast.error('Conexão com Gmail falhou — reconecte');
-                      });
-                    }}
-                    disabled={isPending}
-                  >
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                    Testar
+          <div className="group border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex w-10 shrink-0 items-center justify-center">
+                <Image src="/logos/google-logo.png" alt="Google" width={32} height={32} className="rounded-lg" />
+              </div>
+              <div className="w-32 shrink-0 flex items-center gap-2">
+                <span className="font-medium">Google</span>
+                {!checkFeature(planFeatures, 'calendar') && (
+                  <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5">
+                    Cal: Pro
+                  </Badge>
+                )}
+              </div>
+              <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                {googleConnected
+                  ? `${gmail?.email_address ?? calendar?.calendar_email} \u00b7 Conectado em ${new Date((gmail?.created_at ?? calendar?.created_at)!).toLocaleDateString('pt-BR')}`
+                  : checkFeature(planFeatures, 'calendar')
+                    ? 'Sincronize e-mails e compromissos com sua conta Google'
+                    : 'Integre com sua conta Google para enviar e-mails'}
+              </div>
+              {googleConnected && <StatusBadge status={googleError ? 'error' : 'connected'} />}
+              <div className="ml-auto shrink-0 flex items-center gap-2">
+                {googleConnected ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                      onClick={() => setShowDisconnect('google')}
+                    >
+                      <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                      Desconectar
+                    </Button>
+                    <RowExpandToggle
+                      open={rows.isOpen('google')}
+                      onToggle={() => rows.toggle('google')}
+                      label="Google"
+                    />
+                  </>
+                ) : (
+                  <Button size="sm" onClick={handleConnectGoogle} disabled={isPending}>
+                    {isPending ? 'Conectando...' : 'Conectar'}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowSignatureEditor(true)}
-                  >
-                    <FileSignature className="mr-1.5 h-3.5 w-3.5" />
-                    Assinatura
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                    onClick={() => setShowDisconnect('google')}
-                  >
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                    Desconectar
-                  </Button>
-                </>
-              ) : (
-                <Button size="sm" onClick={handleConnectGoogle} disabled={isPending}>
-                  {isPending ? 'Conectando...' : 'Conectar'}
+                )}
+              </div>
+            </div>
+            {googleConnected && (
+              <RowExtraActions open={rows.isOpen('google')}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    startTransition(async () => {
+                      const r = await testGmailConnection();
+                      if (r.success && r.data.ok)
+                        toast.success(`Gmail conectado (${r.data.email})`);
+                      else toast.error('Conexão com Gmail falhou — reconecte');
+                    });
+                  }}
+                  disabled={isPending}
+                >
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  Testar
                 </Button>
-              )}
-            </div>
+                <Button variant="outline" size="sm" onClick={() => setShowSignatureEditor(true)}>
+                  <FileSignature className="mr-1.5 h-3.5 w-3.5" />
+                  Assinatura
+                </Button>
+              </RowExtraActions>
+            )}
           </div>
 
           {/* Apollo */}
@@ -479,67 +519,78 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
             return (
               <div
                 key={provider.id}
-                className={`group flex items-center gap-3 px-4 py-3 hover:bg-[var(--muted)]/30 ${!isLast ? 'border-b border-[var(--border)]' : ''}`}
+                className={`group hover:bg-[var(--muted)]/30 ${!isLast ? 'border-b border-[var(--border)]' : ''}`}
               >
-                <div className="flex w-10 shrink-0 items-center justify-center">
-                  <Image src={provider.logo} alt={provider.name} width={32} height={32} className="rounded-lg" />
-                </div>
-                <div className="w-32 shrink-0 font-medium">{provider.name}</div>
-                <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-                  {connection ? (
-                    <>
-                      Conectado em {new Date(connection.created_at).toLocaleDateString('pt-BR')}
-                      {connection.last_sync_at && (
-                        <> &middot; Último sync: {new Date(connection.last_sync_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
-                      )}
-                    </>
-                  ) : (
-                    provider.description
-                  )}
-                </div>
-                {connection && <StatusBadge status={connection.status} />}
-                <div className="ml-auto shrink-0 flex items-center gap-2">
-                  {connection ? (
-                    isManager && (
+              <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex w-10 shrink-0 items-center justify-center">
+                    <Image src={provider.logo} alt={provider.name} width={32} height={32} className="rounded-lg" />
+                  </div>
+                  <div className="w-32 shrink-0 font-medium">{provider.name}</div>
+                  <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                    {connection ? (
                       <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                                disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
-                          onClick={() => handleSyncCrm(provider.id)}
-                        >
-                          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                          Sincronizar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                                onClick={() => setFieldMappingProvider(provider.id)}
-                        >
-                          <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                          Campos
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
-                          onClick={() => setShowDisconnect(provider.id)}
-                        >
-                          <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                          Desconectar
-                        </Button>
+                        Conectado em {new Date(connection.created_at).toLocaleDateString('pt-BR')}
+                        {connection.last_sync_at && (
+                          <> &middot; Último sync: {new Date(connection.last_sync_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                        )}
                       </>
-                    )
-                  ) : isManager ? (
+                    ) : (
+                      provider.description
+                    )}
+                  </div>
+                  {connection && <StatusBadge status={connection.status} />}
+                  <div className="ml-auto shrink-0 flex items-center gap-2">
+                    {connection ? (
+                      isManager && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-[var(--muted-foreground)] dark:text-[var(--foreground)] hover:text-red-600"
+                            onClick={() => setShowDisconnect(provider.id)}
+                          >
+                            <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                            Desconectar
+                          </Button>
+                          <RowExpandToggle
+                            open={rows.isOpen(provider.id)}
+                            onToggle={() => rows.toggle(provider.id)}
+                            label={provider.name}
+                          />
+                        </>
+                      )
+                    ) : isManager ? (
+                      <Button
+                        size="sm"
+                        onClick={() => handleConnectCrm(provider.id)}
+                        disabled={activeCrmAction === provider.id}
+                      >
+                        {activeCrmAction === provider.id ? 'Conectando...' : 'Conectar'}
+                      </Button>
+                    ) : null}
+                  </div>
+              </div>
+                {connection && isManager && (
+                  <RowExtraActions open={rows.isOpen(provider.id)}>
                     <Button
+                      variant="outline"
                       size="sm"
-                      onClick={() => handleConnectCrm(provider.id)}
-                      disabled={activeCrmAction === provider.id}
+                      disabled={activeCrmAction === provider.id || connection.status === 'syncing'}
+                      onClick={() => handleSyncCrm(provider.id)}
                     >
-                      {activeCrmAction === provider.id ? 'Conectando...' : 'Conectar'}
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                      Sincronizar
                     </Button>
-                  ) : null}
-                </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setFieldMappingProvider(provider.id)}
+                    >
+                      <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                      Campos
+                    </Button>
+                  </RowExtraActions>
+                )}
               </div>
             );
           })}
@@ -748,22 +799,31 @@ export function IntegrationsView({ gmail, whatsapp, crmConnections, calendar, ap
         <h2 className="mb-3 text-lg font-semibold">API & Webhooks</h2>
         <div className="overflow-hidden rounded-lg border border-[var(--border)]">
           {/* API Enriquece AI */}
-          <div className="group flex items-center gap-3 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--muted)]">
-              <Key className="h-5 w-5 text-[var(--muted-foreground)]" />
+          <div className="group border-b border-[var(--border)] hover:bg-[var(--muted)]/30">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--muted)]">
+                <Key className="h-5 w-5 text-[var(--muted-foreground)]" />
+              </div>
+              <div className="w-32 shrink-0 font-medium">API Enriquece AI</div>
+              <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
+                Receba leads de plataformas externas via API REST e webhooks
+              </div>
+              <div className="ml-auto shrink-0">
+                <RowExpandToggle
+                  open={rows.isOpen('api')}
+                  onToggle={() => rows.toggle('api')}
+                  label="API Enriquece AI"
+                />
+              </div>
             </div>
-            <div className="w-32 shrink-0 font-medium">API Enriquece AI</div>
-            <div className="min-w-0 shrink truncate text-sm text-[var(--muted-foreground)] dark:text-[var(--foreground)]">
-              Receba leads de plataformas externas via API REST e webhooks
-            </div>
-            <div className="ml-auto shrink-0">
-              <Link href="/settings/integrations/api">
-                <Button size="sm" variant="outline">
+            <RowExtraActions open={rows.isOpen('api')}>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/settings/integrations/api">
                   <Settings2 className="mr-1.5 h-3.5 w-3.5" />
                   Configurar
-                </Button>
-              </Link>
-            </div>
+                </Link>
+              </Button>
+            </RowExtraActions>
           </div>
           {/* Webhooks */}
           <WebhookEndpointsManager />

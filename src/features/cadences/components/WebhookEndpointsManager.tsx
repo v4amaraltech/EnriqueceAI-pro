@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { ChevronDown, ChevronRight, Globe, Loader2, Minus, Plus, Search, TestTube2, Trash2 } from 'lucide-react';
+import { ChevronRight, Globe, Loader2, Minus, Plus, Search, TestTube2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { RowExpandToggle } from '@/features/integrations/components/RowExpand';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
@@ -172,29 +173,24 @@ export function WebhookEndpointsManager() {
           </Badge>
         )}
         <div className="ml-auto shrink-0 flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded(true);
-              setShowForm(true);
-            }}
-          >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Novo
-          </Button>
-          {expanded && (
-            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setExpanded(false); }}>
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          )}
+          <RowExpandToggle
+            open={expanded}
+            onToggle={() => setExpanded(!expanded)}
+            label="Webhooks"
+          />
         </div>
       </div>
 
       {/* Expanded content */}
       {expanded && (
         <div className="border-t border-[var(--border)] bg-[var(--muted)]/20 px-4 py-4 space-y-4">
+          {endpoints.length > 0 && !showForm && (
+            <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Novo webhook
+            </Button>
+          )}
+
           {/* Create Form */}
           {showForm && (
             <div className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">

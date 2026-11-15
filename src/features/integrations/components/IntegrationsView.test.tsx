@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Api4ComConnectionSafe, Api4ComOrgOverview, CalendarConnectionSafe, GmailConnectionSafe, WhatsAppConnectionSafe } from '../types';
@@ -180,6 +180,9 @@ describe('IntegrationsView', () => {
 
   it('should show the manage-numbers link to a manager', () => {
     render(<IntegrationsView {...defaultProps} isManager={true} />);
+    // Fica escondido até abrir a seta da linha.
+    expect(screen.queryByText('Gerenciar números')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mais opções de WhatsApp Call' }));
     expect(screen.getByText('Gerenciar números')).toBeInTheDocument();
     expect(screen.queryByText('Parear meu número')).not.toBeInTheDocument();
   });
@@ -257,7 +260,12 @@ describe('IntegrationsView', () => {
   it('should show ramal and Gerenciar button when API4Com connected', () => {
     render(<IntegrationsView {...defaultProps} api4com={api4comConnected} />);
     expect(screen.getByText(/Ramal 1014/)).toBeInTheDocument();
+    // Na linha fica só Desconectar; Testar/Gerenciar aparecem ao abrir a seta.
+    expect(screen.getByText('Desconectar')).toBeInTheDocument();
+    expect(screen.queryByText('Gerenciar')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mais opções de API4Com' }));
     expect(screen.getByText('Gerenciar')).toBeInTheDocument();
+    expect(screen.getByText('Testar')).toBeInTheDocument();
   });
 
   it('should show connected status for API4Com', () => {
@@ -298,6 +306,9 @@ describe('IntegrationsView', () => {
     expect(screen.queryByText(/Ramal 1014/)).not.toBeInTheDocument();
     expect(screen.queryByText('Gerenciar')).not.toBeInTheDocument();
     expect(screen.getByText('1 de 3 prontos para ligar')).toBeInTheDocument();
+    // Começa minimizado: a tabela do time só aparece ao clicar no resumo.
+    expect(screen.queryByText('Pronto')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mais opções de API4Com' }));
     expect(screen.getByText('Pronto')).toBeInTheDocument();
     expect(screen.getByText('Sem ramal')).toBeInTheDocument();
     expect(screen.getByText('Falta sincronizar')).toBeInTheDocument();
