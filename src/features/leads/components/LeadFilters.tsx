@@ -48,9 +48,11 @@ interface LeadFiltersProps {
   canalOptions?: string[];
   lossReasons?: LossReasonFilterOption[];
   currentUserId?: string;
+  /** Gestor: mostra "Responsável" e "Meus leads". SDR: ocultos (a tela já é só dos leads dele). */
+  canFilterByOwner?: boolean;
 }
 
-export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOptions, canalOptions, lossReasons, currentUserId }: LeadFiltersProps) {
+export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOptions, canalOptions, lossReasons, currentUserId, canFilterByOwner = true }: LeadFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sourceOptions = leadSourceOptions ?? LEAD_SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
@@ -394,7 +396,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
         )}
 
         {/* Responsável */}
-        {members && members.length > 0 && (
+        {canFilterByOwner && members && members.length > 0 && (
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-[var(--muted-foreground)]">Responsável</span>
             <Select
@@ -418,7 +420,7 @@ export function LeadFilters({ members, cadences, cnaes: _cnaes, leadSourceOption
         )}
 
         {/* Meus Leads toggle */}
-        {currentUserId && (
+        {canFilterByOwner && currentUserId && (
           <Button
             variant={activeAssigned === currentUserId ? 'default' : 'outline'}
             size="sm"

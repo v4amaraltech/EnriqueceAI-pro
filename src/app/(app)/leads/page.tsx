@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 
+import { isManager } from '@/lib/auth/require-manager';
 import { requireAuth } from '@/lib/auth/require-auth';
 
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -17,7 +18,7 @@ interface LeadsPageProps {
 }
 
 export default async function LeadsPage({ searchParams }: LeadsPageProps) {
-  const user = await requireAuth();
+  const [user, canFilterByOwner] = await Promise.all([requireAuth(), isManager()]);
 
   const params = await searchParams;
 
@@ -29,7 +30,8 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   if (params.cnae) filters.cnae = params.cnae;
   if (params.uf) filters.uf = params.uf;
   if (params.lead_source) filters.lead_source = params.lead_source;
-  if (params.assigned_to) filters.assigned_to = params.assigned_to;
+  // SDR não filtra por responsável: a tela já mostra só os leads dele.
+  if (params.assigned_to && canFilterByOwner) filters.assigned_to = params.assigned_to;
   if (params.cadence_id) filters.cadence_id = params.cadence_id;
   if (params.canal) filters.canal = params.canal;
   if (params.loss_reason_id) filters.loss_reason_id = params.loss_reason_id;
@@ -42,7 +44,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   if (params.sort_by) filters.sort_by = params.sort_by;
   if (params.sort_dir) filters.sort_dir = params.sort_dir;
 
-  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.canal || params.assigned_to || params.cadence_id || params.loss_reason_id || params.search || params.created_period || params.created_from || params.created_to);
+  const hasFilters = !!(params.status || params.enrichment_status || params.porte || params.cnae || params.uf || params.lead_source || params.canal || (canFilterByOwner && params.assigned_to) || params.cadence_id || params.loss_reason_id || params.search || params.created_period || params.created_from || params.created_to);
 
   // Filter options, counts and members don't depend on the lead page — start
   // them together with fetchLeads instead of waiting for it (they used to run
@@ -104,6 +106,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       userMap={userMap}
       currentUserId={user.id}
       members={members}
+      canFilterByOwner={canFilterByOwner}
       statusCounts={statusCounts}
       cadences={cadences}
       cnaes={cnaes}
