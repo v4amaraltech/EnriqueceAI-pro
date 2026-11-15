@@ -223,4 +223,17 @@ describe('elegibilidade e rodadas', () => {
     expect(m.get('11999990000')).toEqual({ count: 2, last: '2026-11-05T14:00:00Z' });
     expect(m.size).toBe(1);
   });
+
+  it('com prioridade, pula outra inscrição do lead já discado e deixa a original voltar na rodada', () => {
+    const first = item('a');
+    const other = item('a2', { leadId: 'l-a' });
+    const nextLead = item('b', { phone: '(11) 98888-0000' });
+    const queue = [first, other, nextLead];
+    const session = new Map([['l-a', 'a']]);
+    expect(pickNextAutoDial(queue, 0, new Set(), new Map(), LIMIT, NOW, { sessionLeadEnrollment: session })).toEqual({ kind: 'dial', index: 2 });
+    // Sem opções, o comportamento atual permanece: a outra inscrição do mesmo lead entra.
+    expect(pickNextAutoDial(queue, 0, new Set(), new Map(), LIMIT, NOW)).toEqual({ kind: 'dial', index: 1 });
+    // A inscrição original ainda pode ser escolhida de novo na volta da fila.
+    expect(pickNextAutoDial(queue, 2, new Set(), new Map(), LIMIT, NOW, { sessionLeadEnrollment: session })).toEqual({ kind: 'dial', index: 0 });
+  });
 });

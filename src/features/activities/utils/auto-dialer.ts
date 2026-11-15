@@ -297,6 +297,15 @@ export type AutoDialPick = { kind: 'dial'; index: number } | { kind: 'wait'; ind
  * (rodadas): o primeiro com número liberado agora; senão, o que fica liberado
  * mais cedo (espera); senão, acabou.
  */
+export type PickNextAutoDialOptions = {
+  /**
+   * Quando a prioridade está ligada: se o lead já foi discado nesta sessão por
+   * uma inscrição, as outras inscrições dele são puladas. A inscrição original
+   * ainda pode voltar nas rodadas (limite diário e intervalo de 1 h).
+   */
+  sessionLeadEnrollment?: ReadonlyMap<string, string>;
+};
+
 export function pickNextAutoDial(
   queue: readonly DialerQueueItem[],
   fromIndex: number,
@@ -304,6 +313,7 @@ export function pickNextAutoDial(
   log: AttemptLog,
   limit: number,
   now: number,
+  options?: PickNextAutoDialOptions,
 ): AutoDialPick {
   const n = queue.length;
   let wait: { index: number; until: number } | null = null;
@@ -311,6 +321,8 @@ export function pickNextAutoDial(
     const i = (((fromIndex + step) % n) + n) % n;
     const item = queue[i];
     if (!item || !isAutoDialEligible(item, done)) continue;
+    const firstEnrollment = options?.sessionLeadEnrollment?.get(item.leadId);
+    if (firstEnrollment && firstEnrollment !== item.enrollmentId) continue;
     if (availablePhones(item, log, limit, now).length > 0) return { kind: 'dial', index: i };
     const at = nextAvailableAt(item, log, limit);
     if (at !== null && (wait === null || at < wait.until)) wait = { index: i, until: at };

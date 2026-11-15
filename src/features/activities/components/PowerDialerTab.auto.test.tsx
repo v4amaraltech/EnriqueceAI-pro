@@ -76,6 +76,15 @@ vi.mock('@/features/auth/hooks/useOrganization', () => ({
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
+const queueRefresh = vi.hoisted(() => ({ fetch: vi.fn() }));
+vi.mock('../actions/fetch-dialer-queue', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../actions/fetch-dialer-queue')>();
+  return {
+    ...actual,
+    fetchDialerQueue: (...args: unknown[]) => queueRefresh.fetch(...args),
+  };
+});
+
 import { clearWebphoneCallContext, setWebphoneCallNotes } from '@/features/integrations/webphone/webphone-call-context';
 import { claimWebphoneDial, resetWebphoneDialCorrelation } from '@/features/integrations/webphone/webphone-dial-correlation';
 import { LOCAL_SESSION_GRACE_MS, RAMAL_RELEASE_WINDOW_MS, SESSION_MISSING_MESSAGE } from '../utils/power-dialer-webphone-sync';
@@ -109,7 +118,7 @@ function lead(id: string, name: string, over: Partial<DialerQueueItem> = {}): Di
 const ready: WebphoneState = { ...initialWebphoneState, registration: 'registered', mic: 'granted' };
 let dialSeq = 0;
 
-function renderDialer(queue: DialerQueueItem[], leadCardEnabled = false) {
+function renderDialer(queue: DialerQueueItem[], leadCardEnabled = false, priorityQueueEnabled = false) {
   return render(
     <TooltipProvider>
       <PowerDialerTab
@@ -117,6 +126,7 @@ function renderDialer(queue: DialerQueueItem[], leadCardEnabled = false) {
         stats={{ leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: queue.length }}
         preferences={{ simultaneous_phones: 2, daily_limit_per_lead: 3 }}
         leadCardEnabled={leadCardEnabled}
+        priorityQueueEnabled={priorityQueueEnabled}
       />
     </TooltipProvider>,
   );
@@ -187,6 +197,7 @@ describe('PowerDialerTab — discagem automática', () => {
     });
     actions.completeDialerCall.mockReset().mockResolvedValue({ success: true, data: { callId: 'x' } });
     leadCard.fetch.mockReset().mockResolvedValue({ success: false, error: 'nao usado' });
+    queueRefresh.fetch.mockReset().mockResolvedValue({ success: true, data: [] });
   });
 
   afterEach(() => {
@@ -728,5 +739,72 @@ describe('PowerDialerTab: microfone ainda não pedido (aba recém-carregada)', (
     });
     expect(mic.request).toHaveBeenCalledTimes(1);
     expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PowerDialerTab: fila por prioridade', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    window.localStorage.setItem(AUTO_DIAL_STORAGE_KEY, '1');
+    resetWebphoneDialCorrelation();
+    clearWebphoneCallContext();
+    phone.set(ready);
+    answer.value = 'unknown';
+    queueRefresh.fetch.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.localStorage.clear();
+  });
+
+  it('com a flag desligada, não recarrega a fila e mantém o initialQueue', async () => {
+    renderDialer([lead('1', 'Maria Silva'), lead('2', 'Joao Santos')]);
+    expect(screen.getAllByText('Maria Silva').length).toBeGreaterThan(0);
+    await advance(30_000);
+    expect(queueRefresh.fetch).not.toHaveBeenCalled();
+  });
+
+  it('com a flag ligada, recarrega a fila e sobe o melhor lead quando não há ligação em curso', async () => {
+    const first = lead('1', 'Maria Silva');
+    const best = lead('2', 'Joao Santos');
+    queueRefresh.fetch.mockResolvedValue({ success: true, data: [best, first] });
+    renderDialer([first, best], false, true);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(queueRefresh.fetch).toHaveBeenCalled();
+    expect(screen.getAllByText('Joao Santos').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    expect(screen.getByText(/Próxima ligação em 5 s — Joao Santos/)).toBeInTheDocument();
+  });
+
+  it('com a flag ligada, não troca o lead no meio da ligação', async () => {
+    const first = lead('1', 'Maria Silva');
+    const best = lead('2', 'Joao Santos');
+    queueRefresh.fetch.mockResolvedValue({ success: true, data: [first, best] });
+    renderDialer([first, best], false, true);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    actions.initiateCall.mockReset().mockImplementation(async (input: { phone: string }) => {
+      attachThisSession(input.phone);
+      return { success: true, data: { callId: '00000000-0000-4000-8000-000000000099', providerCallId: 'p99' } };
+    });
+    fireEvent.click(screen.getByText('Iniciar ligacoes'));
+    await advance(5_000);
+    expect(actions.initiateCall).toHaveBeenCalled();
+    expect(actions.initiateCall.mock.calls[0]?.[0]).toMatchObject({ phone: first.phone });
+    queueRefresh.fetch.mockClear();
+    queueRefresh.fetch.mockResolvedValue({ success: true, data: [best, first] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(queueRefresh.fetch).toHaveBeenCalled();
+    expect(actions.initiateCall).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('Maria Silva').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Próxima ligação em 5 s — Joao Santos/)).not.toBeInTheDocument();
   });
 });

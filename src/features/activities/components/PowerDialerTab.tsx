@@ -39,7 +39,7 @@ import {
   webphoneUsableAfterMicGesture,
 } from '@/features/integrations/webphone/webphone-state';
 
-import type { DialerQueueItem } from '../actions/fetch-dialer-queue';
+import { fetchDialerQueue, type DialerQueueItem } from '../actions/fetch-dialer-queue';
 import type { DialerPreferences, DialerStats } from '../schemas/dialer-preferences.schemas';
 import { completeDialerCall } from '../actions/complete-dialer-call';
 import { hasWrittenNotes } from '../types/call-attempt';
@@ -62,6 +62,11 @@ import {
   type PhoneAttempt,
 } from '../utils/auto-dialer';
 import {
+  DIALER_PRIORITY_REFRESH_MS,
+  isDialerQueueRefreshLocked,
+  mergeDialerQueueRefresh,
+} from '../utils/rank-dialer-queue';
+import {
   LOCAL_SESSION_GRACE_MS,
   nextRamalAttempt,
   RAMAL_BUSY_PAUSE_MESSAGE,
@@ -82,6 +87,8 @@ interface PowerDialerTabProps {
   dialerProvider?: DialerProvider;
   /** Flag `call_lead_card_v1`. Liga o cartão no painel direito. */
   leadCardEnabled?: boolean;
+  /** Flag `call_priority_v2`. Ordena e atualiza a fila pelo melhor lead. */
+  priorityQueueEnabled?: boolean;
 }
 
 type DialResult =
@@ -98,8 +105,8 @@ function browserStorage(): Storage | null {
   }
 }
 
-export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences, dialerProvider = 'api4com', leadCardEnabled = false }: PowerDialerTabProps) {
-  const [queue] = useState<DialerQueueItem[]>(initialQueue);
+export function PowerDialerTab({ initialQueue, stats: initialStats, preferences: initialPreferences, dialerProvider = 'api4com', leadCardEnabled = false, priorityQueueEnabled = false }: PowerDialerTabProps) {
+  const [queue, setQueue] = useState<DialerQueueItem[]>(initialQueue);
   const [currentPreferences] = useState<DialerPreferences>(initialPreferences);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
@@ -138,23 +145,118 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
   const doneIds = useMemo(() => new Set(itemStatuses.keys()), [itemStatuses]);
 
   const currentItem = queue[currentIndex];
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
+  const autoPhaseRef = useRef(auto.phase);
+  autoPhaseRef.current = auto.phase;
+  const callStateRef = useRef(callState);
+  callStateRef.current = callState;
+  const itemStatusesRef = useRef(itemStatuses);
+  itemStatusesRef.current = itemStatuses;
+  const attemptLogRef = useRef(attemptLog);
+  attemptLogRef.current = attemptLog;
+  const sessionLeadEnrollmentRef = useRef(new Map<string, string>());
+  const refreshInFlightRef = useRef(false);
+  const refreshPriorityQueueRef = useRef<() => Promise<void>>(async () => {});
 
   // Find next pending index from a given position
   const findNextPending = useCallback(
     (fromIndex: number, statuses: Map<string, DialerItemStatus>) => {
+      const session = priorityQueueEnabled ? sessionLeadEnrollmentRef.current : null;
       for (let i = fromIndex + 1; i < queue.length; i++) {
         const item = queue[i];
-        if (item && !statuses.has(item.enrollmentId)) return i;
+        if (!item || statuses.has(item.enrollmentId)) continue;
+        const first = session?.get(item.leadId);
+        if (first && first !== item.enrollmentId) continue;
+        return i;
       }
       return -1; // no more pending
     },
-    [queue],
+    [queue, priorityQueueEnabled],
   );
 
   /** Próximo lead do automático depois de `fromIndex` (dá a volta na fila). */
   function pickAuto(fromIndex: number, statuses: Map<string, DialerItemStatus>): AutoDialPick {
-    return pickNextAutoDial(queue, fromIndex, new Set(statuses.keys()), attemptLog, dailyLimit, Date.now());
+    return pickNextAutoDial(
+      queue,
+      fromIndex,
+      new Set(statuses.keys()),
+      attemptLog,
+      dailyLimit,
+      Date.now(),
+      priorityQueueEnabled ? { sessionLeadEnrollment: sessionLeadEnrollmentRef.current } : undefined,
+    );
   }
+
+  async function refreshPriorityQueue() {
+    if (!priorityQueueEnabled || refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    try {
+      const result = await fetchDialerQueue();
+      if (!result.success) return;
+      const previous = queueRef.current;
+      const current = previous[currentIndexRef.current] ?? null;
+      const locked = isDialerQueueRefreshLocked(autoPhaseRef.current, callStateRef.current);
+      const next = mergeDialerQueueRefresh({
+        previous,
+        incoming: result.data,
+        currentEnrollmentId: current?.enrollmentId ?? null,
+        sessionLeadEnrollment: sessionLeadEnrollmentRef.current,
+        lockCurrent: locked,
+      });
+      setQueue(next);
+      setAttemptLog((prev) => {
+        const merged = new Map(prev);
+        for (const [key, value] of buildAttemptLog(next)) {
+          const existing = merged.get(key);
+          if (!existing) {
+            merged.set(key, value);
+            continue;
+          }
+          merged.set(key, {
+            count: Math.max(existing.count, value.count),
+            lastAt: Math.max(existing.lastAt ?? 0, value.lastAt ?? 0) || value.lastAt,
+          });
+        }
+        return merged;
+      });
+
+      if (locked && current) {
+        const idx = next.findIndex((item) => item.enrollmentId === current.enrollmentId);
+        if (idx >= 0 && idx !== currentIndexRef.current) setCurrentIndex(idx);
+        return;
+      }
+
+      const pick = pickNextAutoDial(
+        next,
+        -1,
+        new Set(itemStatusesRef.current.keys()),
+        attemptLogRef.current,
+        dailyLimit,
+        Date.now(),
+        { sessionLeadEnrollment: sessionLeadEnrollmentRef.current },
+      );
+      if (autoPhaseRef.current !== 'off' && pick.kind === 'dial') {
+        const nextItem = next[pick.index];
+        if (nextItem && nextItem.enrollmentId !== current?.enrollmentId) {
+          setCurrentIndex(pick.index);
+          if (autoPhaseRef.current === 'countdown' || autoPhaseRef.current === 'waiting') {
+            dispatchAuto({ type: 'next_lead' });
+          }
+          return;
+        }
+      }
+      if (current) {
+        const idx = next.findIndex((item) => item.enrollmentId === current.enrollmentId);
+        if (idx >= 0 && idx !== currentIndexRef.current) setCurrentIndex(idx);
+      }
+    } finally {
+      refreshInFlightRef.current = false;
+    }
+  }
+  refreshPriorityQueueRef.current = refreshPriorityQueue;
 
   /** Vai para o lead escolhido e devolve o evento do automático (null = acabou). */
   function applyPick(pick: AutoDialPick): AutoDialEvent | null {
@@ -358,6 +460,11 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
         }
 
         setAttemptLog((prev) => recordAttempt(prev, phoneToCall, Date.now()));
+        if (item?.leadId && item.enrollmentId && !sessionLeadEnrollmentRef.current.has(item.leadId)) {
+          const next = new Map(sessionLeadEnrollmentRef.current);
+          next.set(item.leadId, item.enrollmentId);
+          sessionLeadEnrollmentRef.current = next;
+        }
         setCallId(result.data.callId);
         setProviderCallId(result.data.providerCallId);
         inFlightRef.current = false;
@@ -477,6 +584,9 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
    * evento a seguir (`wait` quando todos estão no intervalo) ou null se acabou.
    */
   function alignAuto(): AutoDialEvent | null {
+    if (priorityQueueEnabled) {
+      return applyPick(pickAuto(-1, itemStatuses));
+    }
     if (dialablePhones().length > 0) return { type: 'next_lead' };
     return applyPick(pickAuto(currentIndex - 1, itemStatuses));
   }
@@ -629,6 +739,21 @@ export function PowerDialerTab({ initialQueue, stats: initialStats, preferences:
     const t = window.setTimeout(() => dispatchAuto({ type: 'wake' }), delay);
     return () => window.clearTimeout(t);
   }, [auto]);
+
+  useEffect(() => {
+    if (!priorityQueueEnabled) return;
+    if (auto.phase === 'countdown' || auto.phase === 'waiting' || auto.phase === 'off') {
+      void refreshPriorityQueueRef.current();
+    }
+  }, [auto.phase, priorityQueueEnabled]);
+
+  useEffect(() => {
+    if (!priorityQueueEnabled) return;
+    const id = window.setInterval(() => {
+      void refreshPriorityQueueRef.current();
+    }, DIALER_PRIORITY_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [priorityQueueEnabled]);
 
   // Registra sozinho (com as anotações do painel flutuante) e segue:
   // atendida → a IA classifica a gravação depois; não atendida (última

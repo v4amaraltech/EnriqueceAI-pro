@@ -57,6 +57,7 @@ interface ActivityQueueViewProps {
   members?: Array<{ userId: string; name: string; role: 'manager' | 'sdr' }>;
   /** Flag `call_lead_card_v1`. Ligada, a fila oferece o painel lateral. O Executar continua na gaveta. */
   leadCardEnabled?: boolean;
+  priorityQueueEnabled?: boolean;
 }
 
 const channelGroupLabel: Record<string, string> = {
@@ -102,7 +103,7 @@ function applyFilters(activities: PendingActivity[], filters: ActivityFilterValu
 const defaultStats: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
 const defaultPrefs: DialerPreferences = { simultaneous_phones: 2, daily_limit_per_lead: 3 };
 
-export function ActivityQueueView({ initialActivities, progress, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, activeProspectingCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [], leadCardEnabled = false }: ActivityQueueViewProps) {
+export function ActivityQueueView({ initialActivities, progress, dialerQueue = [], dialerStats, dialerPreferences, dialerProvider = null, showPowerDialer = true, availableLeadsCount = 0, activeProspectingCount = 0, availableLeadIds = [], allCadenceNames = [], isManager = false, members = [], leadCardEnabled = false, priorityQueueEnabled = false }: ActivityQueueViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activities, setActivities] = useState<PendingActivity[]>(initialActivities);
@@ -640,6 +641,7 @@ export function ActivityQueueView({ initialActivities, progress, dialerQueue = [
           preferences={dialerPreferences ?? defaultPrefs}
           dialerProvider={dialerProvider}
           leadCardEnabled={leadCardEnabled}
+          priorityQueueEnabled={priorityQueueEnabled}
         />
       ) : (
         <>

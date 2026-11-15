@@ -8,9 +8,13 @@ import { brtDayStartIso, brtTodayIso } from '@/lib/utils/brt-date';
 
 import type { LeadPhone, LeadSocio } from '@/features/leads/types';
 
+import { isCallPriorityV2Enabled } from '@/features/contact-engine/services/call-priority.service';
+import type { NextLeadInteraction } from '@/features/cockpit/utils/next-lead';
+
 import type { DialerStats } from '../schemas/dialer-preferences.schemas';
 import { countCallsByPhone, phoneKey } from '../utils/auto-dialer';
 import { entraNaFilaHumana } from '../utils/fila-humana';
+import { rankDialerQueue } from '../utils/rank-dialer-queue';
 import { getAllLeadPhones } from '../utils/resolve-whatsapp-phone';
 
 export interface DialerQueuePhone {
@@ -65,6 +69,8 @@ export interface DialerQueueWithStats {
    * batiam com a lista).
    */
   stats: DialerStats;
+  /** Flag `call_priority_v2` ligada para a org do viewer. */
+  priorityQueueEnabled: boolean;
 }
 
 const EMPTY_STATS: DialerStats = { leadsWithoutPhone: 0, leadsAtDailyLimit: 0, leadsWithSnooze: 0, totalAvailable: 0 };
@@ -78,17 +84,21 @@ export async function fetchDialerQueue(): Promise<ActionResult<DialerQueueItem[]
 export async function fetchDialerQueueWithStats(): Promise<ActionResult<DialerQueueWithStats>> {
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
-  const { supabase, userId, role } = auth.data;
+  const { supabase, userId, role, orgId } = auth.data;
+  const priorityQueueEnabled = await isCallPriorityV2Enabled({ orgId, userId });
+  const now = new Date();
+  const nowIso = now.toISOString();
 
   // Active enrollments (all due, regardless of step type). Fila PESSOAL: SDR só os
   // leads atribuídos a ele (não confiar no RLS — em modo 'all' deixa de escopar);
   // manager, a org toda.
+  const enrollmentSelect = 'id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios, phones), cadence:cadences(id, name, type, executor)';
   let queue = from(supabase, 'cadence_enrollments')
-    .select('id, cadence_id, lead_id, current_step, next_step_due, lead:leads!inner(id, nome_fantasia, razao_social, cnpj, telefone, first_name, last_name, socios, phones), cadence:cadences(id, name, type, executor)')
+    .select(enrollmentSelect)
     .eq('status', 'active')
-    .lte('next_step_due', new Date().toISOString());
+    .lte('next_step_due', nowIso);
   if (role !== 'manager') queue = queue.eq('lead.assigned_to', userId);
-  const { data: enrollments, error } = (await queue
+  const { data: dueEnrollments, error } = (await queue
     .order('next_step_due', { ascending: true })
     .limit(100)) as {
       data: Array<{
@@ -103,13 +113,25 @@ export async function fetchDialerQueueWithStats(): Promise<ActionResult<DialerQu
       error: { message: string } | null;
     };
 
-  if (error || !enrollments) {
-    return { success: true, data: { items: [], stats: EMPTY_STATS } };
+  if (error || !dueEnrollments) {
+    return { success: true, data: { items: [], stats: EMPTY_STATS, priorityQueueEnabled } };
   }
+
+  const enrollments = priorityQueueEnabled
+    ? await includeSignaledDueEnrollments({
+        supabase,
+        orgId,
+        userId,
+        role,
+        existing: dueEnrollments,
+        now,
+        select: enrollmentSelect,
+      })
+    : dueEnrollments;
 
   // Batch-fetch all steps for these cadences (phone only + total count)
   const cadenceIds = [...new Set(enrollments.map((e) => e.cadence_id))];
-  if (cadenceIds.length === 0) return { success: true, data: { items: [], stats: EMPTY_STATS } };
+  if (cadenceIds.length === 0) return { success: true, data: { items: [], stats: EMPTY_STATS, priorityQueueEnabled } };
 
   const [phoneStepsResult, allStepsResult] = await Promise.all([
     from(supabase, 'cadence_steps')
@@ -251,16 +273,127 @@ export async function fetchDialerQueueWithStats(): Promise<ActionResult<DialerQu
     });
   }
 
+  const items = priorityQueueEnabled
+    ? (await rankFetchedDialerQueue({ supabase, orgId, items: result, now })).slice(0, 100)
+    : result;
+
   return {
     success: true,
     data: {
-      items: result,
+      items,
       stats: {
         leadsWithoutPhone,
         leadsAtDailyLimit,
         leadsWithSnooze: 0, // ainda não existe snooze
-        totalAvailable: result.length,
+        totalAvailable: items.length,
       },
+      priorityQueueEnabled,
     },
   };
+}
+
+type DialerEnrollmentRow = {
+  id: string;
+  cadence_id: string;
+  lead_id: string;
+  current_step: number;
+  next_step_due: string;
+  lead: { id: string; nome_fantasia: string | null; razao_social: string | null; cnpj: string; telefone: string | null; first_name: string | null; last_name: string | null; socios: LeadSocio[] | null; phones: LeadPhone[] | null } | null;
+  cadence: { id: string; name: string; type: string | null; executor: string | null } | null;
+};
+
+async function includeSignaledDueEnrollments(args: {
+  supabase: unknown;
+  orgId: string;
+  userId: string;
+  role: string;
+  existing: DialerEnrollmentRow[];
+  now: Date;
+  select: string;
+}): Promise<DialerEnrollmentRow[]> {
+  const { supabase, orgId, userId, role, existing, now, select } = args;
+  const already = new Set(existing.map((row) => row.lead_id));
+  const sinceReply = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+  const sinceNoShow = new Date(now.getTime() - 14 * 86_400_000).toISOString();
+
+  const [interactionResult, noShowResult] = await Promise.all([
+    from(supabase as never, 'interactions')
+      .select('lead_id')
+      .eq('org_id', orgId)
+      .in('type', ['replied', 'opened', 'clicked'])
+      .gte('created_at', sinceReply) as unknown as Promise<{ data: Array<{ lead_id: string | null }> | null }>,
+    (role !== 'manager'
+      ? from(supabase as never, 'leads').select('id').eq('assigned_to', userId).gte('meeting_no_show_at', sinceNoShow)
+      : from(supabase as never, 'leads').select('id').gte('meeting_no_show_at', sinceNoShow)
+    ) as unknown as Promise<{ data: Array<{ id: string }> | null }>,
+  ]);
+
+  const missing: string[] = [];
+  const seenMissing = new Set<string>();
+  for (const row of interactionResult.data ?? []) {
+    if (!row.lead_id || already.has(row.lead_id) || seenMissing.has(row.lead_id)) continue;
+    seenMissing.add(row.lead_id);
+    missing.push(row.lead_id);
+  }
+  for (const row of noShowResult.data ?? []) {
+    if (already.has(row.id) || seenMissing.has(row.id)) continue;
+    seenMissing.add(row.id);
+    missing.push(row.id);
+  }
+  if (missing.length === 0) return existing;
+
+  let extraQuery = from(supabase as never, 'cadence_enrollments')
+    .select(select)
+    .eq('status', 'active')
+    .lte('next_step_due', now.toISOString())
+    .in('lead_id', missing.slice(0, 100));
+  if (role !== 'manager') extraQuery = extraQuery.eq('lead.assigned_to', userId);
+  const { data: extra } = (await extraQuery) as { data: DialerEnrollmentRow[] | null };
+  if (!extra || extra.length === 0) return existing;
+
+  const byId = new Map(existing.map((row) => [row.id, row]));
+  for (const row of extra) {
+    if (!byId.has(row.id)) byId.set(row.id, row);
+  }
+  return [...byId.values()];
+}
+
+async function rankFetchedDialerQueue(args: {
+  supabase: unknown;
+  orgId: string;
+  items: DialerQueueItem[];
+  now: Date;
+}): Promise<DialerQueueItem[]> {
+  const { supabase, orgId, items, now } = args;
+  if (items.length === 0) return items;
+  const leadIds = [...new Set(items.map((item) => item.leadId))];
+  const sinceReply = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+
+  const [leadResult, interactionResult] = await Promise.all([
+    from(supabase as never, 'leads')
+      .select('id, updated_at, meeting_no_show_at')
+      .in('id', leadIds) as unknown as Promise<{
+      data: Array<{ id: string; updated_at: string; meeting_no_show_at: string | null }> | null;
+    }>,
+    from(supabase as never, 'interactions')
+      .select('lead_id, type, created_at')
+      .eq('org_id', orgId)
+      .in('lead_id', leadIds)
+      .in('type', ['replied', 'opened', 'clicked'])
+      .gte('created_at', sinceReply) as unknown as Promise<{
+      data: Array<{ lead_id: string; type: string; created_at: string }> | null;
+    }>,
+  ]);
+
+  const signals = (leadResult.data ?? []).map((row) => ({
+    leadId: row.id,
+    noShowAt: row.meeting_no_show_at,
+    updatedAt: row.updated_at,
+  }));
+  const interactions: NextLeadInteraction[] = (interactionResult.data ?? []).map((row) => ({
+    leadId: row.lead_id,
+    type: row.type,
+    at: row.created_at,
+  }));
+  return rankDialerQueue(items, { signals, interactions, now });
 }

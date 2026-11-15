@@ -98,6 +98,7 @@ export default async function AtividadesPage() {
         isManager={managerFlag}
         members={members}
         leadCardEnabled={leadCardEnabled}
+        priorityQueueEnabled={dialerResult.success ? dialerResult.data.priorityQueueEnabled : false}
       />
     </div>
   );
