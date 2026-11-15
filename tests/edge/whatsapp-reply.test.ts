@@ -100,6 +100,38 @@ describe('captureInboundReply', () => {
     expect(state.calls.map((c) => c.table)).toEqual(['app_flags']);
   });
 
+  it('enabled=false e org fora da lista: não captura', async () => {
+    state.results['app_flags:select'] = ok({
+      enabled: false,
+      allow_org_ids: ['00000000-0000-0000-0000-000000000000'],
+      allow_user_ids: [],
+    });
+    expect(await captureInboundReply(ORG, reply)).toEqual({ status: 'disabled' });
+    expect(state.calls.map((c) => c.table)).toEqual(['app_flags']);
+  });
+
+  it('enabled=false e org na allow_org_ids: registra a resposta e para a cadência', async () => {
+    state.results['app_flags:select'] = ok({
+      enabled: false,
+      allow_org_ids: [ORG],
+      allow_user_ids: [],
+    });
+    expect(await captureInboundReply(ORG, reply)).toEqual({ status: 'recorded', leadId: 'lead-1' });
+    expect(find('interactions', 'insert')?.payload).toMatchObject({
+      lead_id: 'lead-1',
+      type: 'replied',
+      channel: 'whatsapp',
+      external_id: 'MSG-1',
+    });
+    expect(find('cadence_enrollments', 'update')?.payload).toMatchObject({ status: 'replied' });
+  });
+
+  it('enabled=true continua valendo para qualquer org', async () => {
+    state.results['app_flags:select'] = ok({ enabled: true, allow_org_ids: [], allow_user_ids: [] });
+    const otherOrg = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    expect(await captureInboundReply(otherOrg, reply)).toEqual({ status: 'recorded', leadId: 'lead-1' });
+  });
+
   it('registra a resposta, para as cadências e avisa o SDR', async () => {
     expect(await captureInboundReply(ORG, reply)).toEqual({ status: 'recorded', leadId: 'lead-1' });
 
