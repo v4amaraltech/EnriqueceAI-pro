@@ -3,7 +3,8 @@ import { COCKPIT_TABS, type CockpitTab } from '../types';
 /**
  * De quem são os dados do Cockpit.
  * - SDR: sempre ele mesmo, ignorando `?sdr=` (não vê outro SDR).
- * - Gestor: o SDR pedido, se for um SDR da org; senão o primeiro SDR da lista;
+ * - Gestor: o SDR pedido, se for um SDR da org, ou ele mesmo (o próprio Cockpit);
+ *   qualquer outro uuid é ignorado. Sem pedido válido: o primeiro SDR da lista;
  *   sem SDR na org, ele mesmo.
  */
 export function pickCockpitTarget(input: {
@@ -14,7 +15,7 @@ export function pickCockpitTarget(input: {
 }): string {
   const { isManager, viewerId, requested, sdrIds } = input;
   if (!isManager) return viewerId;
-  if (requested && sdrIds.includes(requested)) return requested;
+  if (requested && (requested === viewerId || sdrIds.includes(requested))) return requested;
   return sdrIds[0] ?? viewerId;
 }
 
