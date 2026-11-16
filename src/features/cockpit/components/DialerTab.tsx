@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { hangupCall } from '@/features/integrations/webphone/webphone-client';
+import { cn } from '@/lib/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
@@ -62,12 +63,10 @@ interface DialerTabViewProps {
   leadCardEnabled?: boolean;
   schedulingPreview?: SchedulingPreview;
   previewOnly?: boolean;
-  /** Só para a página de visualização: painel solto na página, sem gaveta. Não usar no Cockpit. */
-  inlinePanel?: boolean;
 }
 
 /** A tela da aba (sem o hook): recebe o motor pronto. Separada para a página de visualização usar um motor falso. */
-export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = false, schedulingPreview, previewOnly = false, inlinePanel = false }: DialerTabViewProps) {
+export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = false, schedulingPreview, previewOnly = false }: DialerTabViewProps) {
   // Ligações do motor vistas nesta sessão (o hook não expõe o total do dia).
   const [seenCalls, setSeenCalls] = useState<string[]>([]);
   if (engine.callId && !seenCalls.includes(engine.callId)) setSeenCalls([...seenCalls, engine.callId]);
@@ -90,56 +89,65 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
       : 'Aguardando o próximo lead';
 
   return (
-    <section className="space-y-4" aria-label="Discador" data-testid="dialer-tab">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">Discador</h2>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground text-xs" id="dialer-queue-label">
-            Fila
-          </span>
-          <Select value={queue} onValueChange={(v) => onQueueChange(v as AutoDialQueue)} disabled={running}>
-            <SelectTrigger
-              className="h-8 w-[220px]"
-              aria-labelledby="dialer-queue-label"
-              data-testid="dialer-queue"
-              title={running ? 'Pare o motor para trocar de fila' : undefined}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {QUEUE_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    // Duas colunas em lg+ com o painel aberto (cartão do motor | painel do lead): o painel NUNCA cobre o desfecho.
+    // Fechado, o cartão ocupa a largura toda. Abaixo de lg o painel empilha embaixo do cartão.
+    <section
+      className={cn('grid items-start gap-4', panelOpen && 'lg:grid-cols-[minmax(0,1fr)_minmax(380px,460px)]')}
+      aria-label="Discador"
+      data-testid="dialer-tab"
+      data-panel-open={panelOpen ? 'true' : 'false'}
+    >
+      <div className="min-w-0 space-y-4" data-testid="dialer-main-column">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold">Discador</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground text-xs" id="dialer-queue-label">
+              Fila
+            </span>
+            <Select value={queue} onValueChange={(v) => onQueueChange(v as AutoDialQueue)} disabled={running}>
+              <SelectTrigger
+                className="h-8 w-[220px]"
+                aria-labelledby="dialer-queue-label"
+                data-testid="dialer-queue"
+                title={running ? 'Pare o motor para trocar de fila' : undefined}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {QUEUE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-      </div>
-      {running && (
-        <p className="text-muted-foreground text-right text-xs" data-testid="dialer-queue-hint">
-          Pare o motor para trocar de fila.
-        </p>
-      )}
+        {running && (
+          <p className="text-muted-foreground text-right text-xs" data-testid="dialer-queue-hint">
+            Pare o motor para trocar de fila.
+          </p>
+        )}
 
-      <div className="space-y-4 rounded-lg border border-[var(--primary)]/40 bg-[var(--card)] p-4">
-        <CockpitAutoDialBar engine={engine} sessionCalls={seenCalls.length} onHangup={() => void hangupCall()} />
-        <p className="text-muted-foreground text-sm" data-testid="auto-dial-clean-state">
-          {shortState}
-        </p>
-        {inCallPhase && !panelOpen && panelCard && (
-          <Button type="button" size="sm" variant="outline" onClick={() => setDismissedLead(null)} data-testid="motor-panel-reopen">
-            Ver dados do lead
-          </Button>
-        )}
-        {phase === 'awaiting-sdr' && panelCard && (
-          <AutoDialOutcomeConfirm
-            callId={engine.callId}
-            leadId={panelCard.context.leadId}
-            simulated={engine.simulated}
-            onConfirm={engine.confirmOutcome}
-          />
-        )}
+        <div className="space-y-4 rounded-lg border border-[var(--primary)]/40 bg-[var(--card)] p-4">
+          <CockpitAutoDialBar engine={engine} sessionCalls={seenCalls.length} onHangup={() => void hangupCall()} />
+          <p className="text-muted-foreground text-sm" data-testid="auto-dial-clean-state">
+            {shortState}
+          </p>
+          {inCallPhase && !panelOpen && panelCard && (
+            <Button type="button" size="sm" variant="outline" onClick={() => setDismissedLead(null)} data-testid="motor-panel-reopen">
+              Ver dados do lead
+            </Button>
+          )}
+          {phase === 'awaiting-sdr' && panelCard && (
+            <AutoDialOutcomeConfirm
+              callId={engine.callId}
+              leadId={panelCard.context.leadId}
+              simulated={engine.simulated}
+              onConfirm={engine.confirmOutcome}
+            />
+          )}
+        </div>
       </div>
 
       {panelCard && (
@@ -158,7 +166,6 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
           actionsDisabled={LIVE_PHASES.has(phase)}
           previewOnly={previewOnly}
           schedulingPreview={schedulingPreview}
-          inline={inlinePanel}
         />
       )}
     </section>
