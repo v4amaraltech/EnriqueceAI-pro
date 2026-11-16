@@ -135,6 +135,10 @@ export interface CallPriorityView {
   reasons: string[];
   /** Alguém corrigiu o interesse manualmente. */
   humanCorrected: boolean;
+  /** Lead quente ou frio (sem interesse real). Ausente = como antes. */
+  tier?: 'hot' | 'cold';
+  /** Texto do selo mostrado quando o lead é frio; vem do servidor. */
+  tierLabel?: string | null;
 }
 
 export type NextCallCardResult =

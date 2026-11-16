@@ -30,9 +30,9 @@ import { isScopedFlagEnabled, type FlagScope } from './flag-scope.service';
  * Logs: somente ids e motivos.
  */
 
-const SIGNAL_WINDOW_DAYS = 90;
+export const SIGNAL_WINDOW_DAYS = 90;
 const DAY_MS = 86_400_000;
-const BANT_CORE_FIELDS = ['B (Budget)', 'A (Autoridade)', 'N (Necessidade)', 'T (Timing)'];
+export const BANT_CORE_FIELDS = ['B (Budget)', 'A (Autoridade)', 'N (Necessidade)', 'T (Timing)'];
 const SEND_AND_REPLY_TYPES = ['replied', 'meeting_scheduled', 'sent', 'delivered', 'opened', 'clicked', 'bounced', 'failed'];
 const UNIQUE_VIOLATION = '23505';
 const PAYLOAD_ALLOWED_KEYS = [

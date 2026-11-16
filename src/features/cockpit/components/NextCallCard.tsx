@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Building2, ExternalLink, PhoneCall } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 
 import { initiateApi4ComCall } from '@/features/calls/actions/initiate-api4com-call';
@@ -158,6 +159,11 @@ export function NextCallCard({ card, dialerProvider, outcomesEnabled = false }: 
           <p className="text-muted-foreground text-xs" data-testid="priority-source">
             Prioridade {priority.version} · fonte: {priority.sourceLabel ?? 'sem sinal'} · pontuação {priority.score}
           </p>
+        )}
+        {priority?.tier === 'cold' && priority.tierLabel && (
+          <Badge variant="secondary" data-testid="priority-cold-label">
+            {priority.tierLabel}
+          </Badge>
         )}
         <p className="text-sm font-medium">{approach.headline}</p>
         <p className="text-xs">{approach.opening}</p>

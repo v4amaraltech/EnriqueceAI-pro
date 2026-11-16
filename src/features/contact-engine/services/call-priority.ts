@@ -76,6 +76,9 @@ const CALL_DISPOSITION_POINTS: Record<string, number> = {
   technical_failure: 0,
 };
 
+/** Desfechos de ligação que contam como interesse (pontos > 0). Usado para o pré-filtro SQL do Cockpit. */
+export const INTEREST_DISPOSITIONS: string[] = Object.keys(CALL_DISPOSITION_POINTS).filter((k) => (CALL_DISPOSITION_POINTS[k] ?? 0) > 0);
+
 const CALL_DISPOSITION_LABELS: Record<string, string> = {
   relevant_conversation: 'conversa relevante',
   callback_requested: 'pediu para ligar depois',
