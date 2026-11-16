@@ -110,6 +110,189 @@ export type Database = {
         };
         Relationships: [];
       };
+      _bkp_bdr_ia_archive_20261115_cadences: {
+        Row: {
+          auto_loss_after_days: number | null;
+          auto_loss_reason_id: string | null;
+          created_at: string | null;
+          created_by: string | null;
+          deleted_at: string | null;
+          description: string | null;
+          executor: string | null;
+          id: string | null;
+          name: string | null;
+          org_id: string | null;
+          origin: string | null;
+          priority: string | null;
+          sdr_switch_allowed: boolean | null;
+          status: Database['public']['Enums']['cadence_status'] | null;
+          total_steps: number | null;
+          type: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          auto_loss_after_days?: number | null;
+          auto_loss_reason_id?: string | null;
+          created_at?: string | null;
+          created_by?: string | null;
+          deleted_at?: string | null;
+          description?: string | null;
+          executor?: string | null;
+          id?: string | null;
+          name?: string | null;
+          org_id?: string | null;
+          origin?: string | null;
+          priority?: string | null;
+          sdr_switch_allowed?: boolean | null;
+          status?: Database['public']['Enums']['cadence_status'] | null;
+          total_steps?: number | null;
+          type?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          auto_loss_after_days?: number | null;
+          auto_loss_reason_id?: string | null;
+          created_at?: string | null;
+          created_by?: string | null;
+          deleted_at?: string | null;
+          description?: string | null;
+          executor?: string | null;
+          id?: string | null;
+          name?: string | null;
+          org_id?: string | null;
+          origin?: string | null;
+          priority?: string | null;
+          sdr_switch_allowed?: boolean | null;
+          status?: Database['public']['Enums']['cadence_status'] | null;
+          total_steps?: number | null;
+          type?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_bdr_ia_archive_20261115_enrollments: {
+        Row: {
+          cadence_id: string | null;
+          completed_at: string | null;
+          current_step: number | null;
+          enrolled_at: string | null;
+          enrolled_by: string | null;
+          execution_id: string | null;
+          id: string | null;
+          lead_id: string | null;
+          lease_owner: string | null;
+          lease_until: string | null;
+          loss_notes: string | null;
+          loss_reason_id: string | null;
+          next_step_due: string | null;
+          org_id: string | null;
+          pending_assigned_to: string | null;
+          scheduled_start_at: string | null;
+          snooze_count: number | null;
+          status: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          cadence_id?: string | null;
+          completed_at?: string | null;
+          current_step?: number | null;
+          enrolled_at?: string | null;
+          enrolled_by?: string | null;
+          execution_id?: string | null;
+          id?: string | null;
+          lead_id?: string | null;
+          lease_owner?: string | null;
+          lease_until?: string | null;
+          loss_notes?: string | null;
+          loss_reason_id?: string | null;
+          next_step_due?: string | null;
+          org_id?: string | null;
+          pending_assigned_to?: string | null;
+          scheduled_start_at?: string | null;
+          snooze_count?: number | null;
+          status?: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          cadence_id?: string | null;
+          completed_at?: string | null;
+          current_step?: number | null;
+          enrolled_at?: string | null;
+          enrolled_by?: string | null;
+          execution_id?: string | null;
+          id?: string | null;
+          lead_id?: string | null;
+          lease_owner?: string | null;
+          lease_until?: string | null;
+          loss_notes?: string | null;
+          loss_reason_id?: string | null;
+          next_step_due?: string | null;
+          org_id?: string | null;
+          pending_assigned_to?: string | null;
+          scheduled_start_at?: string | null;
+          snooze_count?: number | null;
+          status?: Database['public']['Enums']['enrollment_status'] | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_bdr_ia_archive_20261115_links: {
+        Row: {
+          created_at: string | null;
+          email_cadence_id: string | null;
+          janela_abertura_dias: number | null;
+          org_id: string | null;
+          phone_cadence_id: string | null;
+        };
+        Insert: {
+          created_at?: string | null;
+          email_cadence_id?: string | null;
+          janela_abertura_dias?: number | null;
+          org_id?: string | null;
+          phone_cadence_id?: string | null;
+        };
+        Update: {
+          created_at?: string | null;
+          email_cadence_id?: string | null;
+          janela_abertura_dias?: number | null;
+          org_id?: string | null;
+          phone_cadence_id?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_bdr_ia_reassign_20261115_activities: {
+        Row: {
+          activity_id: string | null;
+          lead_id: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          activity_id?: string | null;
+          lead_id?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          activity_id?: string | null;
+          lead_id?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_bdr_ia_reassign_20261115_leads: {
+        Row: {
+          assigned_to: string | null;
+          lead_id: string | null;
+        };
+        Insert: {
+          assigned_to?: string | null;
+          lead_id?: string | null;
+        };
+        Update: {
+          assigned_to?: string | null;
+          lead_id?: string | null;
+        };
+        Relationships: [];
+      };
       _bkp_bomdemais_meeting_date_20261001: {
         Row: {
           id: string | null;
@@ -1148,6 +1331,114 @@ export type Database = {
           lead_id?: string | null;
           new_next_step_due?: string | null;
           old_next_step_due?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_recuperacao_piloto_20261115_lote: {
+        Row: {
+          dono_antes: string | null;
+          lead_id: string | null;
+          novo_dono: string | null;
+          novo_dono_nome: string | null;
+          org_id: string | null;
+          r: number | null;
+          status_antes: string | null;
+          status_depois: string | null;
+        };
+        Insert: {
+          dono_antes?: string | null;
+          lead_id?: string | null;
+          novo_dono?: string | null;
+          novo_dono_nome?: string | null;
+          org_id?: string | null;
+          r?: number | null;
+          status_antes?: string | null;
+          status_depois?: string | null;
+        };
+        Update: {
+          dono_antes?: string | null;
+          lead_id?: string | null;
+          novo_dono?: string | null;
+          novo_dono_nome?: string | null;
+          org_id?: string | null;
+          r?: number | null;
+          status_antes?: string | null;
+          status_depois?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_recuperacao_piloto_20261115_removidos: {
+        Row: {
+          cadence_id: string | null;
+          current_step: number | null;
+          dono_antes: string | null;
+          enrolled_at: string | null;
+          enrolled_by: string | null;
+          enrollment_id: string | null;
+          lead_id: string | null;
+          novo_dono: string | null;
+          novo_dono_nome: string | null;
+          org_id: string | null;
+          r: number | null;
+          status_antes: string | null;
+          status_depois: string | null;
+        };
+        Insert: {
+          cadence_id?: string | null;
+          current_step?: number | null;
+          dono_antes?: string | null;
+          enrolled_at?: string | null;
+          enrolled_by?: string | null;
+          enrollment_id?: string | null;
+          lead_id?: string | null;
+          novo_dono?: string | null;
+          novo_dono_nome?: string | null;
+          org_id?: string | null;
+          r?: number | null;
+          status_antes?: string | null;
+          status_depois?: string | null;
+        };
+        Update: {
+          cadence_id?: string | null;
+          current_step?: number | null;
+          dono_antes?: string | null;
+          enrolled_at?: string | null;
+          enrolled_by?: string | null;
+          enrollment_id?: string | null;
+          lead_id?: string | null;
+          novo_dono?: string | null;
+          novo_dono_nome?: string | null;
+          org_id?: string | null;
+          r?: number | null;
+          status_antes?: string | null;
+          status_depois?: string | null;
+        };
+        Relationships: [];
+      };
+      _bkp_recuperacao_piloto_20261115_reposicao: {
+        Row: {
+          dono: string | null;
+          lead_id: string | null;
+          org_id: string | null;
+          r: number | null;
+          status_antes: string | null;
+          status_depois: string | null;
+        };
+        Insert: {
+          dono?: string | null;
+          lead_id?: string | null;
+          org_id?: string | null;
+          r?: number | null;
+          status_antes?: string | null;
+          status_depois?: string | null;
+        };
+        Update: {
+          dono?: string | null;
+          lead_id?: string | null;
+          org_id?: string | null;
+          r?: number | null;
+          status_antes?: string | null;
+          status_depois?: string | null;
         };
         Relationships: [];
       };
@@ -9354,6 +9645,34 @@ export type Database = {
           stage: string;
         }[];
       };
+      cockpit_next_call_candidates: {
+        Args: {
+          p_attempts_window_days?: number;
+          p_bant_field_names: string[];
+          p_cold_limit?: number;
+          p_daily_cap?: number;
+          p_exclude_lead_ids?: string[];
+          p_interest_dispositions: string[];
+          p_max_attempts?: number;
+          p_now?: string;
+          p_org_id: string;
+          p_recent_days?: number;
+          p_signal_window_days?: number;
+          p_target_user_id: string;
+        };
+        Returns: {
+          attempts_recent: number;
+          attempts_window: number;
+          calls_today: number;
+          cold_rank: number;
+          last_call_at: string;
+          lead_id: string;
+          maybe_hot: boolean;
+          next_step_due: string;
+          over_attempts: boolean;
+          updated_at: string;
+        }[];
+      };
       confirm_email_step: {
         Args: {
           p_conteudo?: string;
@@ -9822,11 +10141,11 @@ export type Database = {
       merge_calls_metadata: {
         Args: {
           p_id: string;
-          p_patch: Json;
-          p_org_id?: string;
-          p_sdr_disposition?: Database['public']['Enums']['call_disposition'];
-          p_only_if_disposition_null?: boolean;
           p_only_if_ai_outcome_status?: string;
+          p_only_if_disposition_null?: boolean;
+          p_org_id?: string;
+          p_patch: Json;
+          p_sdr_disposition?: Database['public']['Enums']['call_disposition'];
         };
         Returns: boolean;
       };

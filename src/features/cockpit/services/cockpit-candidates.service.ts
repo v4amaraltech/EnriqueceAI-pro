@@ -41,7 +41,7 @@ export async function fetchCockpitCandidates(
   try {
     const { data, error } = (await client.rpc(
       'cockpit_next_call_candidates',
-      buildCandidatesRpcArgs(input.viewer, input.now, input.excludeLeadIds ?? []) as never,
+      buildCandidatesRpcArgs(input.viewer, input.now, input.excludeLeadIds ?? []),
     )) as { data: RpcRow[] | null; error: { message: string } | null };
     if (error) {
       console.error('[next-call-card] cockpit_next_call_candidates:', error.message);
