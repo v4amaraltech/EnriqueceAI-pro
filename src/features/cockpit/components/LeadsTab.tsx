@@ -20,9 +20,11 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
 import type { CockpitLeadsData } from '../services/cockpit-leads.service';
 import { LEAD_STAGES, leadStageLabel, type LeadStageKey, type LeadTemperature } from '../utils/lead-insights';
+import { LEADS_PER_PAGE_DEFAULT, LEADS_PER_PAGE_OPTIONS } from '../utils/leads-per-page';
 import { type PortfolioFilters, type PortfolioPeriod } from '../utils/portfolio-period';
 
 const STAGE_ICON: Record<LeadStageKey, typeof Building2> = {
@@ -269,7 +271,27 @@ export function LeadsTab({ data, search, filters }: { data: CockpitLeadsData; se
         <span className="text-muted-foreground">
           Mostrando {firstRow} a {lastRow} de {data.total} resultados
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Itens por página</span>
+            <Select
+              value={String(data.perPage)}
+              onValueChange={(v) =>
+                router.replace(hrefWith({ per_page: Number(v) === LEADS_PER_PAGE_DEFAULT ? null : v, page: null }))
+              }
+            >
+              <SelectTrigger className="h-8 w-[70px]" aria-label="Itens por página">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LEADS_PER_PAGE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt} value={String(opt)}>
+                    {opt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button asChild={data.page > 1} variant="ghost" size="sm" disabled={data.page <= 1}>
             {data.page > 1 ? <Link href={hrefWith({ page: String(data.page - 1) })}>Anterior</Link> : <span>Anterior</span>}
           </Button>

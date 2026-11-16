@@ -24,6 +24,7 @@ import { fetchCockpitLeads } from '@/features/cockpit/services/cockpit-leads.ser
 import { resolveCockpitViewer } from '@/features/cockpit/services/resolve-cockpit-viewer';
 import type { CockpitTab, CockpitViewer } from '@/features/cockpit/types';
 import { parseCockpitTab } from '@/features/cockpit/utils/cockpit-target';
+import { parseLeadsPerPage } from '@/features/cockpit/utils/leads-per-page';
 import { parsePortfolioFilters } from '@/features/cockpit/utils/portfolio-period';
 import { isMonth } from '@/features/cockpit/utils/month';
 import { getSdrPaceData } from '@/features/dashboard/actions/get-sdr-pace-data';
@@ -41,6 +42,7 @@ interface CockpitPageProps {
     month?: string;
     q?: string;
     page?: string;
+    per_page?: string;
     skip?: string;
     period?: string;
     from?: string;
@@ -143,17 +145,17 @@ async function TasksTabServer({ viewer }: { viewer: CockpitViewer }) {
   );
 }
 
-const LEADS_PER_PAGE = 10;
 
 async function LeadsTabServer({ viewer, params }: { viewer: CockpitViewer; params: CockpitParams }) {
   const page = Math.max(1, Number.parseInt(params.page ?? '1', 10) || 1);
+  const perPage = parseLeadsPerPage(params.per_page);
   const search = (params.q ?? '').trim();
   const filters = parsePortfolioFilters(params);
   const result = await fetchCockpitLeads({
     orgId: viewer.orgId,
     userId: viewer.targetUserId,
     page,
-    perPage: LEADS_PER_PAGE,
+    perPage,
     search,
     filters,
   });
