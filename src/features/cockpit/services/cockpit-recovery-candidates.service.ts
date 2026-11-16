@@ -37,8 +37,7 @@ export async function fetchRecoveryCandidates(
       p_blocked_reason_names: [...RECOVERY_BLOCKED_REASON_NAMES],
       p_max_attempts_per_day: AUTO_DIAL_RULES.maxAttemptsPerDay,
       p_limit: input.limit ?? RECOVERY_QUEUE_LIMIT,
-      // A função ainda não está em `types.ts` (só depois de aplicar a migration e rodar `pnpm gen:types`): mesmo cast do padrão.
-    } as never)) as { data: RecoveryRpcRow[] | null; error: { message: string } | null };
+    })) as { data: RecoveryRpcRow[] | null; error: { message: string } | null };
     if (error) {
       console.error('[cockpit-auto-dial] cockpit_recovery_candidates:', error.message);
       return null;
