@@ -72,6 +72,28 @@ describe('NextCallCard', () => {
     expect(screen.getByTestId('approach').textContent).toContain('v2, por regras');
   });
 
+  describe('selo de lead frio', () => {
+    const base = { version: 'call_priority_v2.0', score: 0, sourceLabel: null, reasons: [], humanCorrected: false };
+    const label = 'Sem leads quentes, mostrando frio';
+
+    it('aparece só quando tier = cold, com o texto vindo do servidor', () => {
+      const priority = { ...base, tier: 'cold' as const, tierLabel: label };
+      render(<NextCallCard card={{ ...card, priority }} dialerProvider="api4com" />);
+      expect(screen.getByTestId('priority-cold-label').textContent).toBe(label);
+    });
+
+    it('não aparece com tier = hot', () => {
+      const priority = { ...base, tier: 'hot' as const, tierLabel: label };
+      render(<NextCallCard card={{ ...card, priority }} dialerProvider="api4com" />);
+      expect(screen.queryByTestId('priority-cold-label')).toBeNull();
+    });
+
+    it('não aparece sem priority', () => {
+      render(<NextCallCard card={card} dialerProvider="api4com" />);
+      expect(screen.queryByTestId('priority-cold-label')).toBeNull();
+    });
+  });
+
   it('botão chama a action existente da API4Com uma única vez, mesmo com clique duplo', async () => {
     let release: (v: unknown) => void = () => {};
     vi.mocked(initiateApi4ComCall).mockImplementation(

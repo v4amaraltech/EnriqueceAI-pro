@@ -2,7 +2,13 @@ import { from } from '@/lib/supabase/from';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
-import { PRIORITY_SOURCE_LABELS, rankLeadsByPriority, type PriorityResult } from '@/features/contact-engine/services/call-priority';
+import {
+  PRIORITY_SOURCE_LABELS,
+  computeCallPriority,
+  rankLeadsByPriority,
+  type PrioritySignal,
+  type PriorityResult,
+} from '@/features/contact-engine/services/call-priority';
 import {
   isCallPriorityV2Enabled,
   loadPrioritySignals,
@@ -11,12 +17,19 @@ import {
 
 import type { CallPriorityView, CockpitViewer, NextCallCardResult } from '../types';
 import { suggestApproach, suggestApproachV2 } from '../utils/call-approach';
+import { COLD_LEAD_LABEL, SIGNAL_CHUNK_SIZE, chunk } from '../utils/cold-lead-order';
 import { pickNextLead, type NextLeadCandidate } from '../utils/next-lead';
+import { pickCockpitLead, type CockpitTier } from '../utils/next-call-pick';
 import { fetchCallContext, isCallCockpitEnabled } from './call-context.service';
+import { fetchCockpitCandidates } from './cockpit-candidates.service';
+import { isCockpitColdOrderEnabled } from './cockpit-cold-order-flag';
 
 const CANDIDATES_LIMIT = 15;
 const INTERACTION_WINDOW_DAYS = 7;
 const EXCLUDED_STATUSES = '(unqualified,archived)';
+
+type HoldsRows = { data: Array<{ lead_id: string }> | null; error: { message: string } | null };
+type InteractionRows = { data: Array<{ lead_id: string; type: string; created_at: string }> | null; error: { message: string } | null };
 
 interface CandidateRow {
   id: string;
@@ -61,27 +74,29 @@ export async function fetchNextCallCard(input: {
     return { status: 'error', error: 'Falha ao carregar a próxima ligação' };
   }
 
+  // Flag própria da ordem do frio (DP-8). Desligada: nada abaixo muda.
+  const coldOrder = await isCockpitColdOrderEnabled({ orgId: viewer.orgId, userId: viewer.viewerId });
+
   const skipped = new Set(input.excludeLeadIds ?? []);
   const withPhone = (leadsResult.data ?? []).filter((l) => l.telefone?.trim() && !skipped.has(l.id));
-  if (withPhone.length === 0) return { status: 'empty' };
+  // Com a ordem do frio ligada a carteira inteira é vista pela RPC, mesmo que os 15 mais recentes venham vazios.
+  if (withPhone.length === 0 && !coldOrder) return { status: 'empty' };
   const ids = withPhone.map((l) => l.id);
   const since = new Date(now.getTime() - INTERACTION_WINDOW_DAYS * 86_400_000).toISOString();
 
-  const [holdsResult, interactionsResult] = await Promise.all([
-    from(supabase, 'contact_holds').select('lead_id').eq('org_id', viewer.orgId).eq('tipo', 'total').in('lead_id', ids) as unknown as Promise<{
-      data: Array<{ lead_id: string }> | null;
-      error: { message: string } | null;
-    }>,
-    from(supabase, 'interactions')
-      .select('lead_id, type, created_at')
-      .eq('org_id', viewer.orgId)
-      .in('lead_id', ids)
-      .in('type', ['replied', 'clicked', 'opened'])
-      .gte('created_at', since) as unknown as Promise<{
-      data: Array<{ lead_id: string; type: string; created_at: string }> | null;
-      error: { message: string } | null;
-    }>,
-  ]);
+  const noRows = { data: [], error: null };
+  const [holdsResult, interactionsResult] =
+    ids.length === 0
+      ? ([noRows as HoldsRows, noRows as InteractionRows] as const)
+      : await Promise.all([
+          from(supabase, 'contact_holds').select('lead_id').eq('org_id', viewer.orgId).eq('tipo', 'total').in('lead_id', ids) as unknown as Promise<HoldsRows>,
+          from(supabase, 'interactions')
+            .select('lead_id, type, created_at')
+            .eq('org_id', viewer.orgId)
+            .in('lead_id', ids)
+            .in('type', ['replied', 'clicked', 'opened'])
+            .gte('created_at', since) as unknown as Promise<InteractionRows>,
+        ]);
 
   // Falha ao ler bloqueios: não arriscar ligar para quem pediu para parar.
   if (holdsResult.error) {
@@ -100,23 +115,39 @@ export async function fetchNextCallCard(input: {
     interactions: (interactionsResult.data ?? []).map((i) => ({ leadId: i.lead_id, type: i.type, at: i.created_at })),
     now,
   });
-  if (!v1LeadId) return { status: 'empty' };
 
-  // PR11: com `call_priority_v2` ligada o score v2 escolhe o lead e a sugestao mostra fonte e
-  // versao. Desligada (ou com qualquer falha de leitura) vale exatamente a escolha de antes.
-  let leadId = v1LeadId;
+  // Ordem do lead frio (flag `cockpit_cold_order`): quente confirmado primeiro; sem quente, o frio
+  // ordenado no banco sobre a carteira inteira. Falha de leitura (`null`) volta ao caminho de antes.
+  let leadId: string | null = v1LeadId;
   let ranked: { leadId: string; result: PriorityResult } | null = null;
-  if (await isCallPriorityV2Enabled({ orgId: viewer.orgId, userId: viewer.viewerId })) {
-    ranked = await rankWithPriorityV2({ viewer, candidates, v1LeadId, now });
-    if (ranked) leadId = ranked.leadId;
+  let tier: CockpitTier | undefined;
+  if (coldOrder) {
+    const cold = await pickWithColdOrder({ viewer, v1LeadId, now, excludeLeadIds: [...skipped] });
+    if (cold?.kind === 'empty') return { status: 'empty' };
+    if (cold?.kind === 'picked') {
+      leadId = cold.leadId;
+      ranked = { leadId: cold.leadId, result: cold.result };
+      tier = cold.tier;
+    }
   }
+
+  if (!ranked) {
+    if (!v1LeadId) return { status: 'empty' };
+    // PR11: com `call_priority_v2` ligada o score v2 escolhe o lead e a sugestao mostra fonte e
+    // versao. Desligada (ou com qualquer falha de leitura) vale exatamente a escolha de antes.
+    if (await isCallPriorityV2Enabled({ orgId: viewer.orgId, userId: viewer.viewerId })) {
+      ranked = await rankWithPriorityV2({ viewer, candidates, v1LeadId, now });
+      if (ranked) leadId = ranked.leadId;
+    }
+  }
+  if (!leadId) return { status: 'empty' };
 
   const context = await fetchCallContext({ viewer, leadId, now });
   if (context.status === 'error') return { status: 'error', error: context.error };
   if (context.status !== 'ok') return { status: context.status === 'disabled' ? 'disabled' : 'empty' };
 
   if (ranked) {
-    const priority = toPriorityView(ranked.result);
+    const priority = toPriorityView(ranked.result, tier);
     return {
       status: 'ok',
       data: { context: context.data, approach: suggestApproachV2(context.data, priority), generatedAt: now.toISOString(), priority },
@@ -125,14 +156,83 @@ export async function fetchNextCallCard(input: {
   return { status: 'ok', data: { context: context.data, approach: suggestApproach(context.data), generatedAt: now.toISOString() } };
 }
 
-function toPriorityView(result: PriorityResult): CallPriorityView {
+function toPriorityView(result: PriorityResult, tier?: CockpitTier): CallPriorityView {
   return {
     version: result.version,
     score: result.score,
     sourceLabel: result.primarySource ? PRIORITY_SOURCE_LABELS[result.primarySource] : null,
     reasons: result.reasons.map((r) => r.label),
     humanCorrected: result.humanCorrected,
+    ...(tier ? { tier, tierLabel: tier === 'cold' ? COLD_LEAD_LABEL : null } : {}),
   };
+}
+
+type ColdOrderPick = { kind: 'picked'; leadId: string; tier: CockpitTier; result: PriorityResult } | { kind: 'empty' };
+
+/**
+ * Escolha com a ordem do frio. `null` = falha de leitura (o chamador mantém a escolha de antes);
+ * `empty` = a carteira não tem ninguém elegível (ex.: todos no teto diário).
+ */
+async function pickWithColdOrder(input: {
+  viewer: CockpitViewer;
+  v1LeadId: string | null;
+  now: Date;
+  excludeLeadIds: string[];
+}): Promise<ColdOrderPick | null> {
+  const { viewer, v1LeadId, now } = input;
+  try {
+    // Service role (ignora RLS): a RPC e `loadPrioritySignals` filtram org_id em toda consulta.
+    const client = createServiceRoleClient();
+    const rows = await fetchCockpitCandidates(client, { viewer, now, excludeLeadIds: input.excludeLeadIds });
+    if (!rows) return null;
+
+    const hotRows = rows.filter((r) => r.maybeHot);
+    const signals = await loadSignalsInChunks(client, viewer.orgId, hotRows.map((r) => r.leadId), now);
+    if (!signals) return null;
+
+    const hot = rankLeadsByPriority(
+      hotRows.map((r) => ({ leadId: r.leadId, updatedAt: r.updatedAt, signals: signals.get(r.leadId) ?? [] })),
+      now,
+    );
+    const cold = rows.flatMap((r) => (r.coldRank == null ? [] : [{ leadId: r.leadId, coldRank: r.coldRank }]));
+    const pick = pickCockpitLead({ hot, cold });
+    if (!pick) return { kind: 'empty' };
+
+    let result: PriorityResult | undefined = hot.find((h) => h.leadId === pick.leadId)?.result;
+    if (!result) {
+      const own = signals.get(pick.leadId) ?? (await loadSignalsInChunks(client, viewer.orgId, [pick.leadId], now))?.get(pick.leadId);
+      if (!own) return null;
+      result = computeCallPriority(own, now);
+    }
+    // Trilha da sugestao, sem bloquear nem mudar a decisao se falhar.
+    void recordPrioritySuggestion(client, {
+      orgId: viewer.orgId,
+      leadId: pick.leadId,
+      result,
+      v1PickSame: pick.leadId === v1LeadId,
+      dayKey: now.toISOString().slice(0, 10),
+    }).catch(() => undefined);
+    return { kind: 'picked', leadId: pick.leadId, tier: pick.tier, result };
+  } catch (err) {
+    console.error('[next-call-card] cockpit_cold_order:', err instanceof Error ? err.message : 'erro');
+    return null;
+  }
+}
+
+/** Sinais em blocos (URL do PostgREST). `null` se QUALQUER bloco falhar: nada de decidir com dado parcial. */
+async function loadSignalsInChunks(
+  client: ReturnType<typeof createServiceRoleClient>,
+  orgId: string,
+  leadIds: string[],
+  now: Date,
+): Promise<Map<string, PrioritySignal[]> | null> {
+  const parts = await Promise.all(chunk(leadIds, SIGNAL_CHUNK_SIZE).map((ids) => loadPrioritySignals(client, orgId, ids, now)));
+  const merged = new Map<string, PrioritySignal[]>();
+  for (const part of parts) {
+    if (!part) return null;
+    for (const [id, list] of part) merged.set(id, list);
+  }
+  return merged;
 }
 
 /** Ordena os candidatos pelo score v2. `null` = falha de leitura: o chamador mantem a escolha anterior. */
