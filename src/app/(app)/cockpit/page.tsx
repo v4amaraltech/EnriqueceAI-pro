@@ -174,6 +174,10 @@ function resolveMonth(value: string | undefined): string {
 }
 
 async function DashboardTabServer({ viewer, month }: { viewer: CockpitViewer; month: string }) {
+  // Gestor no próprio Cockpit: ele não é SDR e `getSdrPaceData` cairia no 1º SDR (números de outra pessoa).
+  if (viewer.isManager && viewer.targetUserId === viewer.viewerId) {
+    return <DashboardTab month={month} maxMonth={currentMonthBrt()} sdrPace={null} managerOwn />;
+  }
   const paceResult = await getSdrPaceData({ month, userId: viewer.targetUserId }).catch(() => null);
 
   return (

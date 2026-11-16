@@ -18,6 +18,25 @@ describe('pickCockpitTarget', () => {
     expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: null, sdrIds })).toBe('sdr-a');
   });
 
+  it('gestor pedindo string vazia, null ou uuid inexistente cai no padrão', () => {
+    for (const requested of ['', null, undefined, 'nao-existe']) {
+      expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested, sdrIds })).toBe('sdr-a');
+    }
+  });
+
+  it('gestor sem pedido mantém o padrão: primeiro SDR da lista', () => {
+    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: undefined, sdrIds })).toBe('sdr-a');
+  });
+
+  it('gestor pode escolher a si mesmo (próprio Cockpit)', () => {
+    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: 'mgr', sdrIds })).toBe('mgr');
+    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: 'mgr', sdrIds: [] })).toBe('mgr');
+  });
+
+  it('SDR pedindo o gestor continua vendo só o próprio', () => {
+    expect(pickCockpitTarget({ isManager: false, viewerId: 'sdr-a', requested: 'mgr', sdrIds })).toBe('sdr-a');
+  });
+
   it('gestor sem SDR na org vê a si mesmo', () => {
     expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: null, sdrIds: [] })).toBe('mgr');
   });
