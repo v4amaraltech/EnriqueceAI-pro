@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import type { CockpitTab, CockpitViewer } from '../types';
 
+// O "Discador" fica fora desta lista: é a aba própria (com flag) ou o link da Execução (sem flag).
 const TABS: Array<{ key: CockpitTab; label: string; icon: typeof ListChecks }> = [
   { key: 'tarefas', label: 'Tarefas do dia', icon: ListChecks },
   { key: 'leads', label: 'Meus Leads', icon: Filter },
@@ -25,10 +26,15 @@ interface CockpitShellProps {
   children: ReactNode;
   /** Cartão da próxima ligação (flag `call_cockpit_v1`). Ausente = tela como antes. */
   callCard?: ReactNode;
+  /**
+   * Aba própria "Discador" (flags do motor ligadas para o usuário). Ausente/false: o item "Discador" continua
+   * sendo o link para a Execução (/atividades?tab=dialer), idêntico a antes.
+   */
+  dialerTabEnabled?: boolean;
 }
 
 /** Cabeçalho do Cockpit: saudação, seletor de SDR (gestor) e abas. */
-export function CockpitShell({ viewer, tab, children, callCard }: CockpitShellProps) {
+export function CockpitShell({ viewer, tab, children, callCard, dialerTabEnabled = false }: CockpitShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -88,13 +94,30 @@ export function CockpitShell({ viewer, tab, children, callCard }: CockpitShellPr
               {label}
             </Link>
           ))}
-          <Link
-            href="/atividades?tab=dialer"
-            className="text-[var(--muted-foreground)] flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium hover:text-[var(--foreground)]"
-          >
-            <Phone className="h-3.5 w-3.5" />
-            Discador
-          </Link>
+          {dialerTabEnabled ? (
+            <Link
+              href={hrefFor({ tab: 'discador' })}
+              aria-current={tab === 'discador' ? 'page' : undefined}
+              data-testid="tab-discador"
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                tab === 'discador'
+                  ? 'bg-[var(--accent)] text-[var(--foreground)]'
+                  : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]',
+              )}
+            >
+              <Phone className="h-3.5 w-3.5" />
+              Discador
+            </Link>
+          ) : (
+            <Link
+              href="/atividades?tab=dialer"
+              className="text-[var(--muted-foreground)] flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium hover:text-[var(--foreground)]"
+            >
+              <Phone className="h-3.5 w-3.5" />
+              Discador
+            </Link>
+          )}
         </nav>
       </div>
 

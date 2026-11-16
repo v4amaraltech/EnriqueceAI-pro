@@ -1,4 +1,4 @@
-export const COCKPIT_TABS = ['tarefas', 'leads', 'dashboard', 'metas', 'closers'] as const;
+export const COCKPIT_TABS = ['tarefas', 'leads', 'dashboard', 'metas', 'closers', 'discador'] as const;
 export type CockpitTab = (typeof COCKPIT_TABS)[number];
 
 export interface CockpitSdrOption {

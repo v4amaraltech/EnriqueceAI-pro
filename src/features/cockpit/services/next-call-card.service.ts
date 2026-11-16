@@ -142,12 +142,28 @@ export async function fetchNextCallCard(input: {
   }
   if (!leadId) return { status: 'empty' };
 
+  return buildNextCallCardForLead({ viewer, leadId, now, ranked: ranked?.result, tier });
+}
+
+/**
+ * Monta o cartão (contexto, abordagem e prioridade) de um lead JÁ escolhido. Extraído de `fetchNextCallCard`
+ * sem mudar o comportamento; o motor automático usa o mesmo caminho para o lead que o servidor escolheu.
+ */
+export async function buildNextCallCardForLead(input: {
+  viewer: CockpitViewer;
+  leadId: string;
+  now: Date;
+  /** Resultado do score v2 do lead; ausente = cartão sem prioridade (v0). */
+  ranked?: PriorityResult;
+  tier?: CockpitTier;
+}): Promise<NextCallCardResult> {
+  const { viewer, leadId, now, ranked, tier } = input;
   const context = await fetchCallContext({ viewer, leadId, now });
   if (context.status === 'error') return { status: 'error', error: context.error };
   if (context.status !== 'ok') return { status: context.status === 'disabled' ? 'disabled' : 'empty' };
 
   if (ranked) {
-    const priority = toPriorityView(ranked.result, tier);
+    const priority = toPriorityView(ranked, tier);
     return {
       status: 'ok',
       data: { context: context.data, approach: suggestApproachV2(context.data, priority), generatedAt: now.toISOString(), priority },
@@ -220,7 +236,7 @@ async function pickWithColdOrder(input: {
 }
 
 /** Sinais em blocos (URL do PostgREST). `null` se QUALQUER bloco falhar: nada de decidir com dado parcial. */
-async function loadSignalsInChunks(
+export async function loadSignalsInChunks(
   client: ReturnType<typeof createServiceRoleClient>,
   orgId: string,
   leadIds: string[],

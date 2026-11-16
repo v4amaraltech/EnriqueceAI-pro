@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -13,26 +13,57 @@ import { Button } from '@/shared/components/ui/button';
 import { initiateApi4ComCall } from '@/features/calls/actions/initiate-api4com-call';
 
 import { armCockpitCallOutcomeAction } from '../actions/call-outcome';
+import type { AutoDialView } from '../auto-dial.types';
 import type { NextCallCardData } from '../types';
 import { relativeTimePt, sourceLabel, summarizeContext } from '../utils/call-approach';
 
 import { CallOutcomePanel } from './CallOutcomePanel';
+import { NextCallCardWithEngine } from './NextCallCardWithEngine';
 
 const NO_DATA = 'sem dados';
 
 interface NextCallCardProps {
-  card: NextCallCardData;
+  /** `null` só com o motor ligado e sem lead na página: o cartão mostra só a barra. */
+  card: NextCallCardData | null;
   /** Provedor de telefonia do usuário; só `api4com` habilita o botão. */
   dialerProvider: 'api4com' | null;
   /** Flag `call_cockpit_outcomes`: mostra resultado e resumo após a ligação. Ausente = como antes. */
   outcomesEnabled?: boolean;
+  /** Motor automático. Ausente ou `enabled=false` = tela exatamente como antes (sem barra). */
+  autoDial?: AutoDialView;
+  /** Flag `call_lead_card_v1`; só usada pelo painel do motor. */
+  leadCardEnabled?: boolean;
+}
+
+/** Peças que o motor encaixa no cartão. */
+export interface NextCallCardSlots {
+  /** Barra do motor, no topo. */
+  top?: ReactNode;
 }
 
 /**
  * Cartão da próxima ligação. A ligação só começa com o clique do usuário e usa
  * a action existente da API4Com; nada disca sozinho.
  */
-export function NextCallCard({ card, dialerProvider, outcomesEnabled = false }: NextCallCardProps) {
+export function NextCallCard({ card, dialerProvider, outcomesEnabled = false, autoDial, leadCardEnabled = false }: NextCallCardProps) {
+  if (autoDial?.enabled) {
+    return <NextCallCardWithEngine card={card} dialerProvider={dialerProvider} autoDial={autoDial} leadCardEnabled={leadCardEnabled} />;
+  }
+  if (!card) return null;
+  return <NextCallCardBody card={card} dialerProvider={dialerProvider} outcomesEnabled={outcomesEnabled} />;
+}
+
+export function NextCallCardBody({
+  card,
+  dialerProvider,
+  outcomesEnabled = false,
+  slots,
+}: {
+  card: NextCallCardData;
+  dialerProvider: 'api4com' | null;
+  outcomesEnabled?: boolean;
+  slots?: NextCallCardSlots;
+}) {
   const { context: ctx, approach, priority } = card;
   const now = new Date(card.generatedAt);
   const phone = ctx.decisionMaker.phone;
@@ -83,6 +114,7 @@ export function NextCallCard({ card, dialerProvider, outcomesEnabled = false }: 
 
   return (
     <section className="space-y-4 rounded-lg border border-[var(--primary)]/40 bg-[var(--card)] p-4" aria-label="Próxima ligação" data-testid="next-call-card">
+      {slots?.top}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <p className="text-muted-foreground text-xs font-medium">Próxima ligação</p>

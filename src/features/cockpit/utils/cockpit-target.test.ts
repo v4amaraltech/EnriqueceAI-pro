@@ -26,6 +26,7 @@ describe('pickCockpitTarget', () => {
 describe('parseCockpitTab', () => {
   it('aceita abas válidas e cai em tarefas no resto', () => {
     expect(parseCockpitTab('closers')).toBe('closers');
+    expect(parseCockpitTab('discador')).toBe('discador');
     expect(parseCockpitTab('xyz')).toBe('tarefas');
     expect(parseCockpitTab(undefined)).toBe('tarefas');
   });
