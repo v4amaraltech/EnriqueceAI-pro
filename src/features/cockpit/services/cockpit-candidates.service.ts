@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { buildCandidatesRpcArgs } from '../utils/cold-lead-order';
+import { buildCandidatesRpcArgs, type CandidatesRpcOverrides } from '../utils/cold-lead-order';
 import type { CockpitViewer } from '../types';
 
 export interface CockpitCandidateRow {
@@ -36,12 +36,12 @@ interface RpcRow {
  */
 export async function fetchCockpitCandidates(
   client: SupabaseClient,
-  input: { viewer: CockpitViewer; now: Date; excludeLeadIds?: string[] },
+  input: { viewer: CockpitViewer; now: Date; excludeLeadIds?: string[]; overrides?: CandidatesRpcOverrides },
 ): Promise<CockpitCandidateRow[] | null> {
   try {
     const { data, error } = (await client.rpc(
       'cockpit_next_call_candidates',
-      buildCandidatesRpcArgs(input.viewer, input.now, input.excludeLeadIds ?? []),
+      buildCandidatesRpcArgs(input.viewer, input.now, input.excludeLeadIds ?? [], input.overrides),
     )) as { data: RpcRow[] | null; error: { message: string } | null };
     if (error) {
       console.error('[next-call-card] cockpit_next_call_candidates:', error.message);

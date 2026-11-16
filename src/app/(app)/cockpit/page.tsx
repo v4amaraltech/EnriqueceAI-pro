@@ -7,12 +7,14 @@ import { fetchPendingActivities } from '@/features/activities/actions/fetch-pend
 import { EMPTY_GUARDRAILS } from '@/features/activities/utils/daily-guardrails';
 import { getDialerProvider } from '@/features/calls/actions/get-dialer-provider';
 import { isCallLeadCardEnabled } from '@/features/cockpit/services/call-lead-card-flag';
+import { isCockpitAutoDialEnabled, isCockpitAutoDialLive } from '@/features/cockpit/services/cockpit-auto-dial-flag';
 import { ClosersTab } from '@/features/cockpit/components/ClosersTab';
 import { CockpitShell } from '@/features/cockpit/components/CockpitShell';
 import { fetchCockpitClosers } from '@/features/cockpit/services/cockpit-closers.service';
 import { DashboardTab } from '@/features/cockpit/components/DashboardTab';
 import { GoalsHistoryTab } from '@/features/cockpit/components/GoalsHistoryTab';
 import { fetchCockpitGoals } from '@/features/cockpit/services/cockpit-goals.service';
+import { DialerTab } from '@/features/cockpit/components/DialerTab';
 import { LeadsTab } from '@/features/cockpit/components/LeadsTab';
 import { TasksTab } from '@/features/cockpit/components/TasksTab';
 import { fetchCockpitLeads } from '@/features/cockpit/services/cockpit-leads.service';
@@ -46,14 +48,32 @@ interface CockpitPageProps {
 
 export default async function CockpitPage({ searchParams }: CockpitPageProps) {
   const params = await searchParams;
-  const tab = parseCockpitTab(params.tab);
+  const requestedTab = parseCockpitTab(params.tab);
   const viewer = await resolveCockpitViewer(params.sdr);
+  // Aba "Discador" (motor): só para o próprio usuário e só com as flags do motor. Sem flag, o item do menu
+  // segue levando à Execução e `?tab=discador` cai na aba padrão.
+  const dialerTabEnabled = await isDialerTabEnabled(viewer);
+  const tab = requestedTab === 'discador' && !dialerTabEnabled ? 'tarefas' : requestedTab;
 
   return (
-    <CockpitShell viewer={viewer} tab={tab}>
+    <CockpitShell viewer={viewer} tab={tab} dialerTabEnabled={dialerTabEnabled}>
       <CockpitTabContent tab={tab} viewer={viewer} params={params} />
     </CockpitShell>
   );
+}
+
+async function isDialerTabEnabled(viewer: CockpitViewer): Promise<boolean> {
+  if (viewer.viewerId !== viewer.targetUserId) return false;
+  return isCockpitAutoDialEnabled({ orgId: viewer.orgId, userId: viewer.viewerId }).catch(() => false);
+}
+
+async function DialerTabServer({ viewer }: { viewer: CockpitViewer }) {
+  const scope = { orgId: viewer.orgId, userId: viewer.viewerId };
+  const [live, leadCardEnabled] = await Promise.all([
+    isCockpitAutoDialLive(scope).catch(() => false),
+    isCallLeadCardEnabled(viewer.orgId).catch(() => false),
+  ]);
+  return <DialerTab autoDial={{ enabled: true, live }} leadCardEnabled={leadCardEnabled} />;
 }
 
 type CockpitParams = Awaited<CockpitPageProps['searchParams']>;
@@ -70,6 +90,8 @@ async function CockpitTabContent({ tab, viewer, params }: { tab: CockpitTab; vie
       return <ClosersTabServer viewer={viewer} month={resolveMonth(params.month)} />;
     case 'dashboard':
       return <DashboardTabServer viewer={viewer} month={resolveMonth(params.month)} />;
+    case 'discador':
+      return <DialerTabServer viewer={viewer} />;
   }
 }
 

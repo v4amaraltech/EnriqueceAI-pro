@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { ChevronDown, Minus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -21,6 +21,7 @@ import { leadCardFromActivity } from '../utils/lead-card';
 
 import { CallLeadCard } from './CallLeadCard';
 import { CallMeetingConfirmDialog, CallMeetingWeekDialog, type MeetingChoice, type SchedulingPreview } from './CallMeetingDialogs';
+import { CallHistoryList } from './CallHistoryList';
 import { useLeadHistory } from './use-lead-history';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -39,14 +40,6 @@ const ENRICHMENT_LABEL: Record<string, string> = {
   enrichment_failed: 'Falhou',
   not_found: 'Não encontrado',
 };
-
-const timeFmt = new Intl.DateTimeFormat('pt-BR', {
-  timeZone: 'America/Sao_Paulo',
-  day: '2-digit',
-  month: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 interface CallSidePanelProps {
   activity: PendingActivity;
@@ -206,12 +199,12 @@ export function CallSidePanel({
           {leadCard ? (
             <details data-testid="call-history-collapse" className="rounded-md border px-3 py-2">
               <summary className="cursor-pointer text-xs font-semibold">Histórico</summary>
-              <HistoryBody timeline={timeline} />
+              <CallHistoryList timeline={timeline} />
             </details>
           ) : (
             <section aria-label="Histórico de contatos">
               <h3 className="text-xs font-semibold">Histórico</h3>
-              <HistoryBody timeline={timeline} />
+              <CallHistoryList timeline={timeline} />
             </section>
           )}
         </div>
@@ -268,29 +261,6 @@ export function CallSidePanel({
         }}
         onScheduled={onScheduled}
       />
-      )}
-    </>
-  );
-}
-
-function HistoryBody({ timeline }: { timeline: ReturnType<typeof useLeadHistory> }): ReactNode {
-  return (
-    <>
-      {timeline.status === 'loading' && <p className="text-muted-foreground mt-1 text-xs">Carregando histórico...</p>}
-      {timeline.status === 'error' && <p className="mt-1 text-xs text-amber-700">Não foi possível carregar o histórico.</p>}
-      {timeline.status === 'ready' && timeline.entries.length === 0 && (
-        <p className="text-muted-foreground mt-1 text-xs">Nenhum contato registrado ainda.</p>
-      )}
-      {timeline.status === 'ready' && timeline.entries.length > 0 && (
-        <ol className="mt-2 space-y-2">
-          {timeline.entries.map((entry) => (
-            <li key={entry.id} className="border-l-2 border-primary/40 pl-2">
-              <p className="text-[11px] font-medium">{entry.title}</p>
-              <p className="text-muted-foreground text-[10px]">{timeFmt.format(new Date(entry.at))}</p>
-              {entry.detail && <p className="text-xs">{entry.detail}</p>}
-            </li>
-          ))}
-        </ol>
       )}
     </>
   );

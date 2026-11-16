@@ -38,12 +38,29 @@ export interface CockpitCandidatesRpcArgs {
   p_cold_limit: number;
 }
 
+/** Parâmetros da RPC que o chamador pode trocar. Sem eles valem os padrões acima (Cockpit manual do #641). */
+export type CandidatesRpcOverrides = Partial<{
+  dailyCap: number;
+  coldLimit: number;
+  recentDays: number;
+  attemptsWindowDays: number;
+  maxAttempts: number;
+}>;
+
+/**
+ * Motor automático (plano §1, opção A): teto de 3 ligações por lead/dia e `cold_limit` acima da maior
+ * carteira (533), chamando a RPC existente. O filtro de 1 h e o dos bloqueios `prospeccao` são feitos no TypeScript.
+ */
+export const AUTO_DIAL_RPC_OVERRIDES: CandidatesRpcOverrides = { dailyCap: 3, coldLimit: 1000 };
+
 /** Argumentos da RPC `cockpit_next_call_candidates`. Pura: o relógio vem de fora (`now`). */
 export function buildCandidatesRpcArgs(
   viewer: Pick<CockpitViewer, 'orgId' | 'targetUserId'>,
   now: Date,
   excludeLeadIds: string[] = [],
+  overrides: CandidatesRpcOverrides = {},
 ): CockpitCandidatesRpcArgs {
+  const o = { ...COLD_ORDER_DEFAULTS, ...overrides };
   return {
     p_org_id: viewer.orgId,
     p_target_user_id: viewer.targetUserId,
@@ -52,11 +69,11 @@ export function buildCandidatesRpcArgs(
     p_exclude_lead_ids: [...new Set(excludeLeadIds)],
     p_now: now.toISOString(),
     p_signal_window_days: SIGNAL_WINDOW_DAYS,
-    p_recent_days: COLD_ORDER_DEFAULTS.recentDays,
-    p_attempts_window_days: COLD_ORDER_DEFAULTS.attemptsWindowDays,
-    p_max_attempts: COLD_ORDER_DEFAULTS.maxAttempts,
-    p_daily_cap: COLD_ORDER_DEFAULTS.dailyCap,
-    p_cold_limit: COLD_ORDER_DEFAULTS.coldLimit,
+    p_recent_days: o.recentDays,
+    p_attempts_window_days: o.attemptsWindowDays,
+    p_max_attempts: o.maxAttempts,
+    p_daily_cap: o.dailyCap,
+    p_cold_limit: o.coldLimit,
   };
 }
 

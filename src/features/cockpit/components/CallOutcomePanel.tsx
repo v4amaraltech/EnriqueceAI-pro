@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 
 import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
@@ -24,7 +24,11 @@ interface CallOutcomePanelProps {
   callId: string;
   leadId: string;
   /** Segue para a próxima ligação. Nunca fica desabilitado por resultado pendente. */
-  onNext: () => void;
+  onNext?: () => void;
+  /** Motor automático: esconde "Próxima ligação" (quem libera o próximo é a confirmação do SDR). */
+  hideNext?: boolean;
+  /** Motor automático: avisa o resultado atual (para pré-marcar a sugestão da IA). */
+  onOutcome?: (outcome: CockpitCallOutcome) => void;
 }
 
 function isFinal(outcome: CockpitCallOutcome): boolean {
@@ -36,9 +40,10 @@ function isFinal(outcome: CockpitCallOutcome): boolean {
  * estado ficar definitivo; transcrição e resumo pendentes são só informativos e
  * o botão "Próxima ligação" continua disponível o tempo todo.
  */
-export function CallOutcomePanel({ callId, leadId, onNext }: CallOutcomePanelProps) {
+export function CallOutcomePanel({ callId, leadId, onNext, hideNext = false, onOutcome }: CallOutcomePanelProps) {
   const [outcome, setOutcome] = useState<CockpitCallOutcome>({ state: 'waiting_call' });
   const [gaveUp, setGaveUp] = useState(false);
+  const reportOutcome = useEffectEvent((o: CockpitCallOutcome) => onOutcome?.(o));
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +57,7 @@ export function CallOutcomePanel({ callId, leadId, onNext }: CallOutcomePanelPro
         if (cancelled) return;
         if (res.success && res.data.status === 'ok') {
           setOutcome(res.data.outcome);
+          reportOutcome(res.data.outcome);
           if (isFinal(res.data.outcome)) return;
         }
       } catch {
@@ -76,9 +82,11 @@ export function CallOutcomePanel({ callId, leadId, onNext }: CallOutcomePanelPro
     <div className="space-y-2 rounded-md border p-3" data-testid="call-outcome" aria-live="polite">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xs font-semibold">Resultado da ligação</h3>
-        <Button size="sm" variant="outline" onClick={onNext} data-testid="next-lead-button">
-          Próxima ligação
-        </Button>
+        {!hideNext && (
+          <Button size="sm" variant="outline" onClick={onNext} data-testid="next-lead-button">
+            Próxima ligação
+          </Button>
+        )}
       </div>
       <OutcomeBody outcome={outcome} leadId={leadId} gaveUp={gaveUp} />
       <VerbalConsentButton callId={callId} />
