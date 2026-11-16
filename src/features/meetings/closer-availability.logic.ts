@@ -175,7 +175,7 @@ export function availabilityNotice(input: {
     return 'Não foi possível confirmar a agenda deste closer. Os horários não estão livres.';
   }
   if (input.source === 'sdr_token') {
-    return 'Agenda deste closer, lida pelo seu Google. "Você ocupado" avisa a sua agenda e não bloqueia o horário.';
+    return 'Agenda deste closer, lida pelo seu Google.';
   }
   return null;
 }

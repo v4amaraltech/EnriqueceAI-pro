@@ -5,8 +5,8 @@ import { MEETING_DURATION_MIN } from '@/features/meetings/meeting-duration';
 
 const BRT_OFFSET_MIN = -180;
 
-/** Linhas da grade: 09:00 até 16:00, inclusive. */
-export const SLOT_START_HOURS = [9, 10, 11, 12, 13, 14, 15, 16] as const;
+/** Linhas da grade: 09:00 até 17:00, inclusive. */
+export const SLOT_START_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17] as const;
 /** Mesma duração de `MEETING_DURATION_MIN`. A agenda BDR continua com 45 min. */
 export const SLOT_DURATION_MIN = MEETING_DURATION_MIN;
 
