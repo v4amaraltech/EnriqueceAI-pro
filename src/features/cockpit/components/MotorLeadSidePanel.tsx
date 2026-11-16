@@ -4,7 +4,6 @@ import { useState } from 'react';
 
 import { PhoneCall, XIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { Dialog as SheetPrimitive } from 'radix-ui';
 
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -57,14 +56,14 @@ interface MotorLeadSidePanelProps {
   schedulingPreview?: SchedulingPreview;
   /** O SDR agendou reunião ou desqualificou o lead pelo painel. O motor NÃO muda por conta disso (ver relatório). */
   onLeadActed?: (kind: 'scheduled' | 'lost') => void;
-  /** Só para a página de visualização: desenha o painel solto na página, sem gaveta. Não usar no Cockpit. */
-  inline?: boolean;
 }
 
 /**
- * Painel lateral SOMENTE LEITURA do motor automático: dados do lead que o motor está ligando. Não tem discador,
- * webphone nem botão de ligar/desligar (quem liga é só o motor). Não é modal: a barra do motor e a confirmação do
- * desfecho continuam clicáveis com o painel aberto. As anotações têm rascunho próprio, separado da observação do desfecho.
+ * Painel do lead SOMENTE LEITURA do motor automático: dados do lead que o motor está ligando. Não tem discador,
+ * webphone nem botão de ligar/desligar (quem liga é só o motor). É um bloco DOCADO no fluxo da página (a página o
+ * põe numa segunda coluna), nunca uma gaveta por cima: assim a confirmação do desfecho e a barra do motor não ficam
+ * cobertas. Fechado (`open=false`) não desenha nada, mas os diálogos de agenda/perda seguem montados. As anotações
+ * têm rascunho próprio, separado da observação do desfecho.
  */
 export function MotorLeadSidePanel({
   card,
@@ -79,7 +78,6 @@ export function MotorLeadSidePanel({
   previewOnly = false,
   schedulingPreview,
   onLeadActed,
-  inline = false,
 }: MotorLeadSidePanelProps) {
   const ctx = card.context;
   const now = new Date(card.generatedAt);
@@ -113,9 +111,8 @@ export function MotorLeadSidePanel({
     ['CNPJ', ctx.company.cnpj ?? 'sem dado'],
   ];
 
-  const Title = inline ? 'h2' : SheetPrimitive.Title;
   const closeButton = (
-    <Button type="button" size="icon" variant="ghost" className="absolute top-3 right-3 h-7 w-7" aria-label="Fechar painel do lead" onClick={inline ? undefined : () => onOpenChange(false)}>
+    <Button type="button" size="icon" variant="ghost" className="absolute top-3 right-3 h-7 w-7" aria-label="Fechar painel do lead" onClick={() => onOpenChange(false)}>
       <XIcon className="h-4 w-4" />
     </Button>
   );
@@ -123,7 +120,7 @@ export function MotorLeadSidePanel({
   const content = (
     <>
           <header className="relative border-b px-4 py-3 pr-12">
-            <Title className="truncate text-base font-semibold">{ctx.company.name}</Title>
+            <h2 className="truncate text-base font-semibold">{ctx.company.name}</h2>
             <p className="text-muted-foreground truncate text-sm">
               {contact}
               {ctx.decisionMaker.phone ? ` · ${ctx.decisionMaker.phone}` : ''}
@@ -233,28 +230,16 @@ export function MotorLeadSidePanel({
 
   return (
     <>
-    {inline ? (
+    {open && (
       <aside
         data-testid="motor-lead-panel"
-        className="bg-background relative flex h-[780px] w-full max-w-[480px] flex-col overflow-hidden rounded-lg border shadow-lg"
+        data-slot="motor-lead-panel"
+        aria-label="Dados do lead"
+        // Estreito: empilha abaixo do cartão. lg+: fica colado ao topo da 2ª coluna, com rolagem interna.
+        className="bg-background relative flex max-h-[80vh] w-full flex-col overflow-hidden rounded-lg border shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)]"
       >
-          {content}
+        {content}
       </aside>
-    ) : (
-    <SheetPrimitive.Root open={open} onOpenChange={onOpenChange} modal={false}>
-      <SheetPrimitive.Portal>
-        <SheetPrimitive.Content
-          data-testid="motor-lead-panel"
-          data-slot="motor-lead-panel"
-          aria-describedby={undefined}
-          // Não-modal: clicar na página (barra do motor, confirmação) não fecha o painel.
-          onInteractOutside={(event) => event.preventDefault()}
-          className="bg-background fixed inset-y-0 right-0 z-40 flex h-full w-full flex-col border-l shadow-lg sm:max-w-[480px]"
-        >
-          {content}
-        </SheetPrimitive.Content>
-      </SheetPrimitive.Portal>
-    </SheetPrimitive.Root>
     )}
 
     <CallMeetingWeekDialog

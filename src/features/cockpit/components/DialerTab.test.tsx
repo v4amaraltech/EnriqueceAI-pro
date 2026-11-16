@@ -146,6 +146,50 @@ describe('aba Discador', () => {
     expect(screen.queryByTestId('motor-lead-panel')).toBeNull();
   });
 
+  it('awaiting-sdr: confirmação do desfecho e painel são colunas irmãs, sem Portal/overlay nem gaveta', () => {
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card });
+    render(<DialerTab autoDial={AUTO} />);
+    const tab = screen.getByTestId('dialer-tab');
+    const main = screen.getByTestId('dialer-main-column');
+    const panel = screen.getByTestId('motor-lead-panel');
+    // Duas colunas em lg+ e o painel é filho direto do grid, ao lado da coluna principal.
+    expect(tab.className).toContain('lg:grid-cols-');
+    expect(panel.parentElement).toBe(tab);
+    expect(main.parentElement).toBe(tab);
+    expect(within(main).getByTestId('auto-dial-confirm')).toBeTruthy();
+    expect(within(panel).queryByTestId('auto-dial-confirm')).toBeNull();
+    // Sem gaveta: nada de posição fixa, diálogo Radix ou portal.
+    expect(panel.className).not.toContain('fixed');
+    expect(panel.className).toContain('lg:sticky');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(panel.closest('[data-radix-portal]')).toBeNull();
+    expect(document.body.querySelector('[data-radix-popper-content-wrapper]')).toBeNull();
+  });
+
+  it('fechar o painel remove a coluna e mostra "Ver dados do lead"; reabrir devolve a coluna', () => {
+    setEngine({ phase: 'in-call' }, { card });
+    render(<DialerTab autoDial={AUTO} />);
+    expect(screen.getByTestId('dialer-tab').getAttribute('data-panel-open')).toBe('true');
+    expect(screen.queryByTestId('motor-panel-reopen')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar painel do lead' }));
+    expect(screen.queryByTestId('motor-lead-panel')).toBeNull();
+    expect(screen.getByTestId('dialer-tab').getAttribute('data-panel-open')).toBe('false');
+    expect(screen.getByTestId('dialer-tab').className).not.toContain('lg:grid-cols-');
+    fireEvent.click(screen.getByTestId('motor-panel-reopen'));
+    expect(screen.getByTestId('motor-lead-panel')).toBeTruthy();
+    expect(screen.getByTestId('dialer-tab').getAttribute('data-panel-open')).toBe('true');
+  });
+
+  it('Agendar reunião e Desqualificar ficam desabilitados durante a ligação e liberam no awaiting-sdr', () => {
+    setEngine({ phase: 'in-call' }, { card });
+    const { rerender } = render(<DialerTab autoDial={AUTO} />);
+    expect((screen.getByTestId('motor-schedule-meeting') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('motor-disqualify') as HTMLButtonElement).disabled).toBe(true);
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card });
+    rerender(<DialerTab autoDial={AUTO} />);
+    expect((screen.getByTestId('motor-schedule-meeting') as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('modo real: selo LIGAÇÃO REAL na barra', () => {
     setEngine({ phase: 'off' }, { simulated: false });
     render(<DialerTab autoDial={{ enabled: true, live: true }} />);
