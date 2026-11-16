@@ -9673,6 +9673,31 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      cockpit_recovery_candidates: {
+        Args: {
+          p_attempts_window_days?: number;
+          p_blocked_hold_types?: string[];
+          p_blocked_reason_names?: string[];
+          p_exclude_lead_ids?: string[];
+          p_limit?: number;
+          p_max_attempts_per_day?: number;
+          p_now?: string;
+          p_org_id: string;
+          p_target_user_id: string;
+        };
+        Returns: {
+          attempts_window: number;
+          callback_pending: boolean;
+          calls_today: number;
+          conversation_today: boolean;
+          last_call_at: string;
+          lead_id: string;
+          loss_reason_name: string;
+          lost_at: string;
+          recovery_rank: number;
+          updated_at: string;
+        }[];
+      };
       confirm_email_step: {
         Args: {
           p_conteudo?: string;
