@@ -504,9 +504,6 @@ function HourRow({ hour, slots, selectedId, onSelect }: { hour: number; slots: W
               <span className="text-[10px] leading-tight text-amber-700">Marcar com confirmação</span>
             )}
             {slot.state === 'unknown' && !slot.past && <span className="text-xs">Sem dados</span>}
-            {slot.sdrBusy && selectable && (
-              <span className={cn('text-[10px] leading-tight', selected ? 'text-background/80' : 'text-amber-700')}>Você ocupado</span>
-            )}
             {slot.past && !slot.busy && slot.state !== 'unknown' && <span className="sr-only">Passou</span>}
           </button>
         );

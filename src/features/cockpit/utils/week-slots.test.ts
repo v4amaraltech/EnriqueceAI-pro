@@ -21,8 +21,9 @@ describe('week slots', () => {
     expect(nine && slotSelectable(nine)).toBe(false);
     expect(eleven?.busy).toBe(true);
     expect(fourteen && slotSelectable(fourteen)).toBe(true);
-    expect(slots.filter((s) => s.dayIndex === 0)).toHaveLength(8);
-    expect(slots.some((s) => s.hour === 8 || s.hour === 17)).toBe(false);
+    expect(slots.filter((s) => s.dayIndex === 0)).toHaveLength(9);
+    expect(slots.some((s) => s.hour === 8 || s.hour === 18)).toBe(false);
+    expect(slots.some((s) => s.hour === 17)).toBe(true);
   });
 
   it('formata o relógio de parede em BRT', () => {
