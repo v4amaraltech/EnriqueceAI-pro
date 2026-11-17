@@ -6,6 +6,7 @@ import type { ActionResult } from '@/lib/actions/action-result';
 import { handleQueryError } from '@/lib/actions/handle-error';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
+import { createServiceRoleClient } from '@/lib/supabase/service';
 import { isUuid } from '@/lib/utils/uuid';
 
 import type { CadenceRow, CadenceStepRow, MessageTemplateRow } from '@/features/cadences/types';
@@ -13,7 +14,14 @@ import type { EnrichmentStatus, LeadAddress, LeadEmail, LeadPhone, LeadSocio, Le
 
 import { autoSendKey, isHandledByAutoSend } from '@/features/whatsapp-auto-send/utils/auto-step';
 
+import {
+  MIXED_AUTO_EMAIL_FLAG,
+  isMixedAutoEmailCadence,
+  mixedAutoEmailScopeFromFlag,
+} from '@/features/cadences/services/mixed-auto-email.service';
+
 import { entraNaFilaHumana } from '../utils/fila-humana';
+import { type MixedMailboxInfo, isEmailHandledByMixedRobot } from '../utils/mixed-email-handoff';
 import { cadenceStepDay } from '../utils/step-day';
 import { resolveWhatsAppPhone } from '../utils/resolve-whatsapp-phone';
 import type { PendingActivity, ScheduledActivityKind } from '../types';
@@ -182,6 +190,9 @@ export async function fetchPendingActivities(
     for (const f of failedItems ?? []) autoSendFailedKeys.add(autoSendKey(f.enrollment_id, f.step_id));
   }
 
+  // E-mail de cadência mista: o robô envia; a fila só esconde se a caixa dele está saudável.
+  const mixedEmail = await loadMixedEmailHandoff(enrollments, steps ?? []);
+
   // 4. Build candidate activities (before filtering executed ones)
   // For each enrollment, generate activities for ALL steps within 24h cumulative delay
   interface CandidateActivity {
@@ -225,6 +236,23 @@ export async function fetchPendingActivities(
 
       // WhatsApp automático: o robô envia pela fila do número do SDR (story whatsapp-evolution-paced-sending).
       if (isHandledByAutoSend(step, enrollment.lead, enrollment.id, autoSendFailedKeys)) continue;
+
+      // E-mail de cadência mista que o robô envia (org na flag + caixa saudável + dentro do prazo).
+      if (
+        mixedEmail &&
+        isEmailHandledByMixedRobot({
+          scope: mixedEmail.scope,
+          orgId: enrollment.lead.org_id,
+          cadence: enrollment.cadence,
+          assignedTo: enrollment.lead.assigned_to,
+          step,
+          isCurrentStep: step.step_order === currentStepOrder,
+          nextStepDue: enrollment.next_step_due,
+          mailboxes: mixedEmail.mailboxes,
+        })
+      ) {
+        continue;
+      }
 
       // E-mail com bounce: o passo de e-mail não tem como ser feito. O motor
       // (`skipEmailStepsForBouncedLeads`) avança a inscrição; até lá, some da fila.
@@ -304,6 +332,58 @@ export async function fetchPendingActivities(
     .map((c) => c.activity);
 
   return mergeWithScheduledReturns(supabase, ownerFilter, cadenceActivities, includeLeadCard);
+}
+
+/**
+ * Flag + caixas Gmail para a regra de esconder o e-mail que o robô envia.
+ * Service role: gmail_connections só é legível pelo próprio dono (RLS) e a fila
+ * do gestor precisa ver a caixa de cada SDR. Só consulta se há passo de e-mail
+ * de cadência mista; qualquer falha devolve null = tudo visível (fail-open).
+ */
+async function loadMixedEmailHandoff(
+  enrollments: EnrollmentRow[],
+  steps: CadenceStepRow[],
+): Promise<{ scope: ReturnType<typeof mixedAutoEmailScopeFromFlag>; mailboxes: Map<string, MixedMailboxInfo> } | null> {
+  const emailCadenceIds = new Set(steps.filter((s) => s.channel === 'email').map((s) => s.cadence_id));
+  const mixed = enrollments.filter(
+    (e) => e.lead && e.cadence && emailCadenceIds.has(e.cadence_id) && isMixedAutoEmailCadence(e.cadence),
+  );
+  if (mixed.length === 0) return null;
+  try {
+    const service = createServiceRoleClient();
+    const { data: flag, error: flagErr } = (await from(service, 'app_flags')
+      .select('enabled, allow_org_ids, allow_user_ids')
+      .eq('key', MIXED_AUTO_EMAIL_FLAG)
+      .maybeSingle()) as {
+      data: { enabled: boolean; allow_org_ids?: string[] | null; allow_user_ids?: string[] | null } | null;
+      error: { message: string } | null;
+    };
+    if (flagErr) return null;
+    const scope = mixedAutoEmailScopeFromFlag(flag);
+    if (scope.kind === 'none') return null;
+
+    const orgIds = [...new Set(mixed.map((e) => e.lead.org_id))];
+    const { data: rows, error: gmailErr } = (await from(service, 'gmail_connections')
+      .select('org_id, user_id, daily_cap, paused_reason, created_at')
+      .eq('status', 'connected')
+      .in('org_id', orgIds)) as {
+      data: Array<{ org_id: string; user_id: string; daily_cap: number | null; paused_reason: string | null; created_at: string | null }> | null;
+      error: { message: string } | null;
+    };
+    if (gmailErr) return null;
+    const mailboxes = new Map<string, MixedMailboxInfo>();
+    for (const g of rows ?? []) {
+      mailboxes.set(`${g.org_id}:${g.user_id}`, {
+        dailyCap: g.daily_cap,
+        pausedReason: g.paused_reason,
+        connectedAt: g.created_at,
+      });
+    }
+    return { scope, mailboxes };
+  } catch (err) {
+    console.error('[activities] falha ao ler flag/caixas do e-mail misto (fila mostra tudo):', err);
+    return null;
+  }
 }
 
 function toQueueLead(lead: RawLead, includeLeadCard: boolean, enrollmentLossNotes?: string | null) {
