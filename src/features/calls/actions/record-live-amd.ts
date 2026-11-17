@@ -20,6 +20,16 @@ const schema = z.object({
   predictedAt: z.string().min(1),
   transcript: z.string().max(20_000).optional(),
   requestNextActivity: z.boolean().optional(),
+  /** Quem desligou: a escuta desligou a ligação. Opcional; chave desconhecida dentro dele é descartada. */
+  autoHangup: z
+    .object({
+      at: z.string().min(1).max(40),
+      phrase: z.string().max(500).nullable(),
+      prediction: z.string().min(1).max(40),
+      confidence: z.number().min(0).max(1),
+    })
+    .strip()
+    .optional(),
   /** Telemetria da captura (diagnóstico de transcrição vazia). Não muda a previsão nem a sugestão. */
   telemetry: z
     .object({

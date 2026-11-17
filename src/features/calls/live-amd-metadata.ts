@@ -44,6 +44,14 @@ function telemetryFields(telemetry: LiveAmdTelemetryPatch | undefined): Record<s
   return out;
 }
 
+/** Marcador gravado quando a escuta DESLIGOU a ligação (metadata.live_amd.auto_hangup). */
+export interface AutoHangupMarker {
+  at: string;
+  phrase: string | null;
+  prediction: string;
+  confidence: number;
+}
+
 export interface LiveAmdPatch {
   prediction: string;
   phrase: string | null;
@@ -53,6 +61,8 @@ export interface LiveAmdPatch {
   transcript?: string;
   nextActivity?: NextActivityResult | null;
   telemetry?: LiveAmdTelemetryPatch;
+  /** Ausente = mantém o que já está gravado. Presente = vale o novo (último vence). */
+  autoHangup?: AutoHangupMarker;
 }
 
 function isPlain(value: unknown): value is Record<string, unknown> {
@@ -77,6 +87,17 @@ export function mergeLiveAmdMetadata(existing: unknown, patch: LiveAmdPatch): Re
       predicted_at: patch.predictedAt,
       ...(patch.transcript !== undefined ? { transcript: patch.transcript } : {}),
       ...telemetryFields(patch.telemetry),
+      // O `...prev` acima já mantém o marcador existente quando o patch não traz.
+      ...(patch.autoHangup
+        ? {
+            auto_hangup: {
+              at: patch.autoHangup.at,
+              phrase: patch.autoHangup.phrase,
+              prediction: patch.autoHangup.prediction,
+              confidence: patch.autoHangup.confidence,
+            },
+          }
+        : {}),
       ...(patch.nextActivity
         ? {
             next_activity_suggestion: patch.nextActivity.suggestion,
