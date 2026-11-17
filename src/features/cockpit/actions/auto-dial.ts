@@ -52,7 +52,7 @@ const dialSchema = z.object({
 });
 const callSchema = z.object({ callId: uuid });
 const noAnswerSchema = z.object({ callId: uuid, notConversation: z.boolean().optional() });
-const concludeSchema = z.object({ callId: uuid, kind: z.enum(['scheduled', 'lost']) });
+const concludeSchema = z.object({ callId: uuid, kind: z.enum(['scheduled', 'lost', 'callback']) });
 const confirmSchema = z.object({
   callId: uuid,
   disposition: z.enum(DISPOSITION_OPTIONS.map((o) => o.value) as [string, ...string[]]),

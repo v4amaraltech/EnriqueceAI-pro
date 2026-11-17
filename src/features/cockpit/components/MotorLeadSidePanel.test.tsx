@@ -41,7 +41,7 @@ function renderPanel(over: Partial<React.ComponentProps<typeof MotorLeadSidePane
 beforeEach(() => vi.clearAllMocks());
 
 describe('MotorLeadSidePanel: só dados e Anotações', () => {
-  it('não tem mais Agendar reunião, Ligar depois nem Desqualificar (vivem na coluna principal)', () => {
+  it('sem instância de ações (só leitura), o painel não desenha os botões', () => {
     renderPanel();
     expect(screen.queryByRole('button', { name: /agendar reunião|ligar depois|desqualificar/i })).toBeNull();
     expect(screen.queryByTestId('dialer-answered')).toBeNull();

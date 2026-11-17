@@ -54,6 +54,15 @@ describe('AutoDialAnsweredActions', () => {
     }
   });
 
+  it('com status unqualified: o botão vira "Mudar motivo de perda"; qualified: some', () => {
+    const { unmount } = renderIt({ status: 'unqualified', isLost: true });
+    expect(screen.getByTestId('dialer-answered-disqualify')).toHaveTextContent('Mudar motivo de perda');
+    expect(screen.getByText('O lead já está perdido: escolha o novo motivo.')).toBeInTheDocument();
+    unmount();
+    renderIt({ status: 'qualified' });
+    expect(screen.queryByTestId('dialer-answered-disqualify')).toBeNull();
+  });
+
   it('lead perdido: Desqualificar some; Agendar e Ligar depois continuam', () => {
     renderIt({ isLost: true });
     expect(screen.queryByTestId('dialer-answered-disqualify')).toBeNull();

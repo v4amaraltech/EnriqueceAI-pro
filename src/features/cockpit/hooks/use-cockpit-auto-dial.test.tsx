@@ -349,7 +349,7 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     await advance(5000);
     // o navegador manda só o leadId; o telefone é lido no servidor
     expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: true });
-    expect(setWebphoneCallContext).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call-1', ownerHandlesResult: true, dialToken: 'tok' }));
+    expect(setWebphoneCallContext).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call-1', ownerHandlesResult: true, hideNotes: true, dialToken: 'tok' }));
     expect(result.current.state.phase).toBe('awaiting-session');
 
     phone.call = liveCall('active');
@@ -489,13 +489,15 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     expect(result.current.leadCardExtras).toBeNull();
   });
 
-  it('POST aceito sem a sessão SIP desta aba em 2 s: pausa e não repete', async () => {
+  it('POST aceito sem a sessão SIP desta aba em 15 s: pausa e não repete', async () => {
     vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'dialed', callId: 'call-1', providerCallId: 'prov-1', attemptNo: 1 } });
     const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
     await startIt(result);
     await advance(5000);
     expect(result.current.state.phase).toBe('awaiting-session');
     await advance(2100);
+    expect(result.current.state.phase).toBe('awaiting-session'); // 2 s não pausa mais (prazo do Cockpit = 15 s)
+    await advance(14_000);
     expect(result.current.state).toMatchObject({ phase: 'paused', reason: 'blocked' });
     expect(dialAutoLeadAction).toHaveBeenCalledTimes(1);
   });

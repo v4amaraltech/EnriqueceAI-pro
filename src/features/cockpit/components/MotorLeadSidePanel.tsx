@@ -17,7 +17,11 @@ import { leadCardFromCallContext } from '../utils/lead-card-from-context';
 
 import { CallHistoryList } from './CallHistoryList';
 import { CallLeadCard } from './CallLeadCard';
+import { LeadQuickActions } from './LeadQuickActions';
+import { RecoveryTag, showsRecoveryTag } from './RecoveryTag';
 import { useLeadHistory } from './use-lead-history';
+import type { MotorLeadActions } from './use-motor-lead-actions';
+import type { MotorNoteStatus, MotorPanelNote } from '../hooks/use-motor-panel-note';
 
 const STATUS_LABEL: Record<string, string> = {
   new: 'Novo',
@@ -41,11 +45,18 @@ interface MotorLeadSidePanelProps {
   /** Estado da ligação do motor, no lugar da linha do telefone ("Em ligação"). Sem botão de discar. */
   statusLine: string;
   simulated: boolean;
+  /** Instância única das ações do lead (a da tela da discagem). Ausente: o painel fica só de leitura. */
+  actions?: MotorLeadActions;
+  /** Fila do motor: na 'recovery' (ou lead perdido) o cabeçalho mostra a etiqueta "Recuperação · Perdido: <motivo>". */
+  queue?: string;
+  /** Anotação que GRAVA na ligação (estado vem da tela da discagem). Ausente: rascunho local, sem gravar. */
+  note?: MotorPanelNote;
 }
 
 /**
- * Painel do lead SOMENTE LEITURA do motor automático: dados do lead que o motor está ligando. Não tem discador,
- * webphone nem botão de ligar/desligar (quem liga é só o motor). É um bloco DOCADO no fluxo da página (a página o
+ * Painel do lead do motor automático: dados do lead que o motor está ligando e, numa faixa fixa acima das Anotações, as
+ * três ações (Agendar reunião, Ligar depois, Desqualificar) em qualquer fase. Não tem discador, webphone nem botão de
+ * ligar/desligar (quem liga é só o motor). É um bloco DOCADO no fluxo da página (a página o
  * põe numa segunda coluna), nunca uma gaveta por cima: assim a confirmação do desfecho e a barra do motor não ficam
  * cobertas. Fechado (`open=false`) não desenha nada, mas os diálogos de agenda/perda seguem montados. As anotações
  * têm rascunho próprio, separado da observação do desfecho.
@@ -59,6 +70,9 @@ export function MotorLeadSidePanel({
   onOpenChange,
   statusLine,
   simulated,
+  actions,
+  queue = 'normal',
+  note,
 }: MotorLeadSidePanelProps) {
   const ctx = card.context;
   const now = new Date(card.generatedAt);
@@ -71,9 +85,14 @@ export function MotorLeadSidePanel({
   const hasLossBlock = Boolean(extras?.lossReasonName?.trim() || extras?.lossNotes?.trim() || lostAgo);
 
   function updateNotes(value: string) {
+    if (note) {
+      note.onChange(value);
+      return;
+    }
     setNotes(value);
     writeCallNote(noteKey, value);
   }
+  const noteValue = note ? note.value : notes;
 
   const facts: Array<[string, string]> = [
     ['Decisor', ctx.decisionMaker.name ?? 'sem dado'],
@@ -100,6 +119,11 @@ export function MotorLeadSidePanel({
               {contact}
               {ctx.decisionMaker.phone ? ` · ${ctx.decisionMaker.phone}` : ''}
             </p>
+            {showsRecoveryTag({ queue, status: ctx.company.status }) && (
+              <div className="mt-1.5">
+                <RecoveryTag reason={extras?.lossReasonName} />
+              </div>
+            )}
             {closeButton}
           </header>
 
@@ -162,17 +186,20 @@ export function MotorLeadSidePanel({
             </details>
           </div>
 
-          <div className="mt-auto space-y-2 border-t px-4 py-4">
+          <div className="mt-auto space-y-3 border-t px-4 py-3">
+            {actions && <LeadQuickActions status={ctx.company.status} actions={actions} simulated={simulated} />}
             <label className="block text-xs font-medium" htmlFor="motor-call-notes">
               Anotações
             </label>
             <Textarea
               id="motor-call-notes"
-              value={notes}
+              value={noteValue}
               onChange={(event) => updateNotes(event.target.value)}
-              placeholder="O que o lead disse. A nota fica guardada se você fechar o painel."
+              onBlur={note ? note.onBlur : undefined}
+              placeholder={note ? 'O que o lead disse. Grava na ligação ao sair do campo.' : 'O que o lead disse. A nota fica guardada se você fechar o painel.'}
               className="min-h-16 text-xs"
             />
+            {note && <NoteStatusLine status={note.status} onRetry={note.retry} />}
           </div>
     </>
   );
@@ -191,5 +218,32 @@ export function MotorLeadSidePanel({
       </aside>
     )}
     </>
+  );
+}
+
+const NOTE_STATUS_TEXT: Record<Exclude<MotorNoteStatus['kind'], 'error'>, string> = {
+  idle: 'Esta anotação é a que vale: grava na ligação ao sair do campo.',
+  simulated: 'Simulado: a anotação não é gravada.',
+  waiting: 'Discando: a anotação grava assim que a ligação existir.',
+  'no-call': 'A ligação deste lead não foi criada: a anotação fica guardada aqui, mas NÃO foi gravada.',
+  saving: 'Gravando…',
+  saved: 'Guardada na ligação',
+};
+
+function NoteStatusLine({ status, onRetry }: { status: MotorNoteStatus; onRetry: () => void }) {
+  if (status.kind === 'error') {
+    return (
+      <p className="text-destructive text-[11px]" role="alert" data-testid="motor-note-status">
+        Não gravou: {status.message}{' '}
+        <button type="button" className="underline underline-offset-2" onClick={onRetry} data-testid="motor-note-retry">
+          Tentar de novo
+        </button>
+      </p>
+    );
+  }
+  return (
+    <p className="text-muted-foreground text-[11px]" role="status" aria-live="polite" data-testid="motor-note-status" data-kind={status.kind}>
+      {NOTE_STATUS_TEXT[status.kind]}
+    </p>
   );
 }

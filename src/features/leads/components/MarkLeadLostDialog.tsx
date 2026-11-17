@@ -11,6 +11,7 @@ import { Calendar } from '@/shared/components/ui/calendar';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -42,6 +43,10 @@ interface MarkLeadLostDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Called after the server confirms the lead was marked as lost. */
   onSuccess?: () => void;
+  /** Título do diálogo. Padrão: "Desqualificar lead". */
+  title?: string;
+  /** Texto de apoio sob o título (ex.: lead que já está perdido). Padrão: nenhum. */
+  description?: string;
 }
 
 export function MarkLeadLostDialog({
@@ -49,6 +54,8 @@ export function MarkLeadLostDialog({
   open,
   onOpenChange,
   onSuccess,
+  title = 'Desqualificar lead',
+  description,
 }: MarkLeadLostDialogProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -147,7 +154,8 @@ export function MarkLeadLostDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-xl">Desqualificar lead</DialogTitle>
+          <DialogTitle className="text-xl">{title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="space-y-5">
           <div className="space-y-2">

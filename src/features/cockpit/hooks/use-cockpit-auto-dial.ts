@@ -9,7 +9,6 @@ import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-d
 import type { CallDisposition } from '@/features/calls/types';
 import { AUTO_DIAL_ANSWER_TIMEOUT_MS, AUTO_DIAL_COUNTDOWN_SECONDS } from '@/features/activities/utils/auto-dialer';
 import {
-  LOCAL_SESSION_GRACE_MS,
   RAMAL_BUSY_PAUSE_MESSAGE,
   SESSION_MISSING_MESSAGE,
   sessionOfThisDial,
@@ -47,6 +46,7 @@ import {
   refreshTabLock,
   releaseTabLock,
 } from '../utils/auto-dial-tab-lock';
+import { COCKPIT_SESSION_GRACE_MS, COCKPIT_SESSION_MISSING_MESSAGE } from '../utils/cockpit-session-grace';
 import { nextRamalBusyStep } from '../utils/ramal-busy-retry';
 import type { CockpitTier } from '../utils/next-call-pick';
 import type { AutoDialQueue } from '../utils/recovery-queue';
@@ -128,6 +128,8 @@ export interface UseCockpitAutoDialResult {
   simulated: boolean;
   callId: string | null;
   attemptNo: number | null;
+  /** Pausa por sessão que não entrou: id do lead cuja ligação pode ainda aparecer. O painel dele fica aberto. */
+  callLostLeadId?: string | null;
   start: () => Promise<void>;
   stop: () => void;
   pause: () => void;
@@ -214,6 +216,26 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   const notConversationCalls = useRef(new Set<string>());
   const pendingConclusion = useRef<{ callId: string | null; kind: ExternalConclusionKind } | null>(null);
   const prevPhase = useRef<CockpitAutoDialState['phase']>('off');
+  // Lead cuja ligação ficou sem a sessão desta aba (pausa por `session_missing`): o painel dele segue aberto e as ações valem.
+  const [lostLeadId, setLostLeadId] = useState<string | null>(null);
+  const lostLeadRef = useRef<string | null>(null);
+  // Ligação REAL deste motor e o lead a que ela pertence (gravada no momento em que a discagem devolve o callId). O `callId` do
+  // estado/closure pode ser o da ligação ANTERIOR (durante `dialing`, ou numa closure velha depois de um await).
+  const dialedCall = useRef<{ leadId: string; callId: string } | null>(null);
+  const markSessionLost = () => {
+    const id = current.current?.leadId ?? null;
+    lostLeadRef.current = id;
+    setLostLeadId(id);
+  };
+  const clearSessionLost = () => {
+    lostLeadRef.current = null;
+    setLostLeadId(null);
+  };
+  // Fase mais recente: o painel conclui o lead depois de diálogos/awaits e a ligação pode ter mudado de fase nesse meio tempo.
+  const phaseRef = useRef<CockpitAutoDialState['phase']>('off');
+  useEffect(() => {
+    phaseRef.current = state.phase;
+  }, [state.phase]);
 
   const isOn = state.phase !== 'off';
 
@@ -392,6 +414,14 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
 
     tooSoonRef.current = 0;
     attemptNoRef.current = r.attemptNo;
+    // O SDR agiu sobre o lead (agendou/desqualificou/ligar depois) ENQUANTO a discagem estava saindo: a ligação nasceu,
+    // mas o lead já está concluído. Depois do `dial_started` o motor entra em `concluded-call` e só segue ao fim dela.
+    const applyDeferredConclusion = (nowCallId: string | null) => {
+      if (!concluded.current.has(lead.leadId)) return;
+      if (pendingConclusion.current && !pendingConclusion.current.callId) pendingConclusion.current = { ...pendingConclusion.current, callId: nowCallId };
+      if (nowCallId) concludedCalls.current.add(nowCallId);
+      dispatch({ type: 'concluded_externally' });
+    };
     setAttemptNo(r.attemptNo);
 
     if (r.status === 'simulated') {
@@ -410,14 +440,17 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
         return;
       }
       ramalBusyFirstAtRef.current = null;
+      dialedCall.current = { leadId: lead.leadId, callId: sim.callId };
       setCallId(sim.callId);
       dispatch({ type: 'dial_started' });
+      applyDeferredConclusion(sim.callId);
       runSimulatedCall(lead.leadId, r.attemptNo, sim.answered, sim.endsAfterMs);
       return;
     }
 
     // Ligação REAL (as 3 flags, decidido no servidor).
     ramalBusyFirstAtRef.current = null;
+    dialedCall.current = { leadId: lead.leadId, callId: r.callId };
     setCallId(r.callId);
     if (reserved) {
       publishWebphoneDial(reserved.seq, () =>
@@ -428,6 +461,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
           leadName: lead.leadName,
           phone: lead.phone ?? '',
           ownerHandlesResult: true,
+          hideNotes: true, // a anotação que vale é a do painel do lead (grava na ligação)
           dialToken: reserved.token,
         }),
       );
@@ -446,6 +480,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       setCallPhase('awaiting-session');
       dispatch({ type: 'awaiting_session' });
     }
+    applyDeferredConclusion(r.callId);
   });
   useEffect(() => {
     if (state.phase === 'dialing') void onDial();
@@ -481,7 +516,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     }
   }, [live, localRelation, callPhase]);
 
-  // POST ok mas a sessão desta aba não entrou na ligação em 2 s: pausa e não repete (FR-15).
+  // POST ok mas a sessão desta aba não entrou na ligação em COCKPIT_SESSION_GRACE_MS (15 s): pausa e não repete (FR-15).
+  // Enquanto espera, a reserva do token fica de pé (um INVITE atrasado ainda é reconhecido); só ao estourar ela é cancelada.
   useEffect(() => {
     if (!live || callPhase !== 'awaiting-session' || localRelation !== 'none') return;
     const tokenAtStart = dialTokenRef.current;
@@ -503,8 +539,9 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       }
       if (tokenAtStart) cancelWebphoneDial(tokenAtStart);
       setCallPhase('idle');
-      dispatch({ type: 'session_missing', message: SESSION_MISSING_MESSAGE });
-    }, LOCAL_SESSION_GRACE_MS);
+      markSessionLost();
+      dispatch({ type: 'session_missing', message: COCKPIT_SESSION_MISSING_MESSAGE });
+    }, COCKPIT_SESSION_GRACE_MS);
     return () => clearTimeout(t);
   }, [live, callPhase, localRelation]);
 
@@ -516,6 +553,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       if (sessionOfThisDial(getWebphoneState().call, dialTokenRef.current) === 'live') return;
       if (!confirmedRef.current) {
         if (dialTokenRef.current) cancelWebphoneDial(dialTokenRef.current);
+        // O servidor encerrou a ligação antes de a sessão entrar: ela NÃO vai aparecer depois, então o painel não fica aberto
+        // (a marca `callLostLeadId` e a mensagem "pode ainda aparecer" são só do estouro do prazo).
         setCallPhase('idle');
         dispatch({ type: 'session_missing', message: SESSION_MISSING_MESSAGE });
         return;
@@ -610,8 +649,11 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       return;
     }
     for (let i = 0; i <= NO_ANSWER_MAX_RETRIES; i++) {
+      // O SDR concluiu o lead pelo painel no meio: nada de `no_answer` para ele (o desfecho já é o da conclusão).
+      if (concludedCalls.current.has(callId)) return;
       const forced = notConversationCalls.current.has(callId);
       const r = await resolveAutoDialNoAnswerAction(forced ? { callId, notConversation: true } : { callId }).catch(() => null);
+      if (concludedCalls.current.has(callId)) return;
       if (r?.success && (r.data.status === 'recorded' || r.data.status === 'not_last')) {
         dispatch({ type: 'completed' });
         return;
@@ -666,17 +708,34 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     const lead = current.current;
     if (!lead || lead.leadId !== leadId) return; // lead que não é o atual: ignorado
     if (concluded.current.has(leadId)) return; // já concluído: idempotente
-    const phase = state.phase;
+    const phase = phaseRef.current;
     const onAir = phase === 'awaiting-session' || phase === 'in-call';
     const ended = phase === 'resolving' || phase === 'awaiting-sdr' || phase === 'auto-completing';
-    if (!onAir && !ended) return; // fora de uma ligação do motor: ignorado
+    // `dialing`: o POST da discagem ainda está no ar (sem `callId`). A conclusão fica guardada e `onDial` a aplica quando a ligação nasce.
+    const dialing = phase === 'dialing';
+    // Pausa por sessão perdida: o SDR ainda conduz o lead pelo painel. O motor está parado, então só o tira da sessão.
+    if (phase === 'paused' && lostLeadRef.current === leadId) {
+      concluded.current.add(leadId);
+      excluded.current.add(leadId);
+      return;
+    }
+    if (!onAir && !ended && !dialing) return; // fora de uma ligação do motor: ignorado
+    // Ligação do lead TRATADO: nunca o `callId` da closure (a fase muda durante diálogos/awaits e a closure pode ser da ligação
+    // anterior). Sem ligação deste lead ainda (discando), a conclusão fica guardada e `onDial` a aplica quando ela nasce.
+    const dialed = dialedCall.current;
+    const leadCallId = dialed && dialed.leadId === leadId ? dialed.callId : null;
+    const deferred = dialing || leadCallId === null;
     concluded.current.add(leadId);
-    if (callId) concludedCalls.current.add(callId);
-    excluded.current.add(leadId); // o lead sai da sessão do motor (FR-17)
-    if (onAir) pendingConclusion.current = { callId, kind }; // grava quando a ligação terminar (o fim da sessão SIP ainda é observado)
+    if (leadCallId && !deferred) concludedCalls.current.add(leadCallId);
+    excluded.current.add(leadId); // o lead sai da sessão do motor (FR-17): sem 2ª/3ª tentativa nem volta à fila
+    if (deferred) {
+      pendingConclusion.current = { callId: null, kind };
+      return;
+    }
+    if (onAir) pendingConclusion.current = { callId: leadCallId, kind }; // grava quando a ligação terminar (o fim da sessão SIP ainda é observado)
     else {
       setCallPhase('idle');
-      void recordConclusion(live, { callId, kind });
+      void recordConclusion(live, { callId: leadCallId, kind });
     }
     dispatch({ type: 'concluded_externally' });
   }
@@ -723,6 +782,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     pendingConclusion.current = null;
     refusalsRef.current = 0;
     ramalBusyFirstAtRef.current = null;
+    clearSessionLost();
     dispatch({ type: 'start' });
   }
 
@@ -761,17 +821,31 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     if (!lead) return { ok: false, error: 'Nenhum lead em ligação.' };
     const valid = validateCallbackAt(input.scheduledAt, new Date());
     if (!valid.ok) return valid;
+    const inAwaitingSdr = state.phase === 'awaiting-sdr';
+    // Discando: o POST ainda não devolveu a ligação e o `callId` do estado é o da ligação ANTERIOR (não usar).
+    const lostPause = state.phase === 'paused' && lostLeadRef.current === lead.leadId;
+    const dialing = state.phase === 'dialing' || lostPause;
+    const thisCallId = dialing ? null : callId;
     // Já concluído (painel ou clique anterior): ignora, como o confirmOutcome.
-    if (concluded.current.has(lead.leadId) || (callId && concludedCalls.current.has(callId))) return { ok: true };
-    if (live && !callId) return { ok: false, error: 'Não encontrei a ligação deste lead. Tente de novo em instantes.' };
-    if (!live || !callId) {
+    if (concluded.current.has(lead.leadId) || (thisCallId && concludedCalls.current.has(thisCallId))) return { ok: true };
+    // Fora de uma ligação do motor (contagem, espera...): não há o que concluir.
+    if (!inAwaitingSdr && !dialing && !['awaiting-session', 'in-call', 'resolving', 'auto-completing'].includes(state.phase)) {
+      return { ok: false, error: 'Nenhum lead em ligação.' };
+    }
+    if (live && !dialing && !thisCallId) return { ok: false, error: 'Não encontrei a ligação deste lead. Tente de novo em instantes.' };
+    if (!live || (!thisCallId && !dialing)) {
       console.warn('[cockpit-auto-dial] simulado: retorno e desfecho NÃO gravados (ligar depois)');
       toast.info('Simulado: nada é registrado.');
-      setCallPhase('idle');
-      dispatch({ type: 'sdr_concluded' });
+      if (inAwaitingSdr) {
+        setCallPhase('idle');
+        dispatch({ type: 'sdr_concluded' });
+      } else {
+        concludeExternally(lead.leadId, 'callback'); // ligação em curso: o motor deixa o lead e segue ao fim dela
+      }
       return { ok: true };
     }
-    if (!callbackScheduledCalls.current.has(callId)) {
+    const scheduledKey = thisCallId ?? `lead:${lead.leadId}`;
+    if (!callbackScheduledCalls.current.has(scheduledKey)) {
       // Sem `executedStep`: o motor não avança a cadência (D6). O retorno pausa a cadência até o dia útil seguinte.
       const r = await scheduleActivity({
         leadId: lead.leadId,
@@ -781,13 +855,19 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
         pauseCadenceUntilReturn: true,
       }).catch(() => null);
       if (!r?.success) return { ok: false, error: r && !r.success ? r.error : 'Falha ao agendar o retorno' };
-      callbackScheduledCalls.current.add(callId);
+      callbackScheduledCalls.current.add(scheduledKey);
+    }
+    if (!inAwaitingSdr) {
+      // Ligar depois com a ligação tocando, no ar ou terminando: o retorno já está agendado. O motor deixa o lead (sem nova
+      // tentativa, sem `no_answer`) e só segue quando a ligação acabar; o desfecho mínimo é gravado ao fim dela.
+      concludeExternally(lead.leadId, 'callback');
+      return { ok: true };
     }
     const confirmed = await confirmWith({ disposition: 'callback_requested', notes: input.notes }, false);
     if (!confirmed) {
       return { ok: false, error: 'O retorno foi agendado, mas o desfecho da ligação não foi registrado. Tente de novo: só o desfecho será reenviado.' };
     }
-    concludedCalls.current.add(callId); // clique atrasado não regrava; o lead NÃO entra em `concluded` (ele volta no retorno)
+    if (thisCallId) concludedCalls.current.add(thisCallId); // clique atrasado não regrava; o lead NÃO entra em `concluded` (ele volta no retorno)
     return { ok: true };
   }
 
@@ -804,11 +884,15 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     tier,
     simulated: !live,
     callId,
+    callLostLeadId: state.phase === 'paused' ? lostLeadId : null,
     attemptNo,
     start,
     stop,
     pause: () => dispatch({ type: 'pause', reason: 'user' }),
-    resume: () => dispatch({ type: 'resume' }),
+    resume: () => {
+      clearSessionLost();
+      dispatch({ type: 'resume' });
+    },
     confirmOutcome,
     concludeExternally,
     scheduleCallback,

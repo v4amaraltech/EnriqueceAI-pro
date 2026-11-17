@@ -17,6 +17,8 @@ import {
 import { MotorCallbackDialog, type ScheduleCallbackFn } from './MotorCallbackDialog';
 
 const SIMULATED_NOTICE = 'Simulado: nada é registrado.';
+const LOST_TITLE = 'Mudar motivo de perda';
+const LOST_DESCRIPTION = 'O lead já está perdido: escolha o novo motivo.';
 const FIXTURE_NOTICE = 'Fixture de teste: nada é registrado.';
 
 interface UseMotorLeadActionsInput {
@@ -33,12 +35,18 @@ interface UseMotorLeadActionsInput {
   scheduleCallback?: ScheduleCallbackFn;
   /** Ligações do lead hoje, contando a atual. */
   attemptsToday?: number;
+  /** Lead já perdido: o diálogo de motivo vira "Mudar motivo de perda". */
+  alreadyLost?: boolean;
+  /** Texto atual da anotação do painel (observação inicial do "Ligar depois"). Ausente: lê o rascunho guardado do lead. */
+  getNotes?: () => string;
 }
 
 /**
  * As três ações do lead que conversou (Agendar reunião, Ligar depois, Desqualificar) e os diálogos delas.
  * Mesma lógica que ficava no painel do lead: `dialogs` precisa ser renderizado junto dos botões.
  */
+export type MotorLeadActions = ReturnType<typeof useMotorLeadActions>;
+
 export function useMotorLeadActions({
   leadId,
   leadName,
@@ -49,6 +57,8 @@ export function useMotorLeadActions({
   onLeadActed,
   scheduleCallback,
   attemptsToday = 0,
+  alreadyLost = false,
+  getNotes,
 }: UseMotorLeadActionsInput) {
   const [weekOpen, setWeekOpen] = useState(false);
   const [weekSession, setWeekSession] = useState(0);
@@ -57,6 +67,16 @@ export function useMotorLeadActions({
   const [callbackOpen, setCallbackOpen] = useState(false);
   const [callbackNotes, setCallbackNotes] = useState('');
   const [callbackBusy, setCallbackBusy] = useState(false);
+
+  // Trocou de lead: diálogos abertos do lead anterior não podem agir sobre o novo (a instância vive na tela da discagem).
+  const [trackedLeadId, setTrackedLeadId] = useState(leadId);
+  if (trackedLeadId !== leadId) {
+    setTrackedLeadId(leadId);
+    setWeekOpen(false);
+    setChoice(null);
+    setLostOpen(false);
+    setCallbackOpen(false);
+  }
 
   function schedule() {
     // Simulado grava nada: sem agenda real (a fixture /demo usa `previewOnly` + `schedulingPreview`).
@@ -70,7 +90,7 @@ export function useMotorLeadActions({
 
   function callback() {
     // A anotação do painel do lead (rascunho) entra como observação inicial.
-    setCallbackNotes(readCallNote(callNoteKey('motor', leadId)));
+    setCallbackNotes(getNotes ? getNotes() : readCallNote(callNoteKey('motor', leadId)));
     setCallbackOpen(true);
   }
 
@@ -134,6 +154,7 @@ export function useMotorLeadActions({
         leadId={leadId}
         open={lostOpen}
         onOpenChange={setLostOpen}
+        {...(alreadyLost ? { title: LOST_TITLE, description: LOST_DESCRIPTION } : {})}
         onSuccess={() => {
           setLostOpen(false);
           onLeadActed?.('lost');

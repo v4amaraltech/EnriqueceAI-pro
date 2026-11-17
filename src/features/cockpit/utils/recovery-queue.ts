@@ -39,3 +39,17 @@ export const RECOVERY_BLOCKED_REASON_NAMES: readonly string[] = [
 
 /** Linhas pedidas à função SQL (a mais recente primeiro). */
 export const RECOVERY_QUEUE_LIMIT = 1000;
+
+/** Motivo "Sem interesse": o lead fica FORA da recuperação por `SEM_INTERESSE_COOLDOWN_DAYS` dias (decisão do usuário, 17/11). */
+export const SEM_INTERESSE_REASON_NAME = 'Sem interesse';
+export const SEM_INTERESSE_COOLDOWN_DAYS = 90;
+
+/** O motivo de perda é "Sem interesse"? (ignora caixa e acento) */
+export function isSemInteresseReason(name: string | null | undefined): boolean {
+  return Boolean(name) && normalizeReasonName(name as string) === normalizeReasonName(SEM_INTERESSE_REASON_NAME);
+}
+
+/** Início da janela de 90 dias: a perda "Sem interesse" feita a partir daqui ainda está em quarentena. */
+export function semInteresseCooldownCutoff(now: Date): Date {
+  return new Date(now.getTime() - SEM_INTERESSE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+}
