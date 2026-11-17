@@ -98,6 +98,7 @@ function fakeSession(integrated: boolean) {
     on: vi.fn((event: string, h: (payload?: unknown) => void) => handlers.set(event, h)),
     answer: vi.fn(),
     terminate: vi.fn(),
+    sendDTMF: vi.fn(),
   };
   const request = { getHeader: () => (integrated ? 'true' : null) };
   return { session, request };
@@ -499,5 +500,134 @@ describe('hangupCall e a escuta ao vivo', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('teclado DTMF', () => {
+  async function inCall(canInsert: boolean | null) {
+    setMicPermission('granted');
+    await client.startWebphone(CONFIG);
+    const ua = lastUa();
+    ua.emit('registered');
+    await flush();
+    const { session, request } = fakeSession(true);
+    ua.emit('newRTCSession', { session, request });
+    if (canInsert !== null) {
+      const pc = { addEventListener: vi.fn(), getSenders: () => [{ track: { kind: 'audio' }, dtmf: { canInsertDTMF: canInsert } }] };
+      const onPc = session.on.mock.calls.find((e) => e[0] === 'peerconnection')?.[1] as (p: unknown) => void;
+      onPc({ peerconnection: pc });
+    }
+    return { session, ua };
+  }
+  const accept = (session: ReturnType<typeof fakeSession>['session']) =>
+    (session.on.mock.calls.find((e) => e[0] === 'accepted')?.[1] as () => void)();
+
+  it('sem sessão: no-op', () => {
+    expect(client.sendDtmf('1')).toBeNull();
+  });
+
+  it('fase ringing: no-op', async () => {
+    const { session } = await inCall(true);
+    expect(client.getWebphoneState().call?.phase).toBe('ringing');
+    expect(client.sendDtmf('1')).toBeNull();
+    expect(session.sendDTMF).not.toHaveBeenCalled();
+  });
+
+  it('in-call com canInsertDTMF true: RFC2833', async () => {
+    const { session } = await inCall(true);
+    accept(session);
+    expect(client.sendDtmf('5')).toBe('RFC2833');
+    expect(session.sendDTMF).toHaveBeenCalledWith('5', { transportType: 'RFC2833', duration: 160, interToneGap: 70 });
+  });
+
+  it('canInsertDTMF false: INFO', async () => {
+    const { session } = await inCall(false);
+    accept(session);
+    expect(client.sendDtmf('#')).toBe('INFO');
+    expect(session.sendDTMF).toHaveBeenCalledWith('#', { transportType: 'INFO', duration: 160, interToneGap: 70 });
+  });
+
+  it('RFC2833 lança erro: cai para INFO uma vez', async () => {
+    const { session } = await inCall(true);
+    accept(session);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    session.sendDTMF.mockImplementationOnce(() => {
+      throw new Error('InvalidStateError');
+    });
+    expect(client.sendDtmf('1')).toBe('INFO');
+    expect(session.sendDTMF).toHaveBeenCalledTimes(2);
+    expect(session.sendDTMF.mock.calls[1]?.[1]).toMatchObject({ transportType: 'INFO' });
+  });
+
+  it('INFO lança erro: retorna null sem repetir', async () => {
+    const { session } = await inCall(false);
+    accept(session);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    session.sendDTMF.mockImplementation(() => {
+      throw new Error('x');
+    });
+    expect(client.sendDtmf('1')).toBeNull();
+    expect(session.sendDTMF).toHaveBeenCalledTimes(1);
+    expect(client.dtmfUsedInCall(client.getWebphoneState().call?.id ?? '')).toBe(false);
+  });
+
+  it('override do localStorage vence', async () => {
+    const { session } = await inCall(true);
+    accept(session);
+    window.localStorage.setItem('enriqueceai.webphone.dtmf-transport', 'INFO');
+    expect(client.sendDtmf('2')).toBe('INFO');
+    window.localStorage.setItem('enriqueceai.webphone.dtmf-transport', 'lixo');
+    expect(client.sendDtmf('2')).toBe('RFC2833');
+  });
+
+  it('override RFC2833 sem sender de áudio (sem peerconnection): ainda usa RFC2833 e devolve RFC2833', async () => {
+    // Caso silencioso do JsSIP: sem canInsertDTMF o tom pode não sair, mas o override vence e sendDTMF não lança.
+    const { session } = await inCall(null);
+    accept(session);
+    window.localStorage.setItem('enriqueceai.webphone.dtmf-transport', 'RFC2833');
+    expect(client.sendDtmf('3')).toBe('RFC2833');
+    expect(session.sendDTMF).toHaveBeenCalledTimes(1);
+    expect(session.sendDTMF).toHaveBeenCalledWith('3', { transportType: 'RFC2833', duration: 160, interToneGap: 70 });
+  });
+
+  it('tom inválido: no-op', async () => {
+    const { session } = await inCall(true);
+    accept(session);
+    expect(client.sendDtmf('A' as never)).toBeNull();
+    expect(client.sendDtmf('12' as never)).toBeNull();
+    expect(session.sendDTMF).not.toHaveBeenCalled();
+  });
+
+  it('dtmfUsedInCall liga na 1ª tecla, protege o auto-desligar e zera em nova ligação', async () => {
+    const { session, ua } = await inCall(true);
+    accept(session);
+    const id = client.getWebphoneState().call?.id ?? '';
+    expect(client.dtmfUsedInCall(id)).toBe(false);
+    expect(client.shouldAutoHangupOnCarrier(id)).toBe(true);
+    expect(client.shouldAutoHangupOnCarrier()).toBe(true);
+    client.sendDtmf('1');
+    expect(client.dtmfUsedInCall(id)).toBe(true);
+    expect(client.shouldAutoHangupOnCarrier(id)).toBe(false);
+    expect(client.shouldAutoHangupOnCarrier()).toBe(false);
+    expect(client.shouldAutoHangupOnCarrier('outra')).toBe(true);
+
+    const end = session.on.mock.calls.find((e) => e[0] === 'ended')?.[1] as (e: unknown) => void;
+    end({ cause: 'x' });
+    expect(client.dtmfUsedInCall(id)).toBe(false);
+
+    const next = fakeSession(true);
+    ua.emit('newRTCSession', { session: next.session, request: next.request });
+    expect(client.dtmfUsedInCall(client.getWebphoneState().call?.id ?? '')).toBe(false);
+  });
+});
+
+describe('dtmfTransport (puro)', () => {
+  it.each([
+    [null, true, 'RFC2833'],
+    [null, false, 'INFO'],
+    ['INFO', true, 'INFO'],
+    ['RFC2833', false, 'RFC2833'],
+  ] as const)('override=%s canInsert=%s => %s', (override, canInsertDtmf, expected) => {
+    expect(client.dtmfTransport({ override, canInsertDtmf })).toBe(expected);
   });
 });

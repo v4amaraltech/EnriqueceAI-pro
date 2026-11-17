@@ -12,7 +12,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
+import { GripVertical, Grid3x3, Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
@@ -27,6 +27,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import { LiveAmdHint } from './LiveAmdHint';
+import { WebphoneKeypad } from './WebphoneKeypad';
 import { useWebphonePanelHost } from './WebphonePanelHost';
 import { startLiveAmdBrowser } from './live-amd-browser';
 import type { LiveAmdView } from './live-amd-session';
@@ -54,6 +55,7 @@ import {
   hangupCall as hangupWebphoneLeg,
   reconnectWebphone,
   requestWebphoneMicrophone,
+  shouldAutoHangupOnCarrier,
   subscribeRemoteAudioTrack,
   takeOverWebphone,
   toggleMute,
@@ -239,7 +241,10 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
         callId: amdCallId,
         onView: setLiveAmd,
         // Caixa postal, fora de área ou número inexistente: desliga sozinho.
-        onCarrierHangup: () => hangupRef.current(),
+        // Com o teclado em uso o SDR navega a URA: a escuta só grava, não desliga.
+        onCarrierHangup: () => {
+          if (shouldAutoHangupOnCarrier()) hangupRef.current();
+        },
       });
     };
     arm();
@@ -648,9 +653,13 @@ function DraggableShell({
     }
     const raf = window.requestAnimationFrame(clampToViewport);
     window.addEventListener('resize', clampToViewport);
+    // Abrir/fechar o teclado muda a altura do painel: reenquadra para não sair da tela.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(clampToViewport);
+    if (nodeRef.current) observer?.observe(nodeRef.current);
     return () => {
       window.cancelAnimationFrame(raf);
       window.removeEventListener('resize', clampToViewport);
+      observer?.disconnect();
     };
   }, [compact]);
 
@@ -851,6 +860,8 @@ function LiveCallView({
   onHangup: () => void;
 }) {
   const inCall = call.phase === 'in-call';
+  const [keypadOpen, setKeypadOpen] = useState(false);
+  const showKeypad = keypadOpen && inCall; // fecha sozinho quando a fase sai de in-call
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!inCall) return;
@@ -888,7 +899,7 @@ function LiveCallView({
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {call.phase === 'ringing' && !call.integrated && call.direction === 'incoming' && (
           <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700" onClick={answerCall}>
             <Phone className="h-4 w-4" /> Atender
@@ -907,6 +918,20 @@ function LiveCallView({
         </Button>
         <Button
           size="sm"
+          variant="outline"
+          // Só o ícone: com 4 botões (chamada recebida) os rótulos não cabem em w-80.
+          className="shrink-0 px-2.5"
+          aria-label="Teclado"
+          onClick={() => setKeypadOpen((open) => !open)}
+          disabled={!inCall}
+          aria-expanded={showKeypad}
+          aria-controls="webphone-keypad"
+          data-testid="webphone-keypad-toggle"
+        >
+          <Grid3x3 className="h-4 w-4" />
+        </Button>
+        <Button
+          size="sm"
           variant="destructive"
           className="flex-1"
           onPointerDown={(event) => {
@@ -918,6 +943,8 @@ function LiveCallView({
           <PhoneOff className="h-4 w-4" /> Desligar
         </Button>
       </div>
+
+      {showKeypad && <WebphoneKeypad key={call.id} />}
 
       <NotesField notes={notes} onChange={onNotesChange} />
     </>
