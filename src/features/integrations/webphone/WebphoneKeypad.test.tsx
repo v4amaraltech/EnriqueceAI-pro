@@ -1,8 +1,15 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const client = vi.hoisted(() => ({ sendDtmf: vi.fn() }));
 vi.mock('./webphone-client', () => ({ sendDtmf: client.sendDtmf }));
+
+const sound = vi.hoisted(() => ({ play: vi.fn(), read: vi.fn(), write: vi.fn() }));
+vi.mock('./webphone-keypad-sound', () => ({
+  playKeypadBeep: sound.play,
+  readKeypadSound: sound.read,
+  writeKeypadSound: sound.write,
+}));
 
 import { WebphoneKeypad } from './WebphoneKeypad';
 
@@ -10,6 +17,13 @@ describe('WebphoneKeypad', () => {
   beforeEach(() => {
     client.sendDtmf.mockReset();
     client.sendDtmf.mockReturnValue('RFC2833');
+    sound.play.mockReset();
+    sound.write.mockReset();
+    sound.read.mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('tem as 12 teclas com rótulo acessível', () => {
@@ -17,7 +31,7 @@ describe('WebphoneKeypad', () => {
     for (const name of ['Tecla 0', 'Tecla 1', 'Tecla 9', 'Tecla asterisco', 'Tecla sustenido']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
-    expect(screen.getAllByRole('button')).toHaveLength(12);
+    expect(screen.getAllByRole('button')).toHaveLength(13); // 12 teclas + interruptor de som
     expect(screen.getByTestId('webphone-key-star')).toBeInTheDocument();
     expect(screen.getByTestId('webphone-key-hash')).toBeInTheDocument();
   });
@@ -95,5 +109,81 @@ describe('WebphoneKeypad', () => {
     unmount();
     fireEvent.keyDown(document.body, { key: '9' });
     expect(client.sendDtmf).not.toHaveBeenCalled();
+  });
+
+  describe('retorno (som e visual)', () => {
+    it('bip de sucesso por clique e por tecla física; sendDtmf com os mesmos argumentos', () => {
+      render(<WebphoneKeypad />);
+      fireEvent.click(screen.getByRole('button', { name: 'Tecla 5' }));
+      fireEvent.keyDown(document.body, { key: '#' });
+      expect(sound.play).toHaveBeenCalledTimes(2);
+      expect(sound.play).toHaveBeenNthCalledWith(1, 'ok');
+      expect(client.sendDtmf).toHaveBeenNthCalledWith(1, '5');
+      expect(client.sendDtmf).toHaveBeenNthCalledWith(2, '#');
+      expect(client.sendDtmf).toHaveBeenCalledTimes(2);
+    });
+
+    it('tom de falha quando sendDtmf devolve null', () => {
+      client.sendDtmf.mockReturnValue(null);
+      render(<WebphoneKeypad />);
+      fireEvent.click(screen.getByRole('button', { name: 'Tecla 2' }));
+      expect(sound.play).toHaveBeenCalledWith('fail');
+      expect(sound.play).toHaveBeenCalledTimes(1);
+    });
+
+    it('com o som desligado não toca nada e ainda envia', () => {
+      sound.read.mockReturnValue(false);
+      render(<WebphoneKeypad />);
+      const toggle = screen.getByRole('button', { name: 'Som do teclado' });
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      fireEvent.click(screen.getByRole('button', { name: 'Tecla 1' }));
+      expect(sound.play).not.toHaveBeenCalled();
+      expect(client.sendDtmf).toHaveBeenCalledWith('1');
+    });
+
+    it('o interruptor persiste a escolha e silencia/volta o bip', () => {
+      render(<WebphoneKeypad />);
+      const toggle = screen.getByRole('button', { name: 'Som do teclado' });
+      expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.click(toggle);
+      expect(sound.write).toHaveBeenLastCalledWith(false);
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      fireEvent.click(screen.getByRole('button', { name: 'Tecla 3' }));
+      expect(sound.play).not.toHaveBeenCalled();
+      fireEvent.click(toggle);
+      expect(sound.write).toHaveBeenLastCalledWith(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Tecla 3' }));
+      expect(sound.play).toHaveBeenCalledTimes(1);
+    });
+
+    it('a tecla fica pressionada ~150 ms e volta', () => {
+      vi.useFakeTimers();
+      render(<WebphoneKeypad />);
+      const key = screen.getByRole('button', { name: 'Tecla 8' });
+      fireEvent.click(key);
+      expect(key).toHaveAttribute('data-pressed', 'true');
+      act(() => {
+        vi.advanceTimersByTime(160);
+      });
+      expect(key).not.toHaveAttribute('data-pressed');
+    });
+
+    it('falha mostra "Não consegui enviar a tecla N" em role=alert e some sozinha', () => {
+      vi.useFakeTimers();
+      client.sendDtmf.mockReturnValue(null);
+      render(<WebphoneKeypad />);
+      fireEvent.click(screen.getByRole('button', { name: 'Tecla 9' }));
+      expect(screen.getByRole('alert')).toHaveTextContent('Não consegui enviar a tecla 9');
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('sucesso não mostra alerta', () => {
+      render(<WebphoneKeypad />);
+      fireEvent.click(screen.getByRole('button', { name: 'Tecla 9' }));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
   });
 });
