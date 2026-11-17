@@ -25,6 +25,7 @@ import {
   type MeetingChoice,
   type SchedulingPreview,
 } from './CallMeetingDialogs';
+import { MotorCallbackDialog, type ScheduleCallbackFn } from './MotorCallbackDialog';
 import { useLeadHistory } from './use-lead-history';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -58,6 +59,10 @@ interface MotorLeadSidePanelProps {
   schedulingPreview?: SchedulingPreview;
   /** O SDR agendou reunião ou desqualificou o lead pelo painel: vale como desfecho e o motor segue (`concludeExternally`). */
   onLeadActed?: (kind: 'scheduled' | 'lost') => void;
+  /** "Ligar depois": agenda o retorno e confirma o desfecho (um só caminho, do motor). Ausente (fixture): só avisa. */
+  scheduleCallback?: ScheduleCallbackFn;
+  /** Ligações do lead hoje, contando a atual (o `attemptNo` do motor); 0 se desconhecido. */
+  attemptsToday?: number;
 }
 
 /**
@@ -80,6 +85,8 @@ export function MotorLeadSidePanel({
   previewOnly = false,
   schedulingPreview,
   onLeadActed,
+  scheduleCallback,
+  attemptsToday = 0,
 }: MotorLeadSidePanelProps) {
   const ctx = card.context;
   const now = new Date(card.generatedAt);
@@ -90,6 +97,7 @@ export function MotorLeadSidePanel({
   const [weekSession, setWeekSession] = useState(0);
   const [choice, setChoice] = useState<MeetingChoice | null>(null);
   const [lostOpen, setLostOpen] = useState(false);
+  const [callbackOpen, setCallbackOpen] = useState(false);
   const model = leadCardEnabled ? leadCardFromCallContext(ctx, attemptNo, now, extras) : null;
   const contact = ctx.decisionMaker.name ?? 'Sem contato';
   // Lead perdido: o SDR usa só desfecho e nota; "Desqualificar" some.
@@ -148,7 +156,7 @@ export function MotorLeadSidePanel({
                 </Badge>
               )}
             </div>
-            <p className="text-muted-foreground text-xs">Quem liga é o motor. Para encerrar a ligação use o botão Desligar da barra do motor.</p>
+            <p className="text-muted-foreground text-xs">Quem liga é a discagem automática. Para encerrar a ligação use o botão Desligar da barra da discagem.</p>
           </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
@@ -218,6 +226,16 @@ export function MotorLeadSidePanel({
               >
                 Agendar reunião
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-full"
+                disabled={actionsDisabled}
+                data-testid="motor-callback-button"
+                onClick={() => setCallbackOpen(true)}
+              >
+                Ligar depois
+              </Button>
               {!isLost && (
                 <Button
                   type="button"
@@ -283,6 +301,15 @@ export function MotorLeadSidePanel({
         }}
       />
     )}
+    <MotorCallbackDialog
+      open={callbackOpen}
+      onOpenChange={setCallbackOpen}
+      scheduleCallback={scheduleCallback}
+      attemptsToday={attemptsToday}
+      simulated={simulated}
+      initialNotes={notes}
+      leadName={ctx.company.name}
+    />
     <MarkLeadLostDialog
       leadId={ctx.leadId}
       open={lostOpen}

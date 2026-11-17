@@ -83,7 +83,7 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
 
   const company = panelCard?.context.company.name;
   const shortState = !running
-    ? 'Motor desligado. Escolha a fila e clique em Iniciar motor.'
+    ? 'Discagem desligada. Escolha a fila e clique em Iniciar discagem.'
     : inCallPhase && company
       ? `Em ligação com ${company}. Os dados do lead estão no painel ao lado.`
       : 'Aguardando o próximo lead';
@@ -109,7 +109,7 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
                 className="h-8 w-[220px]"
                 aria-labelledby="dialer-queue-label"
                 data-testid="dialer-queue"
-                title={running ? 'Pare o motor para trocar de fila' : undefined}
+                title={running ? 'Pare a discagem para trocar de fila' : undefined}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -125,7 +125,7 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
         </div>
         {running && (
           <p className="text-muted-foreground text-right text-xs" data-testid="dialer-queue-hint">
-            Pare o motor para trocar de fila.
+            Pare a discagem para trocar de fila.
           </p>
         )}
 
@@ -145,6 +145,8 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
               leadId={panelCard.context.leadId}
               simulated={engine.simulated}
               onConfirm={engine.confirmOutcome}
+              scheduleCallback={engine.scheduleCallback}
+              attemptsToday={engine.attemptNo ?? 0}
             />
           )}
         </div>
@@ -167,6 +169,8 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
           previewOnly={previewOnly}
           schedulingPreview={schedulingPreview}
           onLeadActed={(kind) => engine.concludeExternally?.(panelCard.context.leadId, kind)}
+          scheduleCallback={engine.scheduleCallback}
+          attemptsToday={engine.attemptNo ?? 0}
         />
       )}
     </section>

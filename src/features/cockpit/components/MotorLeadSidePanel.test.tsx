@@ -13,6 +13,10 @@ vi.mock('./CallMeetingDialogs', () => ({
   CallMeetingWeekDialog: ({ open }: { open: boolean }) => (open ? <div data-testid="week-dialog" /> : null),
   CallMeetingConfirmDialog: () => null,
 }));
+vi.mock('./MotorCallbackDialog', () => ({
+  MotorCallbackDialog: ({ open, scheduleCallback, attemptsToday, simulated }: { open: boolean; scheduleCallback?: unknown; attemptsToday: number; simulated: boolean }) =>
+    open ? <div data-testid="motor-callback-dialog" data-has-fn={String(Boolean(scheduleCallback))} data-attempts={attemptsToday} data-simulated={String(simulated)} /> : null,
+}));
 vi.mock('@/features/leads/components/MarkLeadLostDialog', () => ({
   MarkLeadLostDialog: ({ open, onSuccess }: { open: boolean; onSuccess: () => void }) =>
     open ? (
@@ -88,5 +92,42 @@ describe('MotorLeadSidePanel: Agendar e Desqualificar', () => {
     fireEvent.click(screen.getByTestId('motor-disqualify'));
     expect(toastMessage).toHaveBeenCalledWith('Fixture de teste: nada é registrado.');
     expect(screen.queryByTestId('lost-dialog')).toBeNull();
+  });
+});
+
+describe('MotorLeadSidePanel: Ligar depois', () => {
+  it('botão presente e desabilitado em fase ao vivo', () => {
+    renderPanel({ actionsDisabled: true });
+    expect((screen.getByTestId('motor-callback-button') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('habilitado em awaiting-sdr: abre o diálogo com scheduleCallback e tentativas do lead', () => {
+    renderPanel({ scheduleCallback: vi.fn(), attemptsToday: 2 });
+    const btn = screen.getByTestId('motor-callback-button') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+    const dialog = screen.getByTestId('motor-callback-dialog');
+    expect(dialog.getAttribute('data-has-fn')).toBe('true');
+    expect(dialog.getAttribute('data-attempts')).toBe('2');
+  });
+
+  it('lead perdido: Desqualificar some, Ligar depois continua', () => {
+    const lost: NextCallCardData = { ...card, context: { ...context, company: { ...context.company, status: 'unqualified' } } };
+    renderPanel({ card: lost });
+    expect(screen.queryByTestId('motor-disqualify')).toBeNull();
+    expect(screen.getByTestId('motor-callback-button')).toBeTruthy();
+  });
+
+  it('simulado abre o diálogo normalmente (quem não grava é o motor)', () => {
+    renderPanel({ simulated: true, scheduleCallback: vi.fn() });
+    fireEvent.click(screen.getByTestId('motor-callback-button'));
+    expect(screen.getByTestId('motor-callback-dialog').getAttribute('data-simulated')).toBe('true');
+    expect(toastMessage).not.toHaveBeenCalled();
+  });
+
+  it('fixture previewOnly sem scheduleCallback: abre o diálogo sem erro', () => {
+    renderPanel({ previewOnly: true, simulated: true });
+    fireEvent.click(screen.getByTestId('motor-callback-button'));
+    expect(screen.getByTestId('motor-callback-dialog').getAttribute('data-has-fn')).toBe('false');
   });
 });

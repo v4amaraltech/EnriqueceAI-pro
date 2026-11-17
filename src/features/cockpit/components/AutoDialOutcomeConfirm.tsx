@@ -10,6 +10,7 @@ import { DISPOSITION_OPTIONS } from '@/features/calls/disposition';
 import type { CockpitCallOutcome } from '../types';
 
 import { CallOutcomePanel } from './CallOutcomePanel';
+import { MotorCallbackDialog, type ScheduleCallbackFn } from './MotorCallbackDialog';
 
 interface AutoDialOutcomeConfirmProps {
   callId: string | null;
@@ -17,6 +18,10 @@ interface AutoDialOutcomeConfirmProps {
   /** Modo simulado: não há ligação real nem resumo da IA para consultar. */
   simulated: boolean;
   onConfirm: (input: { disposition: CallDisposition; notes?: string }) => Promise<boolean>;
+  /** "Pediu para ligar depois" abre o diálogo Ligar depois (o mesmo do painel) em vez de confirmar direto. */
+  scheduleCallback?: ScheduleCallbackFn;
+  /** Ligações do lead hoje, contando a atual. */
+  attemptsToday?: number;
 }
 
 function suggestionOf(outcome: CockpitCallOutcome): string | null {
@@ -29,17 +34,22 @@ function suggestionOf(outcome: CockpitCallOutcome): string | null {
  * O lead atendeu: o motor está parado esperando o SDR. O SDR SEMPRE confirma com clique, mesmo antes da IA
  * terminar; só depois do clique o motor segue.
  */
-export function AutoDialOutcomeConfirm({ callId, leadId, simulated, onConfirm }: AutoDialOutcomeConfirmProps) {
+export function AutoDialOutcomeConfirm({ callId, leadId, simulated, onConfirm, scheduleCallback, attemptsToday = 0 }: AutoDialOutcomeConfirmProps) {
   const [picked, setPicked] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [callbackOpen, setCallbackOpen] = useState(false);
 
   const valid = (v: string | null): v is CallDisposition => DISPOSITION_OPTIONS.some((o) => o.value === v);
   const chosen = picked ?? (valid(aiSuggestion) ? aiSuggestion : null);
 
   async function confirm() {
     if (!valid(chosen) || saving) return;
+    if (chosen === 'callback_requested' && scheduleCallback) {
+      setCallbackOpen(true);
+      return;
+    }
     setSaving(true);
     try {
       await onConfirm({ disposition: chosen, notes: notes.trim() || undefined });
@@ -50,7 +60,7 @@ export function AutoDialOutcomeConfirm({ callId, leadId, simulated, onConfirm }:
 
   return (
     <div className="space-y-3 rounded-md border border-amber-500/60 p-3" data-testid="auto-dial-confirm" aria-live="polite">
-      <p className="text-sm font-medium">O lead atendeu. Confirme o desfecho para o motor seguir.</p>
+      <p className="text-sm font-medium">O lead atendeu. Confirme o desfecho para a discagem seguir.</p>
       {simulated ? (
         <p className="text-muted-foreground text-xs" data-testid="auto-dial-confirm-simulated">
           Simulado: não há resumo da IA e nada será gravado.
@@ -83,6 +93,14 @@ export function AutoDialOutcomeConfirm({ callId, leadId, simulated, onConfirm }:
         </Button>
       </div>
       {aiSuggestion && !picked && <p className="text-muted-foreground text-xs">Sugestão da IA já marcada. Você pode trocar.</p>}
+      <MotorCallbackDialog
+        open={callbackOpen}
+        onOpenChange={setCallbackOpen}
+        scheduleCallback={scheduleCallback}
+        attemptsToday={attemptsToday}
+        simulated={simulated}
+        initialNotes={notes}
+      />
     </div>
   );
 }
