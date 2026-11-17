@@ -12,7 +12,10 @@ const hook = vi.hoisted(() => ({ result: null as unknown }));
 vi.mock('../hooks/use-cockpit-auto-dial', () => ({ useCockpitAutoDial: vi.fn(() => hook.result) }));
 vi.mock('@/features/integrations/webphone/webphone-client', () => ({ hangupCall: vi.fn(async () => undefined) }));
 vi.mock('./use-lead-history', () => ({ useLeadHistory: () => ({ entries: [], status: 'ready' }) }));
-vi.mock('@/features/leads/components/MarkLeadLostDialog', () => ({ MarkLeadLostDialog: () => null }));
+vi.mock('@/features/leads/components/MarkLeadLostDialog', () => ({
+  MarkLeadLostDialog: ({ open, onSuccess }: { open: boolean; onSuccess: () => void }) =>
+    open ? <button type="button" data-testid="lost-dialog" onClick={onSuccess} /> : null,
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), message: vi.fn() } }));
 vi.mock('../actions/call-outcome', () => ({
   armCockpitCallOutcomeAction: vi.fn(),
@@ -188,6 +191,44 @@ describe('aba Discador', () => {
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card });
     rerender(<DialerTab autoDial={AUTO} />);
     expect((screen.getByTestId('motor-schedule-meeting') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('N1: desqualificar pelo painel conclui o lead no motor (concludeExternally), que segue sem o Confirmar', () => {
+    const concludeExternally = vi.fn();
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, simulated: false, concludeExternally });
+    render(<DialerTab autoDial={{ enabled: true, live: true }} />);
+    fireEvent.click(screen.getByTestId('motor-disqualify'));
+    fireEvent.click(screen.getByTestId('lost-dialog'));
+    expect(concludeExternally).toHaveBeenCalledWith('lead-1', 'lost');
+  });
+
+  it('D5: no simulado, Desqualificar não abre o diálogo nem conclui o lead', () => {
+    const concludeExternally = vi.fn();
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, simulated: true, concludeExternally });
+    render(<DialerTab autoDial={AUTO} />);
+    fireEvent.click(screen.getByTestId('motor-disqualify'));
+    expect(screen.queryByTestId('lost-dialog')).toBeNull();
+    expect(concludeExternally).not.toHaveBeenCalled();
+  });
+
+  it('D5: no simulado, Agendar reunião só avisa (sem diálogo de agenda) e não conclui o lead', async () => {
+    const { toast } = await import('sonner');
+    const concludeExternally = vi.fn();
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, simulated: true, concludeExternally });
+    render(<DialerTab autoDial={AUTO} />);
+    fireEvent.click(screen.getByTestId('motor-schedule-meeting'));
+    expect(toast.message).toHaveBeenCalledWith('Simulado: nada é registrado.');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(concludeExternally).not.toHaveBeenCalled();
+  });
+
+  it('fixture /demo (previewOnly): Desqualificar mostra o aviso de fixture, sem diálogo', async () => {
+    const { toast } = await import('sonner');
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, simulated: true });
+    render(<DialerTab autoDial={AUTO} previewOnly />);
+    fireEvent.click(screen.getByTestId('motor-disqualify'));
+    expect(toast.message).toHaveBeenCalledWith('Fixture de teste: nada é registrado.');
+    expect(screen.queryByTestId('lost-dialog')).toBeNull();
   });
 
   it('modo real: selo LIGAÇÃO REAL na barra', () => {
