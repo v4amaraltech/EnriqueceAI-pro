@@ -9,12 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import type { AutoDialView } from '../auto-dial.types';
 import { useCockpitAutoDial, type UseCockpitAutoDialResult } from '../hooks/use-cockpit-auto-dial';
+import { useMotorCallNoteSaver } from '../hooks/use-motor-call-note-saver';
+import { useMotorPanelNote } from '../hooks/use-motor-panel-note';
+import { useMotorWebphoneNotes } from '../hooks/use-motor-webphone-notes';
 import type { AutoDialQueue } from '../utils/recovery-queue';
 
-import { AutoDialAnsweredActions } from './AutoDialAnsweredActions';
+import { AutoDialAnsweredBlock } from './AutoDialAnsweredActions';
 import { autoDialStatusLine, CockpitAutoDialBar } from './CockpitAutoDialBar';
 import type { SchedulingPreview } from './CallMeetingDialogs';
 import { MotorLeadSidePanel } from './MotorLeadSidePanel';
+import { RecoveryTag, showsRecoveryTag } from './RecoveryTag';
+import { useMotorLeadActions } from './use-motor-lead-actions';
 
 const QUEUE_OPTIONS: Array<{ value: AutoDialQueue; label: string }> = [
   { value: 'normal', label: 'Normal' },
@@ -75,19 +80,73 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
   const phase = engine.state.phase;
   const running = phase !== 'off';
   const inCallPhase = CALL_PHASES.has(phase);
+  // "Concluir" do webphone grava a nota da ligação do motor (antes ninguém no Cockpit escutava).
+  const noteSaver = useMotorCallNoteSaver();
+  useMotorWebphoneNotes({ live: !engine.simulated, callId: engine.callId, saver: noteSaver });
 
   // Fechar à mão vale para esta ligação; ao sair da ligação o controle volta ao automático.
   const [dismissedLead, setDismissedLead] = useState<string | null>(null);
-  if (!inCallPhase && dismissedLead !== null) setDismissedLead(null);
   const panelCard = engine.card;
-  const panelOpen = inCallPhase && panelCard !== null && dismissedLead !== panelCard.context.leadId;
+  // Pausa por sessão que não entrou (`session_missing`): a ligação ainda pode aparecer no webphone, então o painel do lead
+  // continua aberto. Critério mínimo: discagem pausada E o motor marcou ESTE lead como "ligação sem sessão" (`callLostLeadId`).
+  const sessionLostOpen = phase === 'paused' && panelCard !== null && engine.callLostLeadId === panelCard.context.leadId;
+  const panelPhase = inCallPhase || sessionLostOpen;
+  if (!panelPhase && dismissedLead !== null) setDismissedLead(null);
+  const panelOpen = panelPhase && panelCard !== null && dismissedLead !== panelCard.context.leadId;
+
+  // Anotação do painel: grava na ligação do lead (blur, antes de ação final, ao trocar de lead, ao parar).
+  const panelNote = useMotorPanelNote({
+    live: !engine.simulated,
+    leadId: panelCard?.context.leadId ?? null,
+    leadName: panelCard?.context.company.name ?? '',
+    engineCallId: engine.callId,
+    dialing: phase === 'dialing',
+    active: panelPhase,
+    saver: noteSaver,
+  });
+
+  // UMA instância das ações do lead para o painel e para o bloco "O lead conversou": um só conjunto de diálogos.
+  const rawLeadActions = useMotorLeadActions({
+    leadId: panelCard?.context.leadId ?? '',
+    leadName: panelCard?.context.company.name ?? '',
+    leadEmail: panelCard?.context.decisionMaker.email ?? null,
+    simulated: engine.simulated,
+    previewOnly,
+    schedulingPreview,
+    onLeadActed: (kind) => {
+      if (panelCard) engine.concludeExternally?.(panelCard.context.leadId, kind);
+    },
+    scheduleCallback: engine.scheduleCallback,
+    attemptsToday: engine.attemptNo ?? 0,
+    alreadyLost: panelCard?.context.company.status === 'unqualified',
+    getNotes: panelNote.getValue,
+  });
+
+  // A anotação digitada NUNCA se perde: antes de qualquer ação final ela já foi mandada gravar.
+  const leadActions = {
+    ...rawLeadActions,
+    schedule: () => {
+      panelNote.flush();
+      rawLeadActions.schedule();
+    },
+    callback: () => {
+      panelNote.flush();
+      rawLeadActions.callback();
+    },
+    disqualify: () => {
+      panelNote.flush();
+      rawLeadActions.disqualify();
+    },
+  };
 
   const company = panelCard?.context.company.name;
   const shortState = !running
     ? 'Discagem desligada. Escolha a fila e clique em Iniciar discagem.'
-    : inCallPhase && company
-      ? `Em ligação com ${company}. Os dados do lead estão no painel ao lado.`
-      : 'Aguardando o próximo lead';
+    : sessionLostOpen && company
+      ? `Discagem pausada. Os dados de ${company} continuam no painel ao lado.`
+      : inCallPhase && company
+        ? `Em ligação com ${company}. Os dados do lead estão no painel ao lado.`
+        : 'Aguardando o próximo lead';
 
   return (
     // Duas colunas em lg+ com o painel aberto (cartão do motor | painel do lead): o painel NUNCA cobre o desfecho.
@@ -135,23 +194,19 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
           <p className="text-muted-foreground text-sm" data-testid="auto-dial-clean-state">
             {shortState}
           </p>
-          {inCallPhase && !panelOpen && panelCard && (
+          {panelPhase && panelCard && showsRecoveryTag({ queue, status: panelCard.context.company.status }) && (
+            <RecoveryTag reason={engine.leadCardExtras?.lossReasonName} />
+          )}
+          {panelPhase && !panelOpen && panelCard && (
             <Button type="button" size="sm" variant="outline" onClick={() => setDismissedLead(null)} data-testid="motor-panel-reopen">
               Ver dados do lead
             </Button>
           )}
           {phase === 'awaiting-sdr' && panelCard && (
-            <AutoDialAnsweredActions
-              leadId={panelCard.context.leadId}
-              leadName={panelCard.context.company.name}
-              leadEmail={panelCard.context.decisionMaker.email}
+            <AutoDialAnsweredBlock
               isLost={panelCard.context.company.status === 'unqualified'}
-              simulated={engine.simulated}
-              previewOnly={previewOnly}
-              schedulingPreview={schedulingPreview}
-              onLeadActed={(kind) => engine.concludeExternally?.(panelCard.context.leadId, kind)}
-              scheduleCallback={engine.scheduleCallback}
-              attemptsToday={engine.attemptNo ?? 0}
+              status={panelCard.context.company.status}
+              actions={leadActions}
               onNotConversation={(engine as EngineWithNotConversation).notConversation}
             />
           )}
@@ -171,8 +226,12 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
           }}
           statusLine={autoDialStatusLine(engine)}
           simulated={engine.simulated}
+          actions={leadActions}
+          queue={queue}
+          note={panelNote}
         />
       )}
+      {panelCard && leadActions.dialogs}
     </section>
   );
 }
