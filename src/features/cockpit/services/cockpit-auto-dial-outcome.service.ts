@@ -6,7 +6,8 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { applySdrCallResult } from '@/features/calls/services/apply-sdr-call-result';
 import type { CallDisposition } from '@/features/calls/types';
 
-import type { AutoDialConcludeResult, AutoDialNoAnswerResult } from '../auto-dial.types';
+import type { AutoDialAnsweredClassification, AutoDialConcludeResult, AutoDialNoAnswerResult } from '../auto-dial.types';
+import { extractAmd, getAnsweredVerdict, type AnsweredVerdict } from '../utils/answered-verdict';
 import { AUTO_DIAL_RULES, isLastAttemptOfDay, type AutoDialRules } from '../utils/auto-dial-rules';
 import { dispositionForExternalConclusion, type ExternalConclusionKind } from '../utils/external-conclusion';
 import { buildNoAnswerNote } from '../utils/no-answer-note';
@@ -23,6 +24,8 @@ import { AUTO_DIAL_METADATA_KEY, loadLeadCallStats } from './cockpit-auto-dial.s
 
 /** Janela em que a ligação do próprio usuário vale mesmo sem o marcador do motor. */
 export const OWN_CALL_GRACE_MS = 30 * 60_000;
+/** "Não foi conversa" (vindo do navegador) só vale para ligação criada há menos disto. */
+export const NOT_CONVERSATION_MAX_AGE_MS = 30 * 60_000;
 
 /** O desfecho esperado ficou mesmo em `calls.sdr_disposition`? */
 async function dispositionWasWritten(supabase: SupabaseClient, orgId: string, callId: string, expected: string): Promise<boolean> {
@@ -39,7 +42,9 @@ interface MotorCallRow {
   user_id: string | null;
   lead_id: string | null;
   answered_at: string | null;
+  duration_seconds: number | null;
   hangup_cause: string | null;
+  sdr_disposition: string | null;
   notes: string | null;
   created_at: string | null;
   started_at: string | null;
@@ -53,7 +58,7 @@ async function loadMotorCall(
   callId: string,
 ): Promise<MotorCallRow | null | 'error'> {
   const { data, error } = (await from(supabase, 'calls')
-    .select('id, user_id, lead_id, answered_at, hangup_cause, notes, created_at, started_at, metadata')
+    .select('id, user_id, lead_id, answered_at, duration_seconds, hangup_cause, sdr_disposition, notes, created_at, started_at, metadata')
     .eq('id', callId)
     .eq('org_id', orgId)
     .maybeSingle()) as { data: MotorCallRow | null; error: { message: string } | null };
@@ -63,6 +68,48 @@ async function loadMotorCall(
   const createdAt = data.created_at ? Date.parse(data.created_at) : Number.NaN;
   const recent = Number.isFinite(createdAt) && Date.now() - createdAt <= OWN_CALL_GRACE_MS;
   return marked || recent ? data : null;
+}
+
+/** Veredito "conversou?" a partir da linha da ligação (answered_at, duração e a previsão da escuta ao vivo). */
+function verdictOfCall(call: MotorCallRow): AnsweredVerdict {
+  const amd = extractAmd(call.metadata);
+  return getAnsweredVerdict({
+    answeredAt: call.answered_at,
+    durationSeconds: call.duration_seconds,
+    amdPrediction: amd?.prediction ?? null,
+    amdConfidence: amd?.confidence ?? null,
+  });
+}
+
+/** Desfecho de uma atendida-por-máquina na última tentativa: caixa postal só se a escuta disse isso com confiança. */
+function machineDisposition(call: MotorCallRow, verdict: AnsweredVerdict | null): 'voicemail' | 'no_answer' {
+  const prediction = extractAmd(call.metadata)?.prediction;
+  return verdict?.reason === 'machine' && (prediction === 'voicemail' || prediction === 'number_not_exist') ? 'voicemail' : 'no_answer';
+}
+
+/**
+ * PR-B: uma ligação ATENDIDA (answered_at) CONVERSOU? Só quem conversou mostra as três ações ao SDR; máquina, caixa
+ * postal e atendida curtíssima voltam para a fila. Sinal claro (máquina com confiança ou humano) decide na hora; senão
+ * espera a duração fechar (hangup_cause). O chamador faz fail-open (conversou) se o sinal não chegar a tempo.
+ */
+export async function classifyMotorAnsweredCall(input: {
+  supabase: SupabaseClient;
+  orgId: string;
+  userId: string;
+  callId: string;
+}): Promise<AutoDialAnsweredClassification | { status: 'error' }> {
+  try {
+    const call = await loadMotorCall(input.supabase, input.orgId, input.userId, input.callId);
+    if (call === 'error') return { status: 'error' };
+    if (!call || !call.lead_id) return { status: 'refused' };
+    const v = verdictOfCall(call);
+    const decisive = v.reason === 'machine' || v.reason === 'human' || v.reason === 'not_answered';
+    if (!decisive && !call.hangup_cause) return { status: 'pending' };
+    return { status: 'verdict', verdict: v.verdict, reason: v.reason, machine: v.reason === 'machine' };
+  } catch (err) {
+    console.error('[cockpit-auto-dial] classify:', err instanceof Error ? err.message : 'erro');
+    return { status: 'error' };
+  }
 }
 
 /**
@@ -78,6 +125,8 @@ export async function resolveMotorNoAnswer(input: {
   now: Date;
   rules?: AutoDialRules;
   countClient?: SupabaseClient;
+  /** O SDR (ou o veredito) disse que NÃO foi conversa: a atendida é tratada como não atendida. */
+  notConversation?: boolean;
 }): Promise<AutoDialNoAnswerResult | { status: 'error' }> {
   const { supabase, orgId, userId, callId, now } = input;
   const rules = input.rules ?? AUTO_DIAL_RULES;
@@ -85,7 +134,14 @@ export async function resolveMotorNoAnswer(input: {
     const call = await loadMotorCall(supabase, orgId, userId, callId);
     if (call === 'error') return { status: 'error' };
     if (!call || !call.lead_id) return { status: 'refused' };
-    if (call.answered_at) return { status: 'answered' };
+    // Atendida: só segue como não atendida se NÃO conversou (máquina, caixa postal, curtíssima) ou se o SDR disse que não foi conversa.
+    const verdict = call.answered_at ? verdictOfCall(call) : null;
+    // O "Não foi conversa" vem do navegador: só vale para ligação recente (nunca reabre uma antiga).
+    const createdMs = call.created_at ? Date.parse(call.created_at) : Number.NaN;
+    const notConversation = Boolean(input.notConversation) && Number.isFinite(createdMs) && now.getTime() - createdMs <= NOT_CONVERSATION_MAX_AGE_MS;
+    if (call.answered_at && !notConversation && verdict?.verdict !== 'nao_conversou') return { status: 'answered' };
+    // Atendida que JÁ tem desfecho (Agendar, Confirmar...): nunca sobrescreve (applySdrCallResult grava sem guarda).
+    if (call.answered_at && call.sdr_disposition) return { status: 'answered' };
     if (!call.hangup_cause) return { status: 'pending' };
 
     const stats = await loadLeadCallStats(input.countClient ?? createServiceRoleClient(), orgId, call.lead_id, now);
@@ -96,16 +152,17 @@ export async function resolveMotorNoAnswer(input: {
     // A-D9 / FR-25: nota padrão. Vai pelo MESMO `applySdrCallResult` que já grava o `no_answer` (campo `calls.notes`,
     // espelhado na interação da ligação), e só quando a ligação ainda não tem nota (nunca cobre texto do SDR).
     const note = call.notes?.trim() ? undefined : buildNoAnswerNote(call.started_at ?? call.created_at ?? now, attemptNo, rules.maxAttemptsPerDay);
+    const disposition = call.answered_at ? machineDisposition(call, verdict) : 'no_answer';
     const written = await applySdrCallResult(supabase, {
       orgId,
       userId,
       callId,
-      sdrOutcome: 'no_answer',
+      sdrOutcome: disposition,
       clientDurationSeconds: 0,
       ...(note ? { notes: note } : {}),
       via: 'webphone',
     });
-    if (!written.success || !(await dispositionWasWritten(supabase, orgId, callId, 'no_answer'))) return { status: 'error' };
+    if (!written.success || !(await dispositionWasWritten(supabase, orgId, callId, disposition))) return { status: 'error' };
     return { status: 'recorded', attemptNo };
   } catch (err) {
     console.error('[cockpit-auto-dial] no-answer:', err instanceof Error ? err.message : 'erro');

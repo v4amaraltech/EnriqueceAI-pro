@@ -55,6 +55,13 @@ export type AutoDialNoAnswerResult =
   | { status: 'answered' }
   | { status: 'refused' };
 
+/** Veredito "conversou?" de uma ligação atendida (`classifyAutoDialAnsweredAction`, PR-B). */
+export type AutoDialAnsweredClassification =
+  | { status: 'verdict'; verdict: 'conversou' | 'nao_conversou'; reason: string; machine: boolean }
+  /** Atendida, mas a duração ainda não fechou: tentar de novo em instantes. */
+  | { status: 'pending' }
+  | { status: 'refused' };
+
 /** Conclusão do lead pelo painel durante a ligação do motor (`concludeAutoDialCallAction`). */
 export type AutoDialConcludeResult =
   | { status: 'recorded'; disposition: string }

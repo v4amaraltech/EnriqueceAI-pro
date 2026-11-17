@@ -22,6 +22,7 @@ import { getWebphoneState, prepareWebphoneMicForDial } from '@/features/integrat
 import { dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 
 import {
+  classifyAutoDialAnsweredAction,
   concludeAutoDialCallAction,
   confirmAutoDialOutcomeAction,
   dialAutoLeadAction,
@@ -84,6 +85,11 @@ const MAX_CONSECUTIVE_REFUSALS = 5;
 /** Espera entre tentativas de registrar a 3ª não atendida enquanto a operadora não confirma. */
 const NO_ANSWER_RETRY_MS = 2_000;
 const NO_ANSWER_MAX_RETRIES = 5;
+/** Espera entre consultas do veredito "conversou?" enquanto a duração da ligação não fechou. */
+const ANSWERED_VERDICT_RETRY_MS = 2_000;
+/** Avisos curtos na barra quando o lead volta para a fila sozinho. */
+export const NOT_ANSWERED_NOTICE = 'Não atendeu: volta para a fila';
+export const VOICEMAIL_NOTICE = 'Caixa postal: volta para a fila';
 
 const BLOCK_CODES: ReadonlySet<AutoDialGateCode> = new Set<AutoDialBlockCode>(['outside_hours', 'holiday', 'daily_cap']);
 /** Mudou entre a escolha e a discagem: o lead sai desta sessão e o motor escolhe outro (FR-10). */
@@ -141,6 +147,13 @@ export interface UseCockpitAutoDialResult {
    * falhar, tentar de novo reenvia só o desfecho (o retorno não é regravado). Simulado: nada é gravado.
    */
   scheduleCallback?: (input: { scheduledAt: Date; notes?: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Link "Não foi conversa" (PR-C): em `awaiting-sdr`, trata a ligação como NÃO atendida (1ª/2ª sem gravar, 3ª grava
+   * caixa postal/não atendeu). O lead NÃO sai da sessão: segue a regra normal da fila. Simulado: só segue.
+   */
+  notConversation?: () => void;
+  /** Aviso curto da última ligação que voltou para a fila sozinha (já somado ao `statusText` durante a contagem). */
+  notice?: string | null;
 }
 
 interface CurrentLead {
@@ -176,6 +189,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   const [attemptNo, setAttemptNo] = useState<number | null>(null);
   const [dialToken, setDialToken] = useState<string | null>(null);
   const [callPhase, setCallPhase] = useState<CallPhase>('idle');
+  // Aviso "volta para a fila": só vale para a ligação (callId) que o gerou; some sozinho quando a próxima nasce.
+  const [noticeState, setNoticeState] = useState<{ callId: string | null; text: string } | null>(null);
 
   const webphone = useApi4ComWebphone();
 
@@ -195,6 +210,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   const concludedCalls = useRef(new Set<string>());
   // Ligações cujo retorno ("Ligar depois") já foi gravado: tentar de novo reenvia só o desfecho.
   const callbackScheduledCalls = useRef(new Set<string>());
+  // Ligações atendidas que viraram "não atendida" (veredito ou "Não foi conversa"): o servidor precisa saber.
+  const notConversationCalls = useRef(new Set<string>());
   const pendingConclusion = useRef<{ callId: string | null; kind: ExternalConclusionKind } | null>(null);
   const prevPhase = useRef<CockpitAutoDialState['phase']>('off');
 
@@ -517,16 +534,59 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   useEffect(() => {
     if (!live || state.phase !== 'resolving') return;
     if (leadAnswer === 'answered') {
-      dispatch({ type: 'lead_answer', answer: 'answered' }); // FR-8: pausa e espera o SDR
-      return;
+      if (!callId) {
+        dispatch({ type: 'lead_answer', answer: 'answered' }); // FR-8: pausa e espera o SDR
+        return;
+      }
+      // PR-B: atendida não é conversa. O servidor cruza duração e escuta ao vivo; sem dados no prazo, conversou (fail-open).
+      let cancelled = false;
+      let decided = false;
+      // Rede de segurança: se a server action travar, o prazo de 20 s ainda cai em "conversou" (fail-open). Só uma das
+      // duas saídas age (o laço ou este timeout) e ambas morrem no cleanup.
+      const failOpen = setTimeout(() => {
+        if (cancelled || decided) return;
+        decided = true;
+        dispatch({ type: 'lead_answer', answer: 'answered' });
+      }, AUTO_DIAL_ANSWER_TIMEOUT_MS);
+      void (async () => {
+        const deadline = Date.now() + AUTO_DIAL_ANSWER_TIMEOUT_MS;
+        let notConversation = false;
+        let machine = false;
+        for (;;) {
+          const r = await classifyAutoDialAnsweredAction({ callId }).catch(() => null);
+          if (cancelled || decided) return;
+          if (r?.success && r.data.status === 'verdict') {
+            notConversation = r.data.verdict === 'nao_conversou';
+            machine = r.data.machine;
+            break;
+          }
+          if (!r?.success || r.data.status !== 'pending' || Date.now() >= deadline) break;
+          await new Promise((resolve) => setTimeout(resolve, ANSWERED_VERDICT_RETRY_MS));
+          if (cancelled || decided) return;
+        }
+        decided = true;
+        clearTimeout(failOpen);
+        if (!notConversation) {
+          dispatch({ type: 'lead_answer', answer: 'answered' }); // FR-8: pausa e espera o SDR
+          return;
+        }
+        notConversationCalls.current.add(callId);
+        setNoticeState({ callId, text: machine ? VOICEMAIL_NOTICE : NOT_ANSWERED_NOTICE });
+        dispatch(noAnswerEvent(attemptNoRef.current));
+      })();
+      return () => {
+        cancelled = true;
+        clearTimeout(failOpen);
+      };
     }
     if (leadAnswer === 'not_answered') {
+      if (callId) setNoticeState({ callId, text: NOT_ANSWERED_NOTICE });
       dispatch(noAnswerEvent(attemptNoRef.current)); // FR-6/FR-7
       return;
     }
     const t = setTimeout(() => dispatch({ type: 'answer_timeout' }), AUTO_DIAL_ANSWER_TIMEOUT_MS); // FR-16
     return () => clearTimeout(t);
-  }, [live, state.phase, leadAnswer]);
+  }, [live, state.phase, leadAnswer, callId]);
 
   // Não atendeu na 1ª/2ª: volta para a contagem do próximo lead (o servidor devolve este lead só após 1 h).
   useEffect(() => {
@@ -550,7 +610,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       return;
     }
     for (let i = 0; i <= NO_ANSWER_MAX_RETRIES; i++) {
-      const r = await resolveAutoDialNoAnswerAction({ callId }).catch(() => null);
+      const forced = notConversationCalls.current.has(callId);
+      const r = await resolveAutoDialNoAnswerAction(forced ? { callId, notConversation: true } : { callId }).catch(() => null);
       if (r?.success && (r.data.status === 'recorded' || r.data.status === 'not_last')) {
         dispatch({ type: 'completed' });
         return;
@@ -623,6 +684,16 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   // ---------------------------------------------------------------------------
   // Controles
   // ---------------------------------------------------------------------------
+
+  function notConversation() {
+    const lead = current.current;
+    if (state.phase !== 'awaiting-sdr' || !lead) return;
+    if (concluded.current.has(lead.leadId) || (callId && concludedCalls.current.has(callId))) return;
+    // O lead NÃO entra em `excluded`/`concluded`: segue a regra normal da fila (volta após 1 h ou fecha na 3ª).
+    if (live && callId) notConversationCalls.current.add(callId);
+    setNoticeState({ callId, text: NOT_ANSWERED_NOTICE });
+    dispatch({ type: 'not_conversation', attemptNo: attemptNoRef.current });
+  }
 
   async function start() {
     if (!enabled || isOn) return;
@@ -720,9 +791,15 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     return { ok: true };
   }
 
+  const baseStatusText = describeCockpitAutoDial(state);
+  const noticeVisible =
+    noticeState !== null && noticeState.callId === callId && (state.phase === 'advancing' || state.phase === 'countdown' || state.phase === 'auto-completing' || state.phase === 'waiting');
+  const notice = noticeVisible ? noticeState.text : null;
+  const statusTextWithNotice = notice ? (baseStatusText ? `${notice} · ${baseStatusText}` : notice) : baseStatusText;
+
   return {
     state,
-    statusText: describeCockpitAutoDial(state),
+    statusText: statusTextWithNotice,
     card,
     tier,
     simulated: !live,
@@ -735,6 +812,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     confirmOutcome,
     concludeExternally,
     scheduleCallback,
+    notConversation,
+    notice,
     startError,
     leadCardExtras,
     skippedLeads,
