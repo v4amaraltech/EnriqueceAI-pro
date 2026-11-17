@@ -24,7 +24,8 @@ function supabaseWith(row: Record<string, unknown> | null, beforeRpc?: (row: Rec
       const chain: Record<string, unknown> = {
         select: () => chain,
         eq: () => chain,
-        maybeSingle: () => Promise.resolve({ data: row ? { ...row } : null, error: null }),
+        // Lê o estado atual da linha (a RPC falsa a atualiza), como o banco real.
+        maybeSingle: () => Promise.resolve({ data: row ? { ...row, metadata: rows[0]?.metadata ?? row.metadata } : null, error: null }),
         update: (payload: unknown) => {
           updates.push(payload);
           return chain;
@@ -164,5 +165,85 @@ describe('recordLiveAmd', () => {
     expect(updates).toHaveLength(0);
     expect(rpcCalls).toHaveLength(0);
     expect(activity.suggestNextActivity).not.toHaveBeenCalled();
+  });
+
+  describe('marcador de quem desligou', () => {
+    const autoHangup = { at: '2026-11-17T12:00:05.000Z', phrase: 'caixa postal', prediction: 'voicemail', confidence: 0.92 };
+
+    async function run(metadata: Record<string, unknown>, extra: Record<string, unknown>, nextActivity?: unknown) {
+      const { client, rpcCalls, rows } = supabaseWith({ id: CALL_ID, user_id: 'u1', metadata });
+      auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org-1', userId: 'u1', role: 'sdr', supabase: client } });
+      flag.isWebphoneLiveAmdEnabled.mockResolvedValue(true);
+      if (nextActivity) activity.suggestNextActivity.mockResolvedValue(nextActivity);
+      const result = await recordLiveAmd({ ...input, requestNextActivity: false, ...extra });
+      return { result, rpcCalls, live: (rows[0]?.metadata as Record<string, unknown>)?.live_amd as Record<string, unknown> };
+    }
+
+    it('grava auto_hangup dentro de live_amd, só com a chave live_amd no patch', async () => {
+      const { result, live, rpcCalls } = await run({}, { autoHangup });
+      expect(result.success).toBe(true);
+      expect(live.auto_hangup).toEqual(autoHangup);
+      expect(Object.keys(rpcCalls[0]?.args.p_patch ?? {})).toEqual(['live_amd']);
+    });
+
+    it('as outras chaves do live_amd (transcript, telemetria, next_activity) sobrevivem quando chega o marcador', async () => {
+      const prev = {
+        prediction: 'voicemail',
+        transcript: 'texto antigo',
+        bytes_sent: 64_000,
+        next_activity_suggestion: 'not_connected',
+        next_activity_reason: 'Caiu na caixa postal.',
+        next_activity_confidence: 0.8,
+        reviewed: true,
+      };
+      const { live } = await run({ live_amd: prev }, { autoHangup, transcript: undefined });
+      expect(live).toMatchObject({ ...prev, auto_hangup: autoHangup });
+    });
+
+    it('registro final COM next_activity seguido do reenvio do marcador não apaga a sugestão', async () => {
+      const { client, rows } = supabaseWith({ id: CALL_ID, user_id: 'u1', metadata: {} });
+      auth.getAuthOrgIdResult.mockResolvedValue({ success: true, data: { orgId: 'org-1', userId: 'u1', role: 'sdr', supabase: client } });
+      flag.isWebphoneLiveAmdEnabled.mockResolvedValue(true);
+      activity.suggestNextActivity.mockResolvedValue({ suggestion: 'not_connected', reason: 'Caiu na caixa postal.', confidence: 0.8 });
+      await recordLiveAmd({ ...input, requestNextActivity: true, autoHangup });
+      // Reenvio do marcador no persist seguinte, sem pedir sugestão de novo.
+      await recordLiveAmd({ ...input, requestNextActivity: false, autoHangup });
+      const live = (rows[0]?.metadata as Record<string, unknown>).live_amd as Record<string, unknown>;
+      expect(live).toMatchObject({
+        next_activity_suggestion: 'not_connected',
+        next_activity_reason: 'Caiu na caixa postal.',
+        next_activity_confidence: 0.8,
+        auto_hangup: autoHangup,
+      });
+    });
+
+    it('registro final sem o campo mantém o existente', async () => {
+      const { live } = await run({ live_amd: { auto_hangup: autoHangup } }, {});
+      expect(live.auto_hangup).toEqual(autoHangup);
+      expect(live.prediction).toBe('voicemail');
+    });
+
+    it('o novo vale quando traz o campo (último vence)', async () => {
+      const { live } = await run({ live_amd: { auto_hangup: autoHangup } }, { autoHangup: { ...autoHangup, at: '2026-11-17T12:09:00.000Z' } });
+      expect(live.auto_hangup).toMatchObject({ at: '2026-11-17T12:09:00.000Z' });
+    });
+
+    it('rejeita valores fora do limite ou incompletos', async () => {
+      for (const bad of [
+        { autoHangup: { ...autoHangup, confidence: 1.5 } },
+        { autoHangup: { ...autoHangup, confidence: -0.1 } },
+        { autoHangup: { ...autoHangup, prediction: '' } },
+        { autoHangup: { ...autoHangup, at: '' } },
+        { autoHangup: { phrase: null } },
+      ]) {
+        const { result } = await run({}, bad);
+        expect(result).toEqual({ success: false, error: 'Dados inválidos' });
+      }
+    });
+
+    it('descarta chave desconhecida dentro do marcador', async () => {
+      const { live } = await run({}, { autoHangup: { ...autoHangup, intruso: 'x', answered: true } });
+      expect(live.auto_hangup).toEqual(autoHangup);
+    });
   });
 });
