@@ -33,7 +33,9 @@ export type CockpitAutoDialEvent =
   | AutoDialEvent
   | { type: 'blocked'; reason: AutoDialBlockedReason }
   /** O SDR concluiu o lead pelo painel (Agendar reunião / Desqualificar): vale como desfecho, sem pedir o Confirmar. */
-  | { type: 'concluded_externally' };
+  | { type: 'concluded_externally' }
+  /** O SDR disse que a ligação atendida NÃO foi conversa: segue o caminho da não atendida (1ª/2ª sem gravar, 3ª grava). */
+  | { type: 'not_conversation'; attemptNo: number };
 
 /** D8 / FR-1: o motor SEMPRE começa Desligado ao carregar; nada é lembrado entre recarregamentos. */
 export const initialCockpitAutoDialState: CockpitAutoDialState = initialAutoDialState;
@@ -60,6 +62,10 @@ export function reduceCockpitAutoDial(state: CockpitAutoDialState, event: Cockpi
     return state; // eventos atrasados da ligação são ignorados
   }
 
+  if (event.type === 'not_conversation') {
+    return state.phase === 'awaiting-sdr' ? reduceAutoDial({ phase: 'resolving' }, noAnswerEvent(event.attemptNo)) : state;
+  }
+
   if (event.type === 'blocked') return CAN_BLOCK.has(state.phase) ? { phase: 'blocked', reason: event.reason } : state;
 
   if (state.phase === 'blocked') {
@@ -82,7 +88,7 @@ export function reduceCockpitAutoDial(state: CockpitAutoDialState, event: Cockpi
  * contando esta). 1ª ou 2ª: segue para o próximo lead, sem gravar nada e sem avançar cadência (o lead volta
  * após 1 h). 3ª: vai para `auto-completing(no_answer)` = sinal para gravar `no_answer`, também sem avançar cadência (D6).
  */
-export function noAnswerEvent(attemptNo: number, rules: { maxAttemptsPerDay: number } = AUTO_DIAL_RULES): CockpitAutoDialEvent {
+export function noAnswerEvent(attemptNo: number, rules: { maxAttemptsPerDay: number } = AUTO_DIAL_RULES): AutoDialEvent {
   return isLastAttemptOfDay(attemptNo, rules)
     ? { type: 'lead_answer', answer: 'not_answered' }
     : { type: 'lead_answer', answer: 'not_answered', then: 'next_lead' };

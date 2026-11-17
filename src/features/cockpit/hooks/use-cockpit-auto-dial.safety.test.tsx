@@ -13,6 +13,8 @@ vi.mock('../actions/auto-dial', () => ({
   getNextAutoDialCardAction: vi.fn(),
   dialAutoLeadAction: vi.fn(),
   resolveAutoDialNoAnswerAction: vi.fn(),
+  // Veredito padrão: conversou (as ligações atendidas dos testes seguem para awaiting-sdr).
+  classifyAutoDialAnsweredAction: vi.fn(async () => ({ success: true, data: { status: 'verdict', verdict: 'conversou', reason: 'long_enough', machine: false } })),
   confirmAutoDialOutcomeAction: vi.fn(),
   concludeAutoDialCallAction: vi.fn(),
 }));

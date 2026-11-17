@@ -11,6 +11,7 @@ import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metada
 import { DISPOSITION_OPTIONS } from '@/features/calls/disposition';
 
 import type {
+  AutoDialAnsweredClassification,
   AutoDialBlockCode,
   AutoDialConcludeResult,
   AutoDialDialResult,
@@ -19,7 +20,7 @@ import type {
 } from '../auto-dial.types';
 import type { CockpitViewer } from '../types';
 import { isCockpitAutoDialEnabled, isCockpitAutoDialLive } from '../services/cockpit-auto-dial-flag';
-import { concludeMotorCallExternally, confirmMotorOutcome, resolveMotorNoAnswer } from '../services/cockpit-auto-dial-outcome.service';
+import { classifyMotorAnsweredCall, concludeMotorCallExternally, confirmMotorOutcome, resolveMotorNoAnswer } from '../services/cockpit-auto-dial-outcome.service';
 import { AUTO_DIAL_METADATA_KEY, checkDialGate, countMotorCallsToday, loadMotorHolidays, pickAutoDialLead } from '../services/cockpit-auto-dial.service';
 import { armCockpitCallOutcome } from '../services/call-outcome.service';
 import { loadLeadCardExtras } from '../services/cockpit-auto-dial-extras.service';
@@ -50,6 +51,7 @@ const dialSchema = z.object({
   expectLive: z.boolean(),
 });
 const callSchema = z.object({ callId: uuid });
+const noAnswerSchema = z.object({ callId: uuid, notConversation: z.boolean().optional() });
 const concludeSchema = z.object({ callId: uuid, kind: z.enum(['scheduled', 'lost']) });
 const confirmSchema = z.object({
   callId: uuid,
@@ -171,6 +173,21 @@ export async function dialAutoLeadAction(input: unknown): Promise<ActionResult<A
 
 /** FR-6/FR-7: depois de uma ligação do motor sem atendimento. Só a 3ª tentativa do dia grava `no_answer`. */
 export async function resolveAutoDialNoAnswerAction(input: unknown): Promise<ActionResult<AutoDialNoAnswerResult>> {
+  const parsed = noAnswerSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: 'Dados inválidos' };
+
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
+  if (!(await isCockpitAutoDialEnabled({ orgId, userId }))) return { success: true, data: { status: 'refused' } };
+
+  const r = await resolveMotorNoAnswer({ supabase, orgId, userId, callId: parsed.data.callId, now: new Date(), notConversation: parsed.data.notConversation });
+  if (r.status === 'error') return { success: false, error: 'Falha ao registrar a ligação não atendida' };
+  return { success: true, data: r };
+}
+
+/** PR-B: a ligação atendida CONVERSOU? Só quem conversou mostra as três ações; o resto volta para a fila. */
+export async function classifyAutoDialAnsweredAction(input: unknown): Promise<ActionResult<AutoDialAnsweredClassification>> {
   const parsed = callSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: 'Dados inválidos' };
 
@@ -179,8 +196,8 @@ export async function resolveAutoDialNoAnswerAction(input: unknown): Promise<Act
   const { orgId, userId, supabase } = auth.data;
   if (!(await isCockpitAutoDialEnabled({ orgId, userId }))) return { success: true, data: { status: 'refused' } };
 
-  const r = await resolveMotorNoAnswer({ supabase, orgId, userId, callId: parsed.data.callId, now: new Date() });
-  if (r.status === 'error') return { success: false, error: 'Falha ao registrar a ligação não atendida' };
+  const r = await classifyMotorAnsweredCall({ supabase, orgId, userId, callId: parsed.data.callId });
+  if (r.status === 'error') return { success: false, error: 'Falha ao classificar a ligação atendida' };
   return { success: true, data: r };
 }
 
