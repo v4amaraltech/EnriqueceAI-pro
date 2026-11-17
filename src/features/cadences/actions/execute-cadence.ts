@@ -25,9 +25,14 @@ import {
   mailboxDailyCap,
   mixedAutoEmailScopeFromFlag,
   orgAllowsMixedAutoEmail,
-  pickDueMixedEmailEnrollments,
   startOfBrtDay,
 } from '../services/mixed-auto-email.service';
+import {
+  completeEnrollmentWithoutStep,
+  shouldSkipEmailStepForNoLeadEmail,
+  skipEmailStepForLeadWithoutEmail,
+} from '../services/enrollment-skip.service';
+import { loadMixedEmailBatch, loadStepsByCadence } from '../services/mixed-email-batch.service';
 import { skipEmailStepsForBouncedLeads, skipWhatsAppStepsForInvalidLeads } from '../services/whatsapp-invalid-skip.service';
 import { dispatchWebhookEvent } from '../services/webhook-dispatch.service';
 import { buildLeadTemplateVariables } from '../utils/build-template-variables';
@@ -35,6 +40,7 @@ import { renderTemplate } from '../utils/render-template';
 import type { CadenceStepRow, InteractionRow, MessageTemplateRow, ReplyType } from '../types';
 
 const BATCH_SIZE = parseInt(process.env.CADENCE_BATCH_SIZE || '25', 10);
+const MIXED_FULL_SELECT = '*, lead:leads!inner(*), cadence:cadences!inner(status, name, type, created_by, executor)';
 const MAX_SEND_RETRIES = 3;
 /** Delay between successful sends (ms) to avoid Gmail rate limits */
 const SEND_DELAY_MS = parseInt(process.env.CADENCE_SEND_DELAY_MS || '2000', 10);
@@ -310,27 +316,18 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
 
   let mixedCandidates: EnrollmentWithLead[] = [];
   if (mixedScope.kind !== 'none') {
-    let mixedQuery = from(supabase, 'cadence_enrollments')
-      .select('*, lead:leads!inner(*), cadence:cadences!inner(status, name, type, created_by, executor)')
-      .eq('status', 'active')
-      .eq('cadence.status', 'active')
-      .eq('cadence.type', 'standard')
-      .neq('cadence.executor', 'bdr_ai')
-      .not('next_step_due', 'is', null)
-      .lte('next_step_due', new Date().toISOString())
-      .order('next_step_due', { ascending: true })
-      .limit(BATCH_SIZE);
-    if (mixedScope.kind === 'orgs') {
-      mixedQuery = mixedQuery.in('lead.org_id', mixedScope.orgIds);
-    }
-    const { data: mixedRows, error: mixedErr } = (await mixedQuery) as {
-      data: EnrollmentWithLead[] | null;
-      error: { message: string } | null;
-    };
-    if (mixedErr) {
-      console.error('[cadence-engine] Failed to fetch mixed auto-email enrollments:', mixedErr.message);
+    // Busca leve + filtro em memória + só então as linhas completas: as mais
+    // antigas de ligação/WhatsApp não ocupam mais os BATCH_SIZE lugares.
+    const mixedBatch = await loadMixedEmailBatch<EnrollmentWithLead>(supabase, {
+      scope: mixedScope,
+      nowIso: new Date().toISOString(),
+      batchSize: BATCH_SIZE,
+      fullSelect: MIXED_FULL_SELECT,
+    });
+    if (mixedBatch.error) {
+      console.error('[cadence-engine] Failed to fetch mixed auto-email enrollments:', mixedBatch.error);
     } else {
-      mixedCandidates = mixedRows ?? [];
+      mixedCandidates = mixedBatch.rows;
     }
   }
 
@@ -353,30 +350,22 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
   // Pre-fetch every cadence step for the batch's cadences in one query.
   // Avoids the N+1 of fetching the current step per enrollment inside the loop.
   const cadenceIdsInBatch = [...new Set(pendingCandidates.map((e) => e.cadence_id))];
-  const stepsByCadence = new Map<string, Map<number, CadenceStepRow>>();
+  let stepsByCadence = new Map<string, Map<number, CadenceStepRow>>();
   if (cadenceIdsInBatch.length > 0) {
-    const { data: allSteps } = (await from(supabase, 'cadence_steps')
-      .select('*')
-      .in('cadence_id', cadenceIdsInBatch)) as { data: CadenceStepRow[] | null };
-    for (const s of allSteps ?? []) {
-      let bucket = stepsByCadence.get(s.cadence_id);
-      if (!bucket) {
-        bucket = new Map<number, CadenceStepRow>();
-        stepsByCadence.set(s.cadence_id, bucket);
-      }
-      bucket.set(s.step_order, s);
-    }
+    // Erro aqui NUNCA segue com mapa vazio: as inscrições cairiam em "sem passo"
+    // e seriam concluídas em silêncio. Encerra o lote; o próximo ciclo tenta de novo.
+    const loaded = await loadStepsByCadence<CadenceStepRow>(supabase, cadenceIdsInBatch);
+    const stepsErr = handleQueryError(
+      loaded.error ? { message: loaded.error } : null,
+      'Erro ao buscar passos das cadências',
+      'cadence-engine',
+    );
+    if (stepsErr) return stepsErr;
+    stepsByCadence = loaded.steps;
   }
 
-  const emailStepOrders = new Map<string, Set<number>>();
-  for (const [cadenceId, steps] of stepsByCadence) {
-    const orders = new Set<number>();
-    for (const step of steps.values()) {
-      if (step.channel === 'email') orders.add(step.step_order);
-    }
-    if (orders.size > 0) emailStepOrders.set(cadenceId, orders);
-  }
-  const mixedEnrollments = pickDueMixedEmailEnrollments(mixedCandidates, emailStepOrders, mixedScope);
+  // Já filtradas por loadMixedEmailBatch (passo de e-mail ou passo inexistente).
+  const mixedEnrollments = mixedCandidates;
   const seenEnrollmentIds = new Set((autoEmailEnrollments ?? []).map((e) => e.id));
   const enrollments: EnrollmentWithLead[] = [...(autoEmailEnrollments ?? [])];
   for (const row of mixedEnrollments) {
@@ -472,12 +461,32 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
       const step = stepsByCadence.get(enrollment.cadence_id)?.get(enrollment.current_step) ?? null;
 
       if (!step) {
-        const { error: completeErr } = await from(supabase, 'cadence_enrollments')
-          .update({ status: 'completed', completed_at: new Date().toISOString() } as Record<string, unknown>)
-          .eq('id', enrollment.id);
-        if (completeErr) console.error(`[cadence-engine] Failed to complete enrollment=${enrollment.id}:`, completeErr);
-        result.completed++;
-        console.warn(`[cadence-engine] enrollment=${enrollment.id} status=completed reason=no_step duration_ms=${Date.now() - stepStart}`);
+        // Só conclui se os passos DESTA cadência foram carregados (e ela tem passos)
+        // e o current_step não existe neles; depois segue o fim normal (Perdido).
+        const outcome = await completeEnrollmentWithoutStep(
+          supabase,
+          {
+            id: enrollment.id,
+            cadence_id: enrollment.cadence_id,
+            lead_id: enrollment.lead_id,
+            org_id: enrollment.lead.org_id,
+            current_step: enrollment.current_step,
+          },
+          [...(stepsByCadence.get(enrollment.cadence_id)?.keys() ?? [])],
+        );
+        if (outcome === 'completed') {
+          result.completed++;
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} status=completed reason=no_step duration_ms=${Date.now() - stepStart}`);
+        } else if (outcome === 'skipped_unloaded') {
+          result.skipped++;
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} status=skipped reason=no_steps_loaded`);
+        } else if (outcome === 'step_gap') {
+          result.skipped++;
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} status=skipped reason=step_gap current_step=${enrollment.current_step}`);
+        } else if (outcome === 'skipped') {
+          result.skipped++;
+          console.warn(`[cadence-engine] enrollment=${enrollment.id} status=skipped reason=no_step_already_changed`);
+        }
         continue;
       }
 
@@ -576,6 +585,35 @@ async function executeStepsCore(supabase: SupabaseClient): Promise<ActionResult<
         if (unsubErr) console.error(`[cadence-engine] Failed to mark enrollment=${enrollment.id} as unsubscribed:`, unsubErr);
         result.skipped++;
         console.warn(`[cadence-engine] enrollment=${enrollment.id} status=unsubscribed reason=auto_stop duration_ms=${Date.now() - stepStart}`);
+        continue;
+      }
+
+      // Cadência mista + passo de e-mail + lead SEM e-mail: pula só o e-mail e segue
+      // (não pausa, não envia, não grava 'sent'). auto_email/bdr_ai mantêm o
+      // comportamento antigo (pausar mais abaixo).
+      if (
+        shouldSkipEmailStepForNoLeadEmail({
+          stepChannel: step.channel,
+          leadEmail: enrollment.lead.email,
+          cadence: enrollment.cadence,
+          scope: mixedScope,
+          orgId: enrollment.lead.org_id,
+        })
+      ) {
+        const skip = await skipEmailStepForLeadWithoutEmail(
+          supabase,
+          {
+            id: enrollment.id,
+            cadence_id: enrollment.cadence_id,
+            lead_id: enrollment.lead_id,
+            org_id: enrollment.lead.org_id,
+            current_step: enrollment.current_step,
+          },
+          [...(stepsByCadence.get(enrollment.cadence_id)?.values() ?? [])],
+        );
+        if (skip === 'ended') result.completed++;
+        result.skipped++;
+        console.warn(`[cadence-engine] enrollment=${enrollment.id} step=${step.step_order} status=${skip} reason=no_lead_email duration_ms=${Date.now() - stepStart}`);
         continue;
       }
 
