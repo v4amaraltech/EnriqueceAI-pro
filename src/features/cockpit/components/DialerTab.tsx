@@ -166,6 +166,7 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
           actionsDisabled={LIVE_PHASES.has(phase)}
           previewOnly={previewOnly}
           schedulingPreview={schedulingPreview}
+          onLeadActed={(kind) => engine.concludeExternally?.(panelCard.context.leadId, kind)}
         />
       )}
     </section>

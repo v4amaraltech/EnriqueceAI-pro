@@ -1,6 +1,7 @@
 import type { PendingActivity } from '@/features/activities/types';
 
 import { usefulCallScript } from './call-history';
+import { NO_RESUME_REASON_NAMES, normalizeReasonName } from './recovery-queue';
 
 const MONTH_MS = 30.4375 * 24 * 60 * 60 * 1000;
 
@@ -75,12 +76,7 @@ function clean(value: string | null | undefined): string | null {
 
 function normalizeReason(value: string | null | undefined): string | null {
   const trimmed = clean(value);
-  if (!trimmed) return null;
-  return trimmed
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
+  return trimmed ? normalizeReasonName(trimmed) : null;
 }
 
 /**
@@ -107,7 +103,7 @@ const OPENING_BODY: Record<string, string> = {
   'servico fora de escopo': 'o que vocês precisam ficou fora do que a V4 entrega. Seria um problema eu confirmar se o pedido mudou?',
 };
 
-const NO_RESUME = new Set(['blocklist', 'spam', 'adolescente/crianca']);
+const NO_RESUME = new Set(NO_RESUME_REASON_NAMES.map((n) => normalizeReason(n)));
 
 function withName(firstName: string | null | undefined, body: string): string {
   const name = clean(firstName);

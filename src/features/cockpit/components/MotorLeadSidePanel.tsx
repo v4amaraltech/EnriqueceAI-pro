@@ -36,6 +36,8 @@ const STATUS_LABEL: Record<string, string> = {
   archived: 'Arquivado',
 };
 
+const SIMULATED_NOTICE = 'Simulado: nada é registrado.';
+
 interface MotorLeadSidePanelProps {
   card: NextCallCardData;
   /** Tentativa do dia deste lead (a do hook); alimenta "TENTATIVA n/3". */
@@ -54,7 +56,7 @@ interface MotorLeadSidePanelProps {
   /** Fixture visual: não cria reunião nem marca lead como perdido. */
   previewOnly?: boolean;
   schedulingPreview?: SchedulingPreview;
-  /** O SDR agendou reunião ou desqualificou o lead pelo painel. O motor NÃO muda por conta disso (ver relatório). */
+  /** O SDR agendou reunião ou desqualificou o lead pelo painel: vale como desfecho e o motor segue (`concludeExternally`). */
   onLeadActed?: (kind: 'scheduled' | 'lost') => void;
 }
 
@@ -205,6 +207,11 @@ export function MotorLeadSidePanel({
                 disabled={actionsDisabled}
                 data-testid="motor-schedule-meeting"
                 onClick={() => {
+                  // Simulado grava nada: sem agenda real (a fixture /demo usa `previewOnly` + `schedulingPreview`).
+                  if (simulated && !previewOnly) {
+                    toast.message(SIMULATED_NOTICE);
+                    return;
+                  }
                   setWeekSession((n) => n + 1);
                   setWeekOpen(true);
                 }}
@@ -218,7 +225,13 @@ export function MotorLeadSidePanel({
                   className="h-9 w-full"
                   disabled={actionsDisabled}
                   data-testid="motor-disqualify"
-                  onClick={previewOnly ? () => toast.message('Fixture de teste: nada é registrado.') : () => setLostOpen(true)}
+                  onClick={
+                    previewOnly
+                      ? () => toast.message('Fixture de teste: nada é registrado.')
+                      : simulated
+                        ? () => toast.message(SIMULATED_NOTICE)
+                        : () => setLostOpen(true)
+                  }
                 >
                   Desqualificar
                 </Button>

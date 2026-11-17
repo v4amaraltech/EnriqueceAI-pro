@@ -78,6 +78,7 @@ export function NextCallCardWithEngine({ card: serverCard, dialerProvider, autoD
       actionsDisabled={LIVE_PHASES.has(phase)}
       previewOnly={previewOnly}
       schedulingPreview={schedulingPreview}
+      onLeadActed={(kind) => engine.concludeExternally?.(panelCard.context.leadId, kind)}
     />
   ) : null;
 

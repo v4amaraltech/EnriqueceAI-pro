@@ -85,6 +85,84 @@ describe('pickAutoDialLead', () => {
     expect(await pickAutoDialLead({ viewer, now: NOW, client })).toMatchObject({ kind: 'picked', leadId: 'A', tier: 'cold' });
   });
 
+  describe('D1/D2 na ESCOLHA: ganho e "não retomar" nunca são escolhidos', () => {
+    const reasons = [
+      { id: 'r-bl', org_id: ORG, name: 'Blocklist' },
+      { id: 'r-spam', org_id: ORG, name: 'SPAM' },
+      { id: 'r-teen', org_id: ORG, name: 'Adolescente/Criança' },
+      { id: 'r-ok', org_id: ORG, name: 'Sem interesse' },
+    ];
+    // Cenário real (89% ganhos no topo): 6 ganhos/não retomar na frente e 1 elegível no fim.
+    const crowded = (): { rows: Row[]; leads: Row[] } => ({
+      rows: [1, 2, 3, 4, 5, 6, 7].map((n) => rpcRow(`L${n}`, { cold_rank: n })),
+      leads: [
+        lead('L1', { status: 'won' }),
+        lead('L2', { status: 'won' }),
+        lead('L3', { status: 'won' }),
+        lead('L4', { loss_reason_id: 'r-bl' }),
+        lead('L5', { loss_reason_id: 'r-spam' }),
+        lead('L6', { loss_reason_id: 'r-teen' }),
+        lead('L7', { loss_reason_id: 'r-ok' }),
+      ],
+    });
+
+    it('com 6 ganhos/não retomar no topo, escolhe o próximo elegível (sem recusas para o hook acumular)', async () => {
+      const { rows, leads } = crowded();
+      const client = setup(rows, { leads, loss_reasons: reasons });
+      expect(await pickAutoDialLead({ viewer, now: NOW, client })).toMatchObject({ kind: 'picked', leadId: 'L7', tier: 'cold' });
+    });
+
+    it('quente ganho não passa na frente: o quente elegível/frio segue', async () => {
+      const client = setup(
+        [rpcRow('W', { maybe_hot: true, cold_rank: 1 }), rpcRow('C', { cold_rank: 2 })],
+        {
+          leads: [lead('W', { status: 'won' }), lead('C')],
+          interactions: [{ id: 'i1', org_id: ORG, lead_id: 'W', channel: 'email', type: 'replied', created_at: ago(60) }],
+        },
+      );
+      expect(await pickAutoDialLead({ viewer, now: NOW, client })).toMatchObject({ kind: 'picked', leadId: 'C' });
+    });
+
+    it('retorno vencido de lead ganho também é descartado (nunca)', async () => {
+      const client = setup([rpcRow('W', { cold_rank: 1 }), rpcRow('C', { cold_rank: 2 })], {
+        leads: [lead('W', { status: 'won' }), lead('C')],
+        scheduled_activities: [{ id: 'sa-W', org_id: ORG, lead_id: 'W', channel: 'phone', kind: 'return', status: 'pending', scheduled_at: ago(90) }],
+      });
+      expect(await pickAutoDialLead({ viewer, now: NOW, client })).toMatchObject({ kind: 'picked', leadId: 'C' });
+    });
+
+    it('só ganhos na fila: empty (não pausa o motor por recusas)', async () => {
+      const client = setup([rpcRow('W1', { cold_rank: 1 }), rpcRow('W2', { cold_rank: 2 })], { leads: [lead('W1', { status: 'won' }), lead('W2', { status: 'won' })] });
+      expect(await pickAutoDialLead({ viewer, now: NOW, client })).toEqual({ kind: 'empty' });
+    });
+
+    it('lead fora da leitura segue (o portão confere de novo); a ordem dos elegíveis não muda', async () => {
+      const client = setup([rpcRow('B', { cold_rank: 2 }), rpcRow('A', { cold_rank: 1 })], { leads: [lead('B')] });
+      expect(await pickAutoDialLead({ viewer, now: NOW, client })).toMatchObject({ kind: 'picked', leadId: 'A' });
+    });
+
+    it('consultas extras por escolha: 1 leitura de leads por bloco de 100 + 1 de loss_reasons (só se há motivo)', async () => {
+      const { rows, leads } = crowded();
+      const client = setup(rows, { leads, loss_reasons: reasons });
+      await pickAutoDialLead({ viewer, now: NOW, client });
+      // 2 leituras de leads: 1 é a nova (status + motivo, 1 por bloco de 100) e 1 é a dos sinais do lead escolhido (já existia).
+      expect(db.reads.filter((r) => r.table === 'leads')).toHaveLength(2);
+      expect(db.reads.filter((r) => r.table === 'loss_reasons')).toHaveLength(1);
+      const noReason = setup([rpcRow('A', { cold_rank: 1 })], { leads: [lead('A')] });
+      await pickAutoDialLead({ viewer, now: NOW, client: noReason });
+      expect(db.reads.filter((r) => r.table === 'loss_reasons')).toHaveLength(0);
+    });
+
+    it('erro ao ler leads ou motivos: falha fechada (error), não escolhe', async () => {
+      const a = setup([rpcRow('A', { cold_rank: 1 })], { leads: [lead('A', { loss_reason_id: 'r-ok' })], loss_reasons: reasons });
+      db.failReads.add('leads');
+      expect(await pickAutoDialLead({ viewer, now: NOW, client: a })).toEqual({ kind: 'error' });
+      const b = setup([rpcRow('A', { cold_rank: 1 })], { leads: [lead('A', { loss_reason_id: 'r-ok' })], loss_reasons: reasons });
+      db.failReads.add('loss_reasons');
+      expect(await pickAutoDialLead({ viewer, now: NOW, client: b })).toEqual({ kind: 'error' });
+    });
+  });
+
   it('quente confirmado vem antes do frio (mesma ordem do #641)', async () => {
     const client = setup([rpcRow('A', { cold_rank: 1 }), rpcRow('H', { maybe_hot: true, cold_rank: 9 })], {
       interactions: [{ id: 'i1', org_id: ORG, lead_id: 'H', channel: 'email', type: 'replied', created_at: ago(60) }],
@@ -264,6 +342,32 @@ describe('checkDialGate (travas no servidor)', () => {
     expect(await gate(setup([], { leads: [lead('A', { deleted_at: ago(1) })] }))).toEqual({ ok: false, code: 'lead_unavailable' });
     expect(await gate(setup([], { leads: [] }))).toEqual({ ok: false, code: 'lead_unavailable' });
     expect(await gate(setup([], { leads: [lead('A', { status: 'archived' })] }))).toEqual({ ok: false, code: 'lead_unavailable' });
+  });
+
+  it('D1: lead ganho (won) nunca é discado; contatado passa', async () => {
+    expect(await gate(setup([], { leads: [lead('A', { status: 'won' })] }))).toEqual({ ok: false, code: 'lead_unavailable' });
+    expect((await gate(setup([], { leads: [lead('A', { status: 'contacted' })] }))).ok).toBe(true);
+  });
+
+  it('D2: motivo "não retomar" (Blocklist, SPAM, Adolescente/Criança) recusa na fila NORMAL; motivo comum e sem motivo passam', async () => {
+    const reasons = [
+      { id: 'r-bl', org_id: ORG, name: 'Blocklist' },
+      { id: 'r-spam', org_id: ORG, name: 'SPAM' },
+      { id: 'r-teen', org_id: ORG, name: 'Adolescente/Criança' },
+      { id: 'r-ok', org_id: ORG, name: 'Sem interesse' },
+    ];
+    for (const id of ['r-bl', 'r-spam', 'r-teen']) {
+      const out = await gate(setup([], { leads: [lead('A', { loss_reason_id: id })], loss_reasons: reasons }));
+      expect(out, id).toEqual({ ok: false, code: 'lead_unavailable' });
+    }
+    expect((await gate(setup([], { leads: [lead('A', { loss_reason_id: 'r-ok' })], loss_reasons: reasons }))).ok).toBe(true);
+    expect((await gate(setup([], { leads: [lead('A', { loss_reason_id: null })], loss_reasons: reasons }))).ok).toBe(true);
+  });
+
+  it('erro ao ler o motivo de perda na fila normal: não disca (falha fechada)', async () => {
+    const client = setup([], { leads: [lead('A', { loss_reason_id: 'r-ok' })], loss_reasons: [{ id: 'r-ok', org_id: ORG, name: 'Sem interesse' }] });
+    db.failReads.add('loss_reasons');
+    expect(await gate(client)).toEqual({ ok: false, code: 'error' });
   });
 
   it('sem telefone: no_phone', async () => {

@@ -217,6 +217,28 @@ describe('motor simulado (FR-18)', () => {
     expect(vi.mocked(getNextAutoDialCardAction).mock.calls[1]?.[0]).toMatchObject({ excludeLeadIds: ['A'] });
   });
 
+  it('lead_unavailable (ganho / não retomar): pula o lead, escolhe o PRÓXIMO elegível e disca esse, sem pausar', async () => {
+    vi.mocked(getNextAutoDialCardAction).mockResolvedValueOnce(ok('W')).mockResolvedValueOnce(ok('B'));
+    vi.mocked(dialAutoLeadAction)
+      .mockResolvedValueOnce({ success: true, data: { status: 'refused', code: 'lead_unavailable' } })
+      .mockResolvedValueOnce(sim());
+    const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));
+    await startIt(result);
+    await advance(5000);
+    expect(result.current.state).toMatchObject({ phase: 'countdown' });
+    expect(vi.mocked(getNextAutoDialCardAction).mock.calls[1]?.[0]).toMatchObject({ excludeLeadIds: ['W'] });
+    await advance(5000);
+    expect(vi.mocked(dialAutoLeadAction).mock.calls[1]?.[0]).toMatchObject({ leadId: 'B' });
+  });
+
+  it('lead_unavailable sempre: não fica em laço (pausa depois de recusas demais)', async () => {
+    vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'refused', code: 'lead_unavailable' } });
+    const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));
+    await startIt(result);
+    for (let i = 0; i < 8; i++) await advance(5000);
+    expect(result.current.state).toMatchObject({ phase: 'paused', reason: 'dial_failed' });
+  });
+
   it('recusas seguidas demais pausam o motor (sem laço infinito)', async () => {
     vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'refused', code: 'held' } });
     const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));

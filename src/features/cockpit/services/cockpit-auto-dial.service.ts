@@ -23,7 +23,7 @@ import {
 } from '../utils/auto-dial-rules';
 import { AUTO_DIAL_RPC_OVERRIDES, SIGNAL_CHUNK_SIZE, chunk } from '../utils/cold-lead-order';
 import { pickCockpitLead, type CockpitTier } from '../utils/next-call-pick';
-import { RECOVERY_BLOCKED_REASON_NAMES, type AutoDialQueue } from '../utils/recovery-queue';
+import { RECOVERY_BLOCKED_REASON_NAMES, isNoResumeReason, type AutoDialQueue } from '../utils/recovery-queue';
 import { isRealConversation } from '../utils/real-conversation';
 import { fetchCockpitCandidates } from './cockpit-candidates.service';
 import { fetchRecoveryCandidates } from './cockpit-recovery-candidates.service';
@@ -43,7 +43,8 @@ type Count = { count: number | null; error: { message: string } | null };
 /** Chave do marcador gravado em `calls.metadata` pelas ligações do motor (teto de 100 conta só estas, C-2). */
 export const AUTO_DIAL_METADATA_KEY = 'cockpit_auto_dial';
 
-const EXCLUDED_LEAD_STATUSES = ['unqualified', 'archived'];
+/** Status em que o motor nunca liga na fila normal (ganho, perdido, arquivado). Usada na escolha e no portão. */
+export const EXCLUDED_LEAD_STATUSES = ['unqualified', 'archived', 'won'];
 
 /**
  * Feriados do motor (C-1): a lista nacional fixa do app UNIDA à tabela `business_holidays` (a mesma da régua de atraso).
@@ -180,6 +181,51 @@ export async function loadDueCallbacks(client: SupabaseClient, orgId: string, le
   return due;
 }
 
+/**
+ * Fora da escolha ANTES de discar (D1/D2): lead ganho (`won`) ou com motivo de perda "não retomar" nunca vai ao
+ * portão, senão a RPC (que ainda os devolve) enche o topo da fila de recusas e o motor pausa. Mesma regra do portão
+ * (`EXCLUDED_LEAD_STATUSES`, `isNoResumeReason`); na recuperação o status `unqualified` é o esperado, então só `won`
+ * conta, e vale a lista maior de motivos. Lote em `SIGNAL_CHUNK_SIZE` + UMA leitura de `loss_reasons` da org
+ * (só se algum lead tem motivo). Lead que não aparece na leitura segue (o portão confere de novo). `null` = erro de leitura.
+ */
+export async function loadUnavailableLeadIds(
+  client: SupabaseClient,
+  orgId: string,
+  leadIds: string[],
+  queue: AutoDialQueue | undefined,
+): Promise<Set<string> | null> {
+  const out = new Set<string>();
+  if (leadIds.length === 0) return out;
+  const recovery = queue === 'recovery';
+  const parts = await Promise.all(
+    chunk(leadIds, SIGNAL_CHUNK_SIZE).map(
+      async (part) =>
+        (await from(client, 'leads').select('id, status, loss_reason_id').eq('org_id', orgId).in('id', part)) as Rows<{
+          id: string;
+          status: string;
+          loss_reason_id: string | null;
+        }>,
+    ),
+  );
+  if (parts.some((p) => p.error || !p.data)) return null;
+  const leads = parts.flatMap((p) => p.data!);
+
+  let reasonNames: Map<string, string> | null = null;
+  if (leads.some((l) => l.loss_reason_id)) {
+    const reasons = (await from(client, 'loss_reasons').select('id, name').eq('org_id', orgId)) as Rows<{ id: string; name: string | null }>;
+    if (reasons.error || !reasons.data) return null;
+    reasonNames = new Map(reasons.data.flatMap((r) => (r.name ? [[r.id, r.name] as [string, string]] : [])));
+  }
+
+  for (const l of leads) {
+    const statusOut = recovery ? l.status === 'won' : EXCLUDED_LEAD_STATUSES.includes(l.status);
+    const name = l.loss_reason_id ? reasonNames?.get(l.loss_reason_id) : undefined;
+    const reasonOut = Boolean(name) && (isNoResumeReason(name) || (recovery && RECOVERY_BLOCKED_REASON_NAMES.includes(name as string)));
+    if (statusOut || reasonOut) out.add(l.id);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Escolha do próximo lead
 // ---------------------------------------------------------------------------
@@ -245,10 +291,14 @@ export async function pickAutoDialLead(input: {
     }
 
     // 1) Filtro barato (tentativas e intervalo) antes de ler bloqueios e atendimentos.
-    const live = rows.filter((r) => {
+    const cheap = rows.filter((r) => {
       const d = evaluateLeadEligibility(stats.get(r.leadId)!, now, rules);
       return d.allowed || d.code === 'gap';
     });
+    // Ganho e "não retomar" saem AQUI (também o retorno vencido deles): nunca chegam a ser escolhidos (D1/D2).
+    const unavailable = await loadUnavailableLeadIds(client, viewer.orgId, cheap.map((r) => r.leadId), input.queue);
+    if (!unavailable) return { kind: 'error' };
+    const live = cheap.filter((r) => !unavailable.has(r.leadId));
     const ids = live.map((r) => r.leadId);
 
     // 2) Bloqueios (total + prospeccao) e atendido hoje, em blocos de 100 ids. Erro = falha fechada (NFR-4).
@@ -414,18 +464,22 @@ export async function checkDialGate(input: {
     const callbacks = await loadDueCallbacks(client, orgId, [leadId], now);
     if (!callbacks) return refuse('error');
 
-    // Recuperação, conferido de novo AQUI (o navegador escolhe a fila e o lead; nada vale só porque veio da escolha):
-    // motivo de perda bloqueado (A-D5) e conversa real depois da perda (A-D4, salvo retorno vencido).
-    if (recovery) {
-      if (lead.loss_reason_id) {
-        const reason = (await from(client, 'loss_reasons')
-          .select('name')
-          .eq('id', lead.loss_reason_id)
-          .eq('org_id', orgId)
-          .maybeSingle()) as One<{ name: string | null }>;
-        if (reason.error) return refuse('error');
-        if (reason.data?.name && RECOVERY_BLOCKED_REASON_NAMES.includes(reason.data.name)) return refuse('lead_unavailable');
+    // Motivo de perda, nas DUAS filas (o navegador escolhe a fila e o lead; nada vale só porque veio da escolha):
+    // "não retomar" (blocklist, spam, adolescente/criança) nunca liga (D2); na recuperação vale a lista maior (A-D5).
+    if (lead.loss_reason_id) {
+      const reason = (await from(client, 'loss_reasons')
+        .select('name')
+        .eq('id', lead.loss_reason_id)
+        .eq('org_id', orgId)
+        .maybeSingle()) as One<{ name: string | null }>;
+      if (reason.error) return refuse('error');
+      const reasonName = reason.data?.name;
+      if (reasonName && (isNoResumeReason(reasonName) || (recovery && RECOVERY_BLOCKED_REASON_NAMES.includes(reasonName)))) {
+        return refuse('lead_unavailable');
       }
+    }
+    // Recuperação: conversa real depois da perda (A-D4, salvo retorno vencido).
+    if (recovery) {
       if (!callbacks.has(leadId)) {
         const since = (await from(client, 'calls')
           .select(CALL_DAY_COLUMNS)
