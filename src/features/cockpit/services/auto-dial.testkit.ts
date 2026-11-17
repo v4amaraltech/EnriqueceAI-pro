@@ -28,7 +28,8 @@ export function makeAutoDialClient(db: AutoDialDb) {
       let head = false;
       let wantCount = false;
       const pick = (r: Row, col: string): unknown => {
-        const [base, key] = col.split('->');
+        // `metadata->>chave` (texto) e `metadata->chave` (json): os dois leem a chave dentro do objeto.
+        const [base, key] = col.includes('->>') ? col.split('->>') : col.split('->');
         const v = r[base!];
         return key && v && typeof v === 'object' ? (v as Row)[key] : v;
       };
@@ -63,6 +64,10 @@ export function makeAutoDialClient(db: AutoDialDb) {
       };
       b.gte = (col: string, v: string) => {
         filters.push((r) => String(pick(r, col) ?? '') >= v);
+        return b;
+      };
+      b.gt = (col: string, v: string) => {
+        filters.push((r) => String(pick(r, col) ?? '') > v);
         return b;
       };
       b.is = (col: string, v: unknown) => {
