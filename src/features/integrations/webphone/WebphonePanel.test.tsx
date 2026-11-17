@@ -127,7 +127,7 @@ function sipCall(phase: WebphoneCall['phase'], startedAt: number, dialToken: str
   };
 }
 
-function publish(ownerHandlesResult: boolean) {
+function publish(ownerHandlesResult: boolean, hideNotes?: boolean) {
   setWebphoneCallContext({
     callId: CALL_ID,
     providerCallId: 'prov-1',
@@ -135,6 +135,7 @@ function publish(ownerHandlesResult: boolean) {
     leadName: 'Lead de Teste',
     phone: '16982501819',
     ownerHandlesResult,
+    ...(hideNotes === undefined ? {} : { hideNotes }),
     dialToken: 'token-dial',
   });
 }
@@ -875,5 +876,52 @@ describe('WebphonePanel — botão Teclado (DTMF)', () => {
       phone.set({ ...ready, call: sipCall('in-call', t0) });
     });
     expect(screen.getByTestId('webphone-keypad')).toBeInTheDocument();
+  });
+});
+
+describe('WebphonePanel — hideNotes (o Cockpit tem o próprio campo de anotação)', () => {
+  beforeEach(() => {
+    resetWebphoneCallContextForTests();
+    resetWebphoneDialCorrelation();
+    answer.value = 'answered';
+    answer.hangupCause = 'NORMAL_CLEARING';
+    for (const fn of Object.values(actions)) fn.mockClear();
+    phone.set(ready);
+  });
+
+  it('com hideNotes: sem campo de anotação na ligação nem na finalizada; Concluir segue existindo e avisa o dono com texto vazio', async () => {
+    const started = Date.now();
+    publish(true, true);
+    const concluded = vi.fn();
+    const off = onWebphoneConcludeRequested(concluded);
+    render(<WebphonePanel />);
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('in-call', started) });
+    });
+    expect(screen.queryByRole('textbox', { name: 'Anotações da ligação' })).toBeNull();
+    await endCall(started);
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Anotações da ligação' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir' }));
+    expect(concluded).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID, notes: '' }));
+    off();
+  });
+
+  it('sem hideNotes (ou false): o campo aparece como sempre', async () => {
+    const started = Date.now();
+    publish(true);
+    const { unmount } = render(<WebphonePanel />);
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('in-call', started) });
+    });
+    expect(screen.getByRole('textbox', { name: 'Anotações da ligação' })).toBeInTheDocument();
+    unmount();
+    resetWebphoneCallContextForTests();
+    publish(true, false);
+    render(<WebphonePanel />);
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('in-call', started) });
+    });
+    expect(screen.getByRole('textbox', { name: 'Anotações da ligação' })).toBeInTheDocument();
   });
 });

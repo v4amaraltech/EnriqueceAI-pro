@@ -946,7 +946,7 @@ function LiveCallView({
 
       {showKeypad && <WebphoneKeypad key={call.id} />}
 
-      <NotesField notes={notes} onChange={onNotesChange} />
+      <NotesField notes={notes} onChange={onNotesChange} hidden={context?.hideNotes} />
     </>
   );
 }
@@ -1013,7 +1013,7 @@ function DialingView({
         </Button>
       </div>
       {status && <p className="text-xs text-[var(--muted-foreground)]">{status}</p>}
-      <NotesField notes={notes} onChange={onNotesChange} />
+      <NotesField notes={notes} onChange={onNotesChange} hidden={context.hideNotes} />
     </>
   );
 }
@@ -1074,7 +1074,7 @@ function FinishedView({
         </p>
       )}
       {status && <p className="text-xs text-[var(--muted-foreground)]">{status}</p>}
-      <NotesField notes={notes} onChange={onNotesChange} autoFocus />
+      <NotesField notes={notes} onChange={onNotesChange} autoFocus hidden={call.context?.hideNotes} />
       <Button size="sm" className="w-full" onClick={onConclude}>
         Concluir
       </Button>
@@ -1087,12 +1087,16 @@ function NotesField({
   onChange,
   autoFocus,
   label = 'Anotações da ligação',
+  hidden,
 }: {
   notes: string;
   onChange: (v: string) => void;
   autoFocus?: boolean;
   label?: string;
+  /** O discador dono tem o próprio campo (`hideNotes` do contexto). */
+  hidden?: boolean;
 }) {
+  if (hidden) return null;
   return (
     <Textarea
       value={notes}
