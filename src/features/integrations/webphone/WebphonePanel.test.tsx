@@ -27,13 +27,31 @@ vi.mock('./useApi4ComWebphone', () => ({
 }));
 vi.mock('./webphone-client', () => ({
   answerCall: vi.fn(),
-  hangupCall: vi.fn(() => Promise.resolve()),
+  hangupCall: () => carrier.hangupLeg(),
   toggleMute: vi.fn(),
+  sendDtmf: vi.fn(() => {
+    carrier.dtmfUsed = true;
+    return 'RFC2833';
+  }),
+  shouldAutoHangupOnCarrier: () => !carrier.dtmfUsed,
+  getRemoteAudioTrack: () => ({ kind: 'audio' }),
+  subscribeRemoteAudioTrack: () => () => undefined,
   getWebphoneState: () => phone.get(),
   requestWebphoneMicrophone: client.requestWebphoneMicrophone,
   takeOverWebphone: client.takeOverWebphone,
   reconnectWebphone: client.reconnectWebphone,
   stopWebphone: client.stopWebphone,
+}));
+const carrier = vi.hoisted(() => ({
+  dtmfUsed: false,
+  onCarrierHangup: null as null | (() => void),
+  hangupLeg: vi.fn(() => Promise.resolve()),
+}));
+vi.mock('./live-amd-browser', () => ({
+  startLiveAmdBrowser: (opts: { onCarrierHangup: () => void }) => {
+    carrier.onCarrierHangup = opts.onCarrierHangup;
+    return () => undefined;
+  },
 }));
 const client = vi.hoisted(() => ({
   requestWebphoneMicrophone: vi.fn(() => Promise.resolve('granted')),
@@ -772,4 +790,90 @@ describe('WebphonePanel: pill do microfone e do ramal em outra aba', () => {
 
 beforeEach(() => {
   resetCallResultModalExclusive();
+});
+
+describe('WebphonePanel — botão Teclado (DTMF)', () => {
+  beforeEach(() => {
+    resetWebphoneCallContextForTests();
+    resetWebphoneDialCorrelation();
+  });
+
+  it('desabilitado fora de in-call; habilitado em in-call; abre e fecha a grade', async () => {
+    const t0 = Date.now();
+    phone.set({ ...ready, call: { ...sipCall('ringing', t0), integrated: false, direction: 'incoming' } });
+    render(<WebphonePanel />);
+    expect(screen.getByTestId('webphone-keypad-toggle')).toBeDisabled();
+    expect(screen.queryByTestId('webphone-keypad')).not.toBeInTheDocument();
+
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('in-call', t0) });
+    });
+    const toggle = screen.getByTestId('webphone-keypad-toggle');
+    expect(toggle).toBeEnabled();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', 'webphone-keypad');
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('webphone-keypad')).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('textbox', { name: 'Anotações da ligação' })).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId('webphone-keypad')).not.toBeInTheDocument();
+  });
+
+  it('fecha sozinho quando a ligação sai de in-call', async () => {
+    const t0 = Date.now();
+    phone.set({ ...ready, call: sipCall('in-call', t0) });
+    render(<WebphonePanel />);
+    fireEvent.click(screen.getByTestId('webphone-keypad-toggle'));
+    expect(screen.getByTestId('webphone-keypad')).toBeInTheDocument();
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('ended', t0) });
+    });
+    expect(screen.queryByTestId('webphone-keypad')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('webphone-keypad-toggle')).not.toBeInTheDocument();
+  });
+
+  it('onCarrierHangup NÃO desliga depois de uma tecla enviada, e desliga se nenhuma foi', async () => {
+    carrier.dtmfUsed = false;
+    carrier.onCarrierHangup = null;
+    carrier.hangupLeg.mockClear();
+    const t0 = Date.now();
+    phone.set({ ...ready, call: sipCall('in-call', t0) });
+    publish(false);
+    render(<WebphonePanel liveListen />);
+    expect((carrier.onCarrierHangup as (() => void) | null)).not.toBeNull();
+    const fireCarrierHangup = () => (carrier.onCarrierHangup as (() => void) | null)?.();
+
+    fireCarrierHangup();
+    expect(carrier.hangupLeg).toHaveBeenCalledTimes(1);
+
+    carrier.hangupLeg.mockClear();
+    fireEvent.click(screen.getByTestId('webphone-keypad-toggle'));
+    fireEvent.click(screen.getByRole('button', { name: 'Tecla 1' }));
+    fireCarrierHangup();
+    expect(carrier.hangupLeg).not.toHaveBeenCalled();
+  });
+
+  it('botão Teclado só com ícone mas com nome acessível; linha de botões pode quebrar', async () => {
+    phone.set({ ...ready, call: sipCall('in-call', Date.now()) });
+    render(<WebphonePanel />);
+    const toggle = screen.getByRole('button', { name: 'Teclado' });
+    expect(toggle.textContent).toBe('');
+    expect(toggle.parentElement?.className).toContain('flex-wrap');
+  });
+
+  it('ligação que sai de in-call e volta com a mesma call.id: o teclado reabre (comportamento atual)', async () => {
+    const t0 = Date.now();
+    phone.set({ ...ready, call: sipCall('in-call', t0) });
+    render(<WebphonePanel />);
+    fireEvent.click(screen.getByTestId('webphone-keypad-toggle'));
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('ringing', t0) });
+    });
+    expect(screen.queryByTestId('webphone-keypad')).not.toBeInTheDocument();
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('in-call', t0) });
+    });
+    expect(screen.getByTestId('webphone-keypad')).toBeInTheDocument();
+  });
 });

@@ -5,6 +5,7 @@
 // em `wss://{domínio}:6443`; o servidor origina a ligação por `POST /calls`;
 // a API4COM manda o INVITE para o ramal com `X-Api4comintegratedcall: true`
 // e a página atende sozinha. Sem extensão do Chrome.
+import type { DTMF_TRANSPORT } from 'jssip/lib/Constants';
 import type { RTCSession } from 'jssip/lib/RTCSession';
 import type { IncomingRequest, OutgoingRequest } from 'jssip/lib/SIPMessage';
 import type { UA } from 'jssip/lib/UA';
@@ -66,6 +67,9 @@ let activeSession: RTCSession | null = null;
 let activeCallId: string | null = null;
 let remoteAudio: HTMLAudioElement | null = null;
 let activePeerConnection: RTCPeerConnection | null = null;
+// Ligação em que o SDR já apertou alguma tecla do teclado (DTMF): a escuta
+// ao vivo não pode mais desligar a URA sozinha.
+let dtmfUsedCallId: string | null = null;
 let statsTimer: number | null = null;
 let callSeq = 0;
 // Geração do start: um stop (ou um novo start) invalida um start ainda em
@@ -272,6 +276,7 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   const remoteNumber = remoteNumberFromUri(session.remote_identity?.uri?.user);
   activeSession = session;
   activeCallId = id;
+  dtmfUsedCallId = null;
 
   dispatch({
     type: 'call_new',
@@ -306,6 +311,7 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
     stopStatsSampling();
     stopRemoteTapNow();
     publishRemoteTrack(null);
+    if (dtmfUsedCallId === id) dtmfUsedCallId = null;
     dispatch({ type: 'call_ended', id, at: Date.now(), cause: e?.cause ?? null });
     clearEndedCallLater(id);
   };
@@ -552,4 +558,74 @@ export function toggleMute(): void {
   } catch (err) {
     console.error('[webphone] mute failed:', err);
   }
+}
+
+export type DtmfTone = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '*' | '#';
+export type DtmfTransport = 'RFC2833' | 'INFO';
+
+const DTMF_TONE_RE = /^[0-9*#]$/;
+const DTMF_TRANSPORT_KEY = 'enriqueceai.webphone.dtmf-transport';
+
+/** Transporte do tom: o override vence; sem ele, RFC2833 só se o navegador consegue inserir DTMF. */
+export function dtmfTransport(input: {
+  override: DtmfTransport | null;
+  canInsertDtmf: boolean;
+}): DtmfTransport {
+  if (input.override) return input.override;
+  return input.canInsertDtmf ? 'RFC2833' : 'INFO';
+}
+
+function readDtmfOverride(): DtmfTransport | null {
+  try {
+    const value = window.localStorage.getItem(DTMF_TRANSPORT_KEY);
+    return value === 'RFC2833' || value === 'INFO' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function canInsertDtmf(): boolean {
+  try {
+    const sender = activePeerConnection?.getSenders().find((s) => s.track?.kind === 'audio');
+    return sender?.dtmf?.canInsertDTMF === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Manda um tom DTMF na chamada em curso (navegar em URA). No-op (retorna null)
+ * sem sessão, fora de `in-call` ou com tom inválido. Se o RFC2833 falhar,
+ * tenta INFO uma vez. Não mexe no estado nem grava nada. Retorna o transporte usado.
+ */
+export function sendDtmf(tone: DtmfTone): DtmfTransport | null {
+  if (!activeSession || state.call?.phase !== 'in-call') return null;
+  if (!DTMF_TONE_RE.test(tone)) return null;
+  const session = activeSession;
+  const first = dtmfTransport({ override: readDtmfOverride(), canInsertDtmf: canInsertDtmf() });
+  const attempt = (transportType: DtmfTransport): boolean => {
+    try {
+      session.sendDTMF(tone, { transportType: transportType as DTMF_TRANSPORT, duration: 160, interToneGap: 70 });
+      return true;
+    } catch (err) {
+      console.error(`[webphone] dtmf ${transportType} failed:`, err);
+      return false;
+    }
+  };
+  let used: DtmfTransport | null = null;
+  if (attempt(first)) used = first;
+  else if (first === 'RFC2833' && attempt('INFO')) used = 'INFO';
+  if (used && activeCallId) dtmfUsedCallId = activeCallId;
+  return used;
+}
+
+/** O SDR já usou o teclado nesta ligação? */
+export function dtmfUsedInCall(callId: string): boolean {
+  return dtmfUsedCallId !== null && dtmfUsedCallId === callId;
+}
+
+/** A escuta ao vivo pode desligar sozinha? Não, se o SDR está navegando a URA. Sem id, usa a ligação atual. */
+export function shouldAutoHangupOnCarrier(callId?: string | null): boolean {
+  const id = callId ?? state.call?.id ?? null;
+  return !(id && dtmfUsedInCall(id));
 }
