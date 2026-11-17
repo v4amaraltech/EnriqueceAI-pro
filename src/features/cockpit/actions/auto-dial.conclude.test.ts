@@ -53,6 +53,7 @@ describe('concludeAutoDialCallAction', () => {
   it.each([
     ['scheduled', 'relevant_conversation'],
     ['lost', 'answered_no_progress'],
+    ['callback', 'callback_requested'],
   ] as const)('ligação atendida + %s → grava %s, sem avançar cadência', async (kind, disposition) => {
     setup([callRow()]);
     expect(await concludeAutoDialCallAction({ callId: CALL, kind })).toEqual({ success: true, data: { status: 'recorded', disposition } });
