@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UseCockpitAutoDialResult } from '../hooks/use-cockpit-auto-dial';
@@ -199,43 +199,39 @@ describe('NextCallCard com o motor', () => {
     expect(screen.queryByTestId('motor-lead-panel')).toBeNull();
   });
 
-  it('Agendar reunião e Desqualificar: desligados na ligação, ligados quando o lead atendeu', () => {
+  it('o bloco das 3 ações só existe em awaiting-sdr; lá os botões ficam habilitados', () => {
     setEngine(IN_CALL);
     const { rerender } = render(<NextCallCard card={null} dialerProvider="api4com" autoDial={AUTO} />);
-    expect((screen.getByTestId('motor-schedule-meeting') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('motor-disqualify') as HTMLButtonElement).disabled).toBe(true);
+    for (const phase of ['dialing', 'in-call', 'resolving']) {
+      setEngine({ phase } as CockpitAutoDialState);
+      rerender(<NextCallCard card={null} dialerProvider="api4com" autoDial={AUTO} />);
+      expect(screen.queryByTestId('dialer-answered')).toBeNull();
+      expect(screen.queryByText(/O lead conversou/)).toBeNull();
+    }
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' });
     rerender(<NextCallCard card={null} dialerProvider="api4com" autoDial={AUTO} />);
-    expect((screen.getByTestId('motor-schedule-meeting') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByTestId('motor-disqualify') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId('dialer-answered-schedule') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId('dialer-answered-disqualify') as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('atendeu: confirmação com o painel aberto; só o clique chama o hook; notas do painel e observação do desfecho não se pisam', async () => {
-    const e = setEngine({ phase: 'awaiting-sdr', reason: 'answered' });
+  it('atendeu: as 3 ações aparecem com o painel aberto, sem select de desfecho nem Confirmar', () => {
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' });
     render(<NextCallCard card={null} dialerProvider="api4com" autoDial={AUTO} />);
     expect(screen.getByTestId('auto-dial-status').textContent).toBe('Aguardando o desfecho');
     expect(screen.getByTestId('motor-lead-panel')).toBeTruthy();
-
-    fireEvent.change(screen.getByLabelText('Anotações'), { target: { value: 'pediu proposta' } });
-    fireEvent.change(screen.getByLabelText('Observação do desfecho'), { target: { value: 'ligar terça' } });
-    expect((screen.getByLabelText('Anotações') as HTMLTextAreaElement).value).toBe('pediu proposta');
-    expect((screen.getByLabelText('Observação do desfecho') as HTMLInputElement).value).toBe('ligar terça');
-
-    const button = screen.getByTestId('auto-dial-confirm-button') as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(e.confirmOutcome).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId('auto-dial-disposition'));
-    fireEvent.click(screen.getByRole('option', { name: 'Conversa relevante' }));
-    await waitFor(() => expect(button.disabled).toBe(false));
-    fireEvent.click(button);
-    await waitFor(() => expect(e.confirmOutcome).toHaveBeenCalledWith({ disposition: 'relevant_conversation', notes: 'ligar terça' }));
+    expect(screen.getByTestId('dialer-answered-schedule')).toBeTruthy();
+    expect(screen.getByTestId('dialer-answered-callback')).toBeTruthy();
+    expect(screen.getByTestId('dialer-answered-disqualify')).toBeTruthy();
+    expect(screen.queryByTestId('auto-dial-disposition')).toBeNull();
+    expect(screen.queryByTestId('auto-dial-confirm-button')).toBeNull();
+    expect(screen.queryByLabelText('Observação do desfecho')).toBeNull();
   });
 
-  it('ligação real: LIGAÇÃO REAL na barra e no painel, e o painel consulta a IA pelo resumo da ligação', () => {
+  it('ligação real: LIGAÇÃO REAL na barra e no painel; sem resumo da IA nem sugestão de desfecho', () => {
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { simulated: false });
     render(<NextCallCard card={null} dialerProvider="api4com" autoDial={{ enabled: true, live: true }} />);
     expect(screen.getAllByText('LIGAÇÃO REAL').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByTestId('call-outcome')).toBeTruthy();
+    expect(screen.queryByTestId('call-outcome')).toBeNull();
     expect(screen.queryByTestId('next-lead-button')).toBeNull();
   });
 
@@ -284,14 +280,14 @@ describe('NextCallCard com o motor', () => {
       const lost = { ...card, context: { ...context, company: { ...context.company, status: 'unqualified' } } };
       setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card: lost, leadCardExtras: extras });
       render(<NextCallCard card={null} dialerProvider="api4com" autoDial={AUTO} leadCardEnabled />);
-      expect(screen.queryByTestId('motor-disqualify')).toBeNull();
-      expect(screen.getByTestId('motor-schedule-meeting')).toBeTruthy();
+      expect(screen.queryByTestId('dialer-answered-disqualify')).toBeNull();
+      expect(screen.getByTestId('dialer-answered-schedule')).toBeTruthy();
     });
 
     it('lead ativo: o botão "Desqualificar" aparece', () => {
-      setEngine(IN_CALL);
+      setEngine({ phase: 'awaiting-sdr', reason: 'answered' });
       render(<NextCallCard card={null} dialerProvider="api4com" autoDial={AUTO} />);
-      expect(screen.getByTestId('motor-disqualify')).toBeTruthy();
+      expect(screen.getByTestId('dialer-answered-disqualify')).toBeTruthy();
     });
   });
 

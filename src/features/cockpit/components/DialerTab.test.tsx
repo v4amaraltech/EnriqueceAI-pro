@@ -133,10 +133,13 @@ describe('aba Discador', () => {
     expect(screen.queryByRole('button', { name: /Ligar agora/ })).toBeNull();
   });
 
-  it('atendeu: a confirmação aparece com o painel aberto', () => {
+  it('atendeu: as 3 ações aparecem (e não o select) com o painel aberto', () => {
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card });
     render(<DialerTab autoDial={AUTO} />);
-    expect(screen.getByTestId('auto-dial-confirm')).toBeTruthy();
+    expect(screen.getByTestId('dialer-answered')).toBeTruthy();
+    expect(screen.queryByTestId('auto-dial-confirm')).toBeNull();
+    expect(screen.queryByTestId('auto-dial-disposition')).toBeNull();
+    expect(screen.queryByTestId('auto-dial-confirm-button')).toBeNull();
     expect(screen.getByTestId('motor-lead-panel')).toBeTruthy();
   });
 
@@ -159,8 +162,8 @@ describe('aba Discador', () => {
     expect(tab.className).toContain('lg:grid-cols-');
     expect(panel.parentElement).toBe(tab);
     expect(main.parentElement).toBe(tab);
-    expect(within(main).getByTestId('auto-dial-confirm')).toBeTruthy();
-    expect(within(panel).queryByTestId('auto-dial-confirm')).toBeNull();
+    expect(within(main).getByTestId('dialer-answered')).toBeTruthy();
+    expect(within(panel).queryByTestId('dialer-answered')).toBeNull();
     // Sem gaveta: nada de posição fixa, diálogo Radix ou portal.
     expect(panel.className).not.toContain('fixed');
     expect(panel.className).toContain('lg:sticky');
@@ -183,21 +186,28 @@ describe('aba Discador', () => {
     expect(screen.getByTestId('dialer-tab').getAttribute('data-panel-open')).toBe('true');
   });
 
-  it('Agendar reunião e Desqualificar ficam desabilitados durante a ligação e liberam no awaiting-sdr', () => {
+  it('o bloco das 3 ações só existe em awaiting-sdr (nem título, nem botões, nem link nas outras fases)', () => {
     setEngine({ phase: 'in-call' }, { card });
     const { rerender } = render(<DialerTab autoDial={AUTO} />);
-    expect((screen.getByTestId('motor-schedule-meeting') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('motor-disqualify') as HTMLButtonElement).disabled).toBe(true);
-    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card });
+    for (const phase of ['dialing', 'in-call', 'resolving']) {
+      setEngine({ phase } as CockpitAutoDialState, { card });
+      rerender(<DialerTab autoDial={AUTO} />);
+      expect(screen.queryByTestId('dialer-answered')).toBeNull();
+      expect(screen.queryByText(/O lead conversou/)).toBeNull();
+      expect(screen.queryByTestId('dialer-answered-not-conversation')).toBeNull();
+    }
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, notConversation: vi.fn() } as Partial<UseCockpitAutoDialResult>);
     rerender(<DialerTab autoDial={AUTO} />);
-    expect((screen.getByTestId('motor-schedule-meeting') as HTMLButtonElement).disabled).toBe(false);
+    for (const id of ['schedule', 'callback', 'disqualify', 'not-conversation']) {
+      expect((screen.getByTestId(`dialer-answered-${id}`) as HTMLButtonElement).disabled).toBe(false);
+    }
   });
 
   it('N1: desqualificar pelo painel conclui o lead no motor (concludeExternally), que segue sem o Confirmar', () => {
     const concludeExternally = vi.fn();
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, simulated: false, concludeExternally });
     render(<DialerTab autoDial={{ enabled: true, live: true }} />);
-    fireEvent.click(screen.getByTestId('motor-disqualify'));
+    fireEvent.click(screen.getByTestId('dialer-answered-disqualify'));
     fireEvent.click(screen.getByTestId('lost-dialog'));
     expect(concludeExternally).toHaveBeenCalledWith('lead-1', 'lost');
   });
@@ -206,7 +216,7 @@ describe('aba Discador', () => {
     const concludeExternally = vi.fn();
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, simulated: true, concludeExternally });
     render(<DialerTab autoDial={AUTO} />);
-    fireEvent.click(screen.getByTestId('motor-disqualify'));
+    fireEvent.click(screen.getByTestId('dialer-answered-disqualify'));
     expect(screen.queryByTestId('lost-dialog')).toBeNull();
     expect(concludeExternally).not.toHaveBeenCalled();
   });
@@ -216,7 +226,7 @@ describe('aba Discador', () => {
     const concludeExternally = vi.fn();
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, simulated: true, concludeExternally });
     render(<DialerTab autoDial={AUTO} />);
-    fireEvent.click(screen.getByTestId('motor-schedule-meeting'));
+    fireEvent.click(screen.getByTestId('dialer-answered-schedule'));
     expect(toast.message).toHaveBeenCalledWith('Simulado: nada é registrado.');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(concludeExternally).not.toHaveBeenCalled();
@@ -226,9 +236,26 @@ describe('aba Discador', () => {
     const { toast } = await import('sonner');
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, simulated: true });
     render(<DialerTab autoDial={AUTO} previewOnly />);
-    fireEvent.click(screen.getByTestId('motor-disqualify'));
+    fireEvent.click(screen.getByTestId('dialer-answered-disqualify'));
     expect(toast.message).toHaveBeenCalledWith('Fixture de teste: nada é registrado.');
     expect(screen.queryByTestId('lost-dialog')).toBeNull();
+  });
+
+  it('awaiting-sdr: Ligar depois e Não foi conversa ligados ao motor; lead perdido sem Desqualificar', () => {
+    const notConversation = vi.fn();
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card, notConversation } as Partial<UseCockpitAutoDialResult>);
+    const { unmount } = render(<DialerTab autoDial={AUTO} />);
+    fireEvent.click(screen.getByTestId('dialer-answered-callback'));
+    expect(screen.getByTestId('motor-callback-dialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    fireEvent.click(screen.getByTestId('dialer-answered-not-conversation'));
+    expect(notConversation).toHaveBeenCalledTimes(1);
+    unmount();
+    const lost = { ...card, context: { ...context, company: { ...context.company, status: 'unqualified' } } };
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card: lost });
+    render(<DialerTab autoDial={AUTO} />);
+    expect(screen.queryByTestId('dialer-answered-disqualify')).toBeNull();
+    expect(screen.getByTestId('dialer-answered-schedule')).toBeTruthy();
   });
 
   it('modo real: selo LIGAÇÃO REAL na barra', () => {
