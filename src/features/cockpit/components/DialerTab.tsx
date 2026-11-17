@@ -11,7 +11,7 @@ import type { AutoDialView } from '../auto-dial.types';
 import { useCockpitAutoDial, type UseCockpitAutoDialResult } from '../hooks/use-cockpit-auto-dial';
 import type { AutoDialQueue } from '../utils/recovery-queue';
 
-import { AutoDialOutcomeConfirm } from './AutoDialOutcomeConfirm';
+import { AutoDialAnsweredActions } from './AutoDialAnsweredActions';
 import { autoDialStatusLine, CockpitAutoDialBar } from './CockpitAutoDialBar';
 import type { SchedulingPreview } from './CallMeetingDialogs';
 import { MotorLeadSidePanel } from './MotorLeadSidePanel';
@@ -23,8 +23,9 @@ const QUEUE_OPTIONS: Array<{ value: AutoDialQueue; label: string }> = [
 
 /** Fases em que o motor está com a ligação do lead atual (painel abre sozinho). */
 const CALL_PHASES: ReadonlySet<string> = new Set(['dialing', 'awaiting-session', 'in-call', 'resolving', 'auto-completing', 'awaiting-sdr']);
-/** Ligação no ar ou sendo conferida: Agendar/Desqualificar esperam o fim. */
-const LIVE_PHASES: ReadonlySet<string> = new Set(['dialing', 'awaiting-session', 'in-call', 'resolving', 'auto-completing']);
+
+/** `notConversation` chega com o PR-B no hook; até lá o tipo é declarado aqui (opcional). */
+type EngineWithNotConversation = UseCockpitAutoDialResult & { notConversation?: () => void };
 
 interface DialerTabProps {
   autoDial: AutoDialView;
@@ -140,13 +141,18 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
             </Button>
           )}
           {phase === 'awaiting-sdr' && panelCard && (
-            <AutoDialOutcomeConfirm
-              callId={engine.callId}
+            <AutoDialAnsweredActions
               leadId={panelCard.context.leadId}
+              leadName={panelCard.context.company.name}
+              leadEmail={panelCard.context.decisionMaker.email}
+              isLost={panelCard.context.company.status === 'unqualified'}
               simulated={engine.simulated}
-              onConfirm={engine.confirmOutcome}
+              previewOnly={previewOnly}
+              schedulingPreview={schedulingPreview}
+              onLeadActed={(kind) => engine.concludeExternally?.(panelCard.context.leadId, kind)}
               scheduleCallback={engine.scheduleCallback}
               attemptsToday={engine.attemptNo ?? 0}
+              onNotConversation={(engine as EngineWithNotConversation).notConversation}
             />
           )}
         </div>
@@ -165,12 +171,6 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
           }}
           statusLine={autoDialStatusLine(engine)}
           simulated={engine.simulated}
-          actionsDisabled={LIVE_PHASES.has(phase)}
-          previewOnly={previewOnly}
-          schedulingPreview={schedulingPreview}
-          onLeadActed={(kind) => engine.concludeExternally?.(panelCard.context.leadId, kind)}
-          scheduleCallback={engine.scheduleCallback}
-          attemptsToday={engine.attemptNo ?? 0}
         />
       )}
     </section>
