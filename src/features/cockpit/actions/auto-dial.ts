@@ -192,7 +192,7 @@ export async function confirmAutoDialOutcomeAction(input: unknown): Promise<Acti
   const auth = await getAuthOrgIdResult();
   if (!auth.success) return auth;
   const { orgId, userId, supabase } = auth.data;
-  if (!(await isCockpitAutoDialEnabled({ orgId, userId }))) return { success: false, error: 'Motor desligado' };
+  if (!(await isCockpitAutoDialEnabled({ orgId, userId }))) return { success: false, error: 'Discagem desligada' };
 
   const r = await confirmMotorOutcome({
     supabase,
