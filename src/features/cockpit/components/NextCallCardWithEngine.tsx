@@ -90,7 +90,7 @@ export function NextCallCardWithEngine({ card: serverCard, dialerProvider, autoD
     return (
       <>
         {panel}
-        <section className={SHELL} aria-label="Motor automático" data-testid="next-call-card" data-clean="true">
+        <section className={SHELL} aria-label="Discagem automática" data-testid="next-call-card" data-clean="true">
           {bar}
           <p className="text-muted-foreground text-sm" data-testid="auto-dial-clean-state">
             {shortState}

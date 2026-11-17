@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useReducer, useRef, useState } from 'react';
 
 import { toast } from 'sonner';
 
+import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 import type { CallDisposition } from '@/features/calls/types';
 import { AUTO_DIAL_ANSWER_TIMEOUT_MS, AUTO_DIAL_COUNTDOWN_SECONDS } from '@/features/activities/utils/auto-dialer';
@@ -36,6 +37,7 @@ import {
   reduceCockpitAutoDial,
   type CockpitAutoDialState,
 } from '../utils/cockpit-auto-dial-machine';
+import { validateCallbackAt } from '../utils/callback-slots';
 import type { ExternalConclusionKind } from '../utils/external-conclusion';
 import {
   TAB_LOCK_HEARTBEAT_MS,
@@ -64,7 +66,7 @@ import { simulateDial, type SimulatedScript } from '../utils/simulated-dialer';
 export const DEFAULT_SIMULATED_SCRIPT: SimulatedScript = ['no_answer', 'answered'];
 
 /** Mensagem quando o servidor decide um modo (simulado/real) diferente do que a página esperava. */
-export const LIVE_MISMATCH_MESSAGE = 'O modo do motor mudou (simulado/real). Recarregue a página para continuar.';
+export const LIVE_MISMATCH_MESSAGE = 'O modo da discagem mudou (simulado/real). Recarregue a página para continuar.';
 /** `too_soon` seguidos (≈5 s cada) antes de pausar: ligação sua em curso ou sem término que o servidor ainda não viu terminar. */
 const MAX_CONSECUTIVE_TOO_SOON = 12;
 const TOO_SOON_PAUSE_MESSAGE = 'Há uma ligação sua em curso ou sem término. Confira o ramal e continue quando ela acabar.';
@@ -132,6 +134,13 @@ export interface UseCockpitAutoDialResult {
    * avança quando ela terminar). Ignora lead que não é o atual e é idempotente.
    */
   concludeExternally?: (leadId: string, kind: ExternalConclusionKind) => void;
+  /**
+   * "Ligar depois": agenda o retorno do lead atual e confirma o desfecho `callback_requested` (o motor segue). Chamar
+   * na fase `awaiting-sdr`. Ao contrário dos outros desfechos, o lead NÃO sai da sessão: o servidor o segura até o
+   * retorno vencer. Real: `scheduleActivity` e DEPOIS o desfecho; se o retorno falhar nada é confirmado; se só o desfecho
+   * falhar, tentar de novo reenvia só o desfecho (o retorno não é regravado). Simulado: nada é gravado.
+   */
+  scheduleCallback?: (input: { scheduledAt: Date; notes?: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 interface CurrentLead {
@@ -184,6 +193,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   const attemptNoRef = useRef(0);
   const concluded = useRef(new Set<string>());
   const concludedCalls = useRef(new Set<string>());
+  // Ligações cujo retorno ("Ligar depois") já foi gravado: tentar de novo reenvia só o desfecho.
+  const callbackScheduledCalls = useRef(new Set<string>());
   const pendingConclusion = useRef<{ callId: string | null; kind: ExternalConclusionKind } | null>(null);
   const prevPhase = useRef<CockpitAutoDialState['phase']>('off');
 
@@ -279,7 +290,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     }
     refusalsRef.current += 1;
     if (code === 'error' || refusalsRef.current >= MAX_CONSECUTIVE_REFUSALS) {
-      dispatch({ type: 'dial_failed', message: 'O servidor recusou a discagem. O motor parou para conferência.' });
+      dispatch({ type: 'dial_failed', message: 'O servidor recusou a discagem. A discagem parou para conferência.' });
       return;
     }
     if (SKIP_CODES.has(code)) excluded.current.add(leadId);
@@ -302,7 +313,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     toast.info('Número inválido: lead pulado nesta sessão.');
     refusalsRef.current += 1;
     if (refusalsRef.current >= MAX_CONSECUTIVE_REFUSALS) {
-      dispatch({ type: 'dial_failed', message: 'Vários números inválidos seguidos. O motor parou para conferência.' });
+      dispatch({ type: 'dial_failed', message: 'Vários números inválidos seguidos. A discagem parou para conferência.' });
       return;
     }
     dispatch({ type: 'next_lead' });
@@ -564,7 +575,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       return;
     }
     const t = setInterval(() => {
-      if (!refreshTabLock(browserStorage(), id, Date.now())) dispatch({ type: 'pause', reason: 'blocked', message: 'O motor passou para outra aba.' });
+      if (!refreshTabLock(browserStorage(), id, Date.now())) dispatch({ type: 'pause', reason: 'blocked', message: 'A discagem passou para outra aba.' });
     }, TAB_LOCK_HEARTBEAT_MS);
     return () => clearInterval(t);
   }, [running]);
@@ -637,6 +648,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     excluded.current = new Set();
     concluded.current = new Set();
     concludedCalls.current = new Set();
+    callbackScheduledCalls.current = new Set();
     pendingConclusion.current = null;
     refusalsRef.current = 0;
     ramalBusyFirstAtRef.current = null;
@@ -649,6 +661,11 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   }
 
   async function confirmOutcome(input: { disposition: CallDisposition; notes?: string }): Promise<boolean> {
+    return confirmWith(input, true);
+  }
+
+  /** `excludeLead=false` só no "Ligar depois": o lead volta na sessão quando o retorno vencer (o servidor o segura até lá). */
+  async function confirmWith(input: { disposition: CallDisposition; notes?: string }, excludeLead: boolean): Promise<boolean> {
     const lead = current.current;
     // Já concluído pelo painel (o lead ou a ligação): clique atrasado é ignorado, mesmo depois de o motor seguir.
     if ((lead && concluded.current.has(lead.leadId)) || (callId && concludedCalls.current.has(callId))) return true;
@@ -662,10 +679,45 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       console.warn('[cockpit-auto-dial] simulado: desfecho NÃO gravado', input.disposition);
       toast.info('Simulado: desfecho não foi gravado.');
     }
-    if (lead) excluded.current.add(lead.leadId); // atendido sai da sessão (o servidor também tira, FR-9b)
+    if (lead && excludeLead) excluded.current.add(lead.leadId); // atendido sai da sessão (o servidor também tira, FR-9b)
     setCallPhase('idle');
     dispatch({ type: 'sdr_concluded' });
     return true;
+  }
+
+  async function scheduleCallback(input: { scheduledAt: Date; notes?: string }): Promise<{ ok: true } | { ok: false; error: string }> {
+    const lead = current.current;
+    if (!lead) return { ok: false, error: 'Nenhum lead em ligação.' };
+    const valid = validateCallbackAt(input.scheduledAt, new Date());
+    if (!valid.ok) return valid;
+    // Já concluído (painel ou clique anterior): ignora, como o confirmOutcome.
+    if (concluded.current.has(lead.leadId) || (callId && concludedCalls.current.has(callId))) return { ok: true };
+    if (live && !callId) return { ok: false, error: 'Não encontrei a ligação deste lead. Tente de novo em instantes.' };
+    if (!live || !callId) {
+      console.warn('[cockpit-auto-dial] simulado: retorno e desfecho NÃO gravados (ligar depois)');
+      toast.info('Simulado: nada é registrado.');
+      setCallPhase('idle');
+      dispatch({ type: 'sdr_concluded' });
+      return { ok: true };
+    }
+    if (!callbackScheduledCalls.current.has(callId)) {
+      // Sem `executedStep`: o motor não avança a cadência (D6). O retorno pausa a cadência até o dia útil seguinte.
+      const r = await scheduleActivity({
+        leadId: lead.leadId,
+        channel: 'phone',
+        scheduledAt: input.scheduledAt.toISOString(),
+        ...(input.notes ? { notes: input.notes } : {}),
+        pauseCadenceUntilReturn: true,
+      }).catch(() => null);
+      if (!r?.success) return { ok: false, error: r && !r.success ? r.error : 'Falha ao agendar o retorno' };
+      callbackScheduledCalls.current.add(callId);
+    }
+    const confirmed = await confirmWith({ disposition: 'callback_requested', notes: input.notes }, false);
+    if (!confirmed) {
+      return { ok: false, error: 'O retorno foi agendado, mas o desfecho da ligação não foi registrado. Tente de novo: só o desfecho será reenviado.' };
+    }
+    concludedCalls.current.add(callId); // clique atrasado não regrava; o lead NÃO entra em `concluded` (ele volta no retorno)
+    return { ok: true };
   }
 
   return {
@@ -682,6 +734,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     resume: () => dispatch({ type: 'resume' }),
     confirmOutcome,
     concludeExternally,
+    scheduleCallback,
     startError,
     leadCardExtras,
     skippedLeads,

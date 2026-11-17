@@ -27,10 +27,10 @@ function engine(state: CockpitAutoDialState, extra: Partial<UseCockpitAutoDialRe
 const status = () => screen.getByTestId('auto-dial-status').textContent;
 
 describe('CockpitAutoDialBar', () => {
-  it('desligado: só Iniciar motor, e o clique chama start', () => {
+  it('desligado: só Iniciar discagem, e o clique chama start', () => {
     const e = engine({ phase: 'off' });
     render(<CockpitAutoDialBar engine={e} sessionCalls={0} />);
-    expect(status()).toBe('Motor desligado');
+    expect(status()).toBe('Discagem desligada');
     expect(screen.queryByTestId('auto-dial-pause')).toBeNull();
     expect(screen.queryByTestId('auto-dial-stop')).toBeNull();
     fireEvent.click(screen.getByTestId('auto-dial-start'));

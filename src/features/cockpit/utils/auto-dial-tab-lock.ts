@@ -67,4 +67,4 @@ export function releaseTabLock(storage: LockStorage | null | undefined, tabId: s
   }
 }
 
-export const TAB_LOCK_MESSAGE = 'O motor já está rodando em outra aba.';
+export const TAB_LOCK_MESSAGE = 'A discagem já está rodando em outra aba.';

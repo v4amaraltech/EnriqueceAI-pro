@@ -105,16 +105,16 @@ export function isCockpitAutoDialOn(state: CockpitAutoDialState): boolean {
 }
 
 const BLOCKED_TEXT: Record<AutoDialBlockedReason, string> = {
-  outside_hours: 'Fora do horário (seg–sex 8h–20h): motor bloqueado',
-  holiday: 'Feriado: motor bloqueado',
-  daily_cap: 'Teto do dia atingido: motor bloqueado',
-  empty: 'Sem leads disponíveis agora: motor parado',
+  outside_hours: 'Fora do horário (seg–sex 8h–20h): discagem bloqueada',
+  holiday: 'Feriado: discagem bloqueada',
+  daily_cap: 'Teto do dia atingido: discagem bloqueada',
+  empty: 'Sem leads disponíveis agora: discagem parada',
 };
 
 /** Texto curto do estado para a tela; reaproveita `describeAutoDial` e cobre os textos novos. */
 export function describeCockpitAutoDial(state: CockpitAutoDialState): string | null {
   if (state.phase === 'blocked') return BLOCKED_TEXT[state.reason];
-  if (state.phase === 'concluded-call') return 'Lead concluído pelo painel: o motor segue quando a ligação terminar';
+  if (state.phase === 'concluded-call') return 'Lead concluído pelo painel: a discagem segue quando a ligação terminar';
   if (state.phase === 'awaiting-sdr' && state.reason === 'answered') return 'Em conversa: confirme o desfecho para seguir';
   return describeAutoDial(state);
 }

@@ -153,7 +153,7 @@ describe('NextCallCard com o motor', () => {
     setEngine(IN_CALL, { simulated: false });
     render(<NextCallCard card={null} dialerProvider="api4com" autoDial={{ enabled: true, live: true }} leadCardEnabled />);
     const panel = screen.getByTestId('motor-lead-panel');
-    expect(within(panel).queryByRole('button', { name: /ligar|discar|desligar|chamar/i })).toBeNull();
+    expect(within(panel).queryByRole('button', { name: /^(?!ligar depois)(.*)(ligar|discar|desligar|chamar)/i })).toBeNull();
     // o Desligar fica só na barra do motor, fora do painel
     expect(screen.getByTestId('auto-dial-hangup')).toBeTruthy();
     expect(panel.contains(screen.getByTestId('auto-dial-hangup'))).toBe(false);

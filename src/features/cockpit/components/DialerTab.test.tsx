@@ -78,7 +78,7 @@ describe('aba Discador', () => {
     expect(screen.getByTestId('dialer-queue')).toBeTruthy();
     expect(screen.getByTestId('auto-dial-bar')).toBeTruthy();
     expect(screen.getByTestId('auto-dial-simulated')).toBeTruthy();
-    expect(screen.getByTestId('auto-dial-clean-state').textContent).toContain('Motor desligado');
+    expect(screen.getByTestId('auto-dial-clean-state').textContent).toContain('Discagem desligada');
     expect(screen.queryByTestId('next-call-card')).toBeNull();
     expect(screen.queryByTestId('why-now')).toBeNull();
     expect(screen.queryByRole('button', { name: /Ligar agora/ })).toBeNull();
@@ -112,7 +112,7 @@ describe('aba Discador', () => {
     setEngine(state);
     render(<DialerTab autoDial={AUTO} />);
     expect(screen.getByTestId('dialer-queue').hasAttribute('disabled')).toBe(true);
-    expect(screen.getByTestId('dialer-queue-hint').textContent).toBe('Pare o motor para trocar de fila.');
+    expect(screen.getByTestId('dialer-queue-hint').textContent).toBe('Pare a discagem para trocar de fila.');
   });
 
   it('desligado: a fila está habilitada e sem a dica', () => {
@@ -127,7 +127,7 @@ describe('aba Discador', () => {
     render(<DialerTab autoDial={AUTO} leadCardEnabled />);
     const panel = screen.getByTestId('motor-lead-panel');
     expect(within(panel).getAllByText('Acme Ltda').length).toBeGreaterThan(0);
-    expect(within(panel).queryByRole('button', { name: /ligar|discar|desligar/i })).toBeNull();
+    expect(within(panel).queryByRole('button', { name: /^(?!ligar depois)(.*)(ligar|discar|desligar)/i })).toBeNull();
     expect(screen.getByTestId('auto-dial-clean-state').textContent).toContain('Acme Ltda');
     expect(screen.queryByTestId('why-now')).toBeNull();
     expect(screen.queryByRole('button', { name: /Ligar agora/ })).toBeNull();
