@@ -64,12 +64,13 @@ const answer = vi.hoisted(() => ({
   value: 'not_answered' as 'unknown' | 'answered' | 'not_answered',
   hangupCause: null as string | null,
   durationSeconds: 0,
+  exhausted: false,
 }));
 vi.mock('./useWebphoneLeadAnswer', () => ({
   useWebphoneLeadAnswer: (callId: string | null) => (callId ? answer.value : 'unknown'),
   useWebphoneCallOutcome: (callId: string | null) =>
     callId
-      ? { leadAnswer: answer.value, hangupCause: answer.hangupCause, durationSeconds: answer.durationSeconds }
+      ? { leadAnswer: answer.value, hangupCause: answer.hangupCause, durationSeconds: answer.durationSeconds, exhausted: answer.exhausted }
       : { leadAnswer: 'unknown', hangupCause: null, durationSeconds: 0 },
 }));
 
@@ -283,6 +284,79 @@ describe('WebphonePanel — motivo quando o lead não atende', () => {
 
     expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
     expect(screen.queryByTestId('webphone-hangup-reason')).not.toBeInTheDocument();
+  });
+
+  it('webhook ainda não chegou: mostra "Confirmando com a operadora…" e NÃO "Não atendida"', async () => {
+    answer.value = 'unknown';
+    answer.hangupCause = null;
+    answer.exhausted = false;
+    publish(true);
+    render(<WebphonePanel />);
+
+    await endCall(Date.now());
+
+    expect(screen.getByTestId('webphone-confirming')).toHaveTextContent('Confirmando com a operadora…');
+    expect(screen.queryByText('Não atendida')).not.toBeInTheDocument();
+  });
+
+  it('lead atendeu: mostra a duração, sem "Confirmando" nem "Não atendida"', async () => {
+    answer.value = 'answered';
+    answer.hangupCause = 'NORMAL_CLEARING';
+    publish(true);
+    render(<WebphonePanel />);
+
+    await endCall(Date.now());
+
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.getByText(/00:0/)).toBeInTheDocument();
+    expect(screen.queryByTestId('webphone-confirming')).not.toBeInTheDocument();
+    expect(screen.queryByText('Não atendida')).not.toBeInTheDocument();
+  });
+
+  it('sem contexto da ligação: segue o ramo antigo, sem "Confirmando"', async () => {
+    answer.value = 'unknown';
+    answer.hangupCause = null;
+    answer.exhausted = false;
+    render(<WebphonePanel />);
+
+    await endCall(Date.now());
+
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    expect(screen.queryByTestId('webphone-confirming')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('webphone-unconfirmed')).not.toBeInTheDocument();
+  });
+
+  it('webhook chega depois: "Confirmando" troca para "Não atendida" + motivo', async () => {
+    answer.value = 'unknown';
+    answer.hangupCause = null;
+    answer.exhausted = false;
+    publish(true);
+    const { rerender } = render(<WebphonePanel />);
+    await endCall(Date.now());
+    expect(screen.getByTestId('webphone-confirming')).toBeInTheDocument();
+
+    answer.value = 'not_answered';
+    answer.hangupCause = 'NORMAL_TEMPORARY_FAILURE';
+    rerender(<WebphonePanel />);
+
+    expect(screen.queryByTestId('webphone-confirming')).not.toBeInTheDocument();
+    expect(screen.getByText('Não atendida')).toBeInTheDocument();
+    expect(screen.getByTestId('webphone-hangup-reason')).toBeInTheDocument();
+  });
+
+  it('consultas esgotadas sem resposta: "Resultado não confirmado", nunca "Não atendida"', async () => {
+    answer.value = 'unknown';
+    answer.hangupCause = null;
+    answer.exhausted = true;
+    publish(true);
+    render(<WebphonePanel />);
+
+    await endCall(Date.now());
+
+    expect(screen.getByTestId('webphone-unconfirmed')).toHaveTextContent('Resultado não confirmado');
+    expect(screen.queryByTestId('webphone-confirming')).not.toBeInTheDocument();
+    expect(screen.queryByText('Não atendida')).not.toBeInTheDocument();
+    answer.exhausted = false;
   });
 
   it('lead atendeu: nunca mostra motivo, mesmo com causa gravada', async () => {
