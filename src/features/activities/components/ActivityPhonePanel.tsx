@@ -325,21 +325,41 @@ export function ActivityPhonePanel({
 
   function handleRetryAttempt(attemptNotes: string) {
     const attempt = buildCurrentAttempt(attemptNotes);
+    const previousCallId = callId;
+    const previousSeconds = resultSeconds;
+
+    setAttempts((prev) => [...prev, attempt]);
+    setCallStatus('');
+    setCallState('idle');
+    setCallId(null);
+    setProviderCallId(null);
+    setElapsed(0);
+    setCallDuration(0);
+
+    // Re-disca na hora: o SDR liga várias vezes até conectar sem fechar o modal e
+    // reclicar no botão. A nova discagem gera um callId novo, então cada
+    // tentativa vira um registro distinto.
+    //
+    // A discagem sai ANTES de gravar a tentativa anterior e de buscar os
+    // telefones: o Next manda as Server Actions uma por vez, em fila. Com a
+    // gravação na frente, o `initiateCall` esperava e o ramal levava ~10 s
+    // para tocar no "Ligar de novo".
+    void handleInitiateCall();
 
     // Persist notes + duration. Call status (significant/not_connected/etc)
     // is owned by the API4COM webhook now — we don't pass it here.
-    if (callId) {
-      const notesRev = notesRevisionForSubmit(callId, attemptNotes);
+    if (previousCallId) {
+      const notesRev = notesRevisionForSubmit(previousCallId, attemptNotes);
       classifyWebphoneCall({
-        callId,
-        clientDurationSeconds: resultSeconds,
+        callId: previousCallId,
+        clientDurationSeconds: previousSeconds,
         notes: attemptNotes || undefined,
         notesRev: attemptNotes.trim() ? notesRev : undefined,
         leadId,
       }).catch((err: unknown) =>
         console.error('[ActivityPhonePanel] classifyWebphoneCall failed:', err),
       );
-      clearWebphoneCallContext(callId);
+      clearWebphoneCallContext(previousCallId);
     }
 
     // Re-fetch lead phones in case new ones were added during the call
@@ -352,19 +372,6 @@ export function ActivityPhonePanel({
         }),
       )
       .catch(() => {});
-
-    setAttempts((prev) => [...prev, attempt]);
-    setCallStatus('');
-    setCallState('idle');
-    setCallId(null);
-    setProviderCallId(null);
-    setElapsed(0);
-    setCallDuration(0);
-
-    // Re-disca na hora: o SDR liga várias vezes até conectar sem fechar o modal e
-    // reclicar no botão. A tentativa anterior já foi persistida acima; a nova
-    // discagem gera um callId novo, então cada tentativa vira um registro distinto.
-    void handleInitiateCall();
   }
 
   function handleSubmitResult(

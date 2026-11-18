@@ -38,8 +38,8 @@ const outcome = vi.hoisted(() => ({
   pending: null as Promise<void> | null,
   release: () => {},
 }));
-vi.mock('@/features/calls/actions/get-webphone-call-outcome', () => ({
-  getWebphoneCallOutcome: vi.fn(async ({ callId }: { callId: string }) => {
+vi.mock('@/features/calls/fetch-webphone-call-outcome', () => ({
+  fetchWebphoneCallOutcome: vi.fn(async (callId: string) => {
     outcome.calls.push(callId);
     if (callId === '559d0ad0-0000-4000-8000-0000000000a1' && outcome.pending) await outcome.pending;
     if (!outcome.hangup) {
