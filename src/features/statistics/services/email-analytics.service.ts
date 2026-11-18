@@ -12,8 +12,8 @@ import type {
   DailyEmailTrendEntry,
   EmailAnalyticsData,
 } from '../types/email-analytics.types';
-import type { InteractionQueryRow } from '../types/query-rows';
 import { safeRate } from '../types/shared';
+import { type EmailStatsRow, isProspectingEmailRow } from './email-scope';
 import { readAllRows } from './read-all-rows';
 
 export async function fetchEmailAnalyticsData(
@@ -46,11 +46,16 @@ export async function fetchEmailAnalyticsData(
   }
 
   // Paginado (antes `.limit(10000)`, que cortava em silêncio — set/2026).
+  // Lembretes de reunião e feedback do closer não têm cadência: o filtro de
+  // cadence_id já os corta no banco; o resto da regra fica em email-scope.ts.
   const buildBaseQuery = (leadChunk?: string[]) => {
     let q = from(supabase, 'interactions')
-      .select('type, lead_id, cadence_id, created_at')
+      .select(
+        'type, lead_id, cadence_id, created_at, external_id, manual_send:metadata->>manual_send, meeting_reminder:metadata->>meeting_reminder, source:metadata->>source',
+      )
       .eq('org_id', orgId)
       .eq('channel', 'email')
+      .not('cadence_id', 'is', null)
       .gte('created_at', periodStart)
       .lte('created_at', periodEnd);
     if (isUuid(cadenceId)) q = q.eq('cadence_id', cadenceId);
@@ -58,89 +63,109 @@ export async function fetchEmailAnalyticsData(
     return q.order('created_at', { ascending: true }).order('id', { ascending: true });
   };
 
-  let interactions: InteractionQueryRow[];
+  let rows: EmailStatsRow[];
   if (leadIdFilter && leadIdFilter.length > 0) {
-    interactions = await chunkedIn<InteractionQueryRow>(leadIdFilter, async (chunk) => ({
-      data: await readAllRows<InteractionQueryRow>('e-mail: interações', () => buildBaseQuery(chunk)),
+    rows = await chunkedIn<EmailStatsRow>(leadIdFilter, async (chunk) => ({
+      data: await readAllRows<EmailStatsRow>('e-mail: interações', () => buildBaseQuery(chunk)),
       error: null,
     }));
   } else {
-    interactions = await readAllRows<InteractionQueryRow>('e-mail: interações', () => buildBaseQuery());
+    rows = await readAllRows<EmailStatsRow>('e-mail: interações', () => buildBaseQuery());
   }
 
-  if (interactions.length === 0) {
-    return emptyData();
-  }
-
-  return calculateEmailAnalytics(interactions);
+  return calculateEmailAnalytics(rows);
 }
 
-function calculateEmailAnalytics(interactions: InteractionQueryRow[]): EmailAnalyticsData {
-  const totalSent = interactions.filter((i) => i.type === 'sent').length;
-  const totalBounced = interactions.filter((i) => i.type === 'bounced').length;
-  // Estimate delivered as sent - bounced (Gmail doesn't provide delivery receipts)
-  const totalDelivered = Math.max(0, totalSent - totalBounced);
-  const totalOpened = interactions.filter((i) => i.type === 'opened').length;
-  const totalClicked = interactions.filter((i) => i.type === 'clicked').length;
-  const totalReplied = interactions.filter((i) => i.type === 'replied').length;
+/**
+ * Lead → date (YYYY-MM-DD) of its first event of `type`, only for leads that
+ * received a prospecting e-mail in the period. Bounce/reply rows don't carry
+ * the sender's `source`, so an Ana IA e-mail's bounce would otherwise leak in.
+ * Rows come sorted by created_at.
+ */
+function firstEventByLead(rows: EmailStatsRow[], type: string, emailed: Set<string>): Map<string, string> {
+  const first = new Map<string, string>();
+  for (const row of rows) {
+    if (row.type !== type || first.has(row.lead_id) || !emailed.has(row.lead_id)) continue;
+    first.set(row.lead_id, row.created_at.slice(0, 10));
+  }
+  return first;
+}
 
-  // Rates are per unique prospect (distinct leads who acted ÷ distinct leads
-  // emailed), matching the cadence list (#99) so the same cadence shows the same
-  // open/reply rate across screens. The total* counts and the volume funnel
-  // below stay event-based.
-  const sentLeads = new Set(interactions.filter((i) => i.type === 'sent').map((i) => i.lead_id)).size;
-  const openedLeads = new Set(interactions.filter((i) => i.type === 'opened').map((i) => i.lead_id)).size;
-  const clickedLeads = new Set(interactions.filter((i) => i.type === 'clicked').map((i) => i.lead_id)).size;
-  const repliedLeads = new Set(interactions.filter((i) => i.type === 'replied').map((i) => i.lead_id)).size;
+/**
+ * Prospecting e-mail metrics. `totalSent` counts e-mails (volume); everything
+ * else counts distinct leads, so a lead whose reply was recorded 12 times
+ * (old thread re-checks) counts once.
+ */
+export function calculateEmailAnalytics(allRows: EmailStatsRow[]): EmailAnalyticsData {
+  const rows = [...allRows].filter(isProspectingEmailRow).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const sentRows = rows.filter((r) => r.type === 'sent');
+  if (sentRows.length === 0) return emptyData();
 
-  const funnel = buildFunnel(totalSent, totalDelivered, totalOpened, totalClicked, totalReplied);
-  const dailyTrend = buildDailyTrend(interactions);
-  const bounceTrend = buildBounceTrend(interactions);
+  const totalSent = sentRows.length;
+  const emailed = new Set(sentRows.map((r) => r.lead_id));
+  const emailedLeads = emailed.size;
+
+  const firstOpened = firstEventByLead(rows, 'opened', emailed);
+  const firstClicked = firstEventByLead(rows, 'clicked', emailed);
+  const firstReplied = firstEventByLead(rows, 'replied', emailed);
+  const firstBounced = firstEventByLead(rows, 'bounced', emailed);
+
+  const totalOpened = firstOpened.size;
+  const totalClicked = firstClicked.size;
+  const totalReplied = firstReplied.size;
+  const totalBounced = firstBounced.size;
+  // Gmail não confirma entrega: entregue = recebeu e-mail e não deu bounce.
+  const totalDelivered = Math.max(0, emailedLeads - totalBounced);
 
   return {
     totalSent,
+    emailedLeads,
     totalDelivered,
     totalOpened,
     totalClicked,
     totalReplied,
     totalBounced,
-    openRate: safeRate(openedLeads, sentLeads),
-    clickRate: safeRate(clickedLeads, sentLeads),
-    replyRate: safeRate(repliedLeads, sentLeads),
-    funnel,
-    dailyTrend,
-    bounceTrend,
+    openRate: safeRate(totalOpened, emailedLeads),
+    clickRate: safeRate(totalClicked, emailedLeads),
+    replyRate: safeRate(totalReplied, emailedLeads),
+    bounceRate: safeRate(totalBounced, emailedLeads),
+    funnel: buildFunnel(emailedLeads, totalDelivered, totalOpened, totalClicked, totalReplied),
+    dailyTrend: buildDailyTrend(sentRows, firstOpened, firstReplied),
+    bounceTrend: buildBounceTrend(firstBounced),
   };
 }
 
 function buildFunnel(
-  sent: number,
+  emailed: number,
   delivered: number,
   opened: number,
   clicked: number,
   replied: number,
 ): FunnelStage[] {
   return [
-    { label: 'Enviados', count: sent, percentage: 100, color: INTERACTION_TYPE_COLORS.sent! },
-    { label: 'Entregues', count: delivered, percentage: safeRate(delivered, sent), color: INTERACTION_TYPE_COLORS.delivered! },
-    { label: 'Abertos', count: opened, percentage: safeRate(opened, sent), color: INTERACTION_TYPE_COLORS.opened! },
-    { label: 'Clicados', count: clicked, percentage: safeRate(clicked, sent), color: INTERACTION_TYPE_COLORS.clicked! },
-    { label: 'Respondidos', count: replied, percentage: safeRate(replied, sent), color: INTERACTION_TYPE_COLORS.replied! },
+    { label: 'Receberam e-mail', count: emailed, percentage: 100, color: INTERACTION_TYPE_COLORS.sent! },
+    { label: 'Entregues', count: delivered, percentage: safeRate(delivered, emailed), color: INTERACTION_TYPE_COLORS.delivered! },
+    { label: 'Abriram', count: opened, percentage: safeRate(opened, emailed), color: INTERACTION_TYPE_COLORS.opened! },
+    { label: 'Clicaram', count: clicked, percentage: safeRate(clicked, emailed), color: INTERACTION_TYPE_COLORS.clicked! },
+    { label: 'Responderam', count: replied, percentage: safeRate(replied, emailed), color: INTERACTION_TYPE_COLORS.replied! },
   ];
 }
 
-function buildDailyTrend(interactions: InteractionQueryRow[]): DailyEmailTrendEntry[] {
+function buildDailyTrend(
+  sentRows: EmailStatsRow[],
+  firstOpened: Map<string, string>,
+  firstReplied: Map<string, string>,
+): DailyEmailTrendEntry[] {
   const dayMap = new Map<string, { sent: number; opened: number; replied: number }>();
+  const bump = (date: string, key: 'sent' | 'opened' | 'replied') => {
+    const entry = dayMap.get(date) ?? { sent: 0, opened: 0, replied: 0 };
+    entry[key]++;
+    dayMap.set(date, entry);
+  };
 
-  for (const interaction of interactions) {
-    if (interaction.type !== 'sent' && interaction.type !== 'opened' && interaction.type !== 'replied') continue;
-    const dateStr = interaction.created_at.slice(0, 10);
-    const entry = dayMap.get(dateStr) ?? { sent: 0, opened: 0, replied: 0 };
-    if (interaction.type === 'sent') entry.sent++;
-    else if (interaction.type === 'opened') entry.opened++;
-    else if (interaction.type === 'replied') entry.replied++;
-    dayMap.set(dateStr, entry);
-  }
+  for (const row of sentRows) bump(row.created_at.slice(0, 10), 'sent');
+  for (const date of firstOpened.values()) bump(date, 'opened');
+  for (const date of firstReplied.values()) bump(date, 'replied');
 
   return Array.from(dayMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
@@ -151,14 +176,9 @@ function buildDailyTrend(interactions: InteractionQueryRow[]): DailyEmailTrendEn
     }));
 }
 
-function buildBounceTrend(interactions: InteractionQueryRow[]): DailyBounceTrendEntry[] {
+function buildBounceTrend(firstBounced: Map<string, string>): DailyBounceTrendEntry[] {
   const dayMap = new Map<string, number>();
-
-  for (const interaction of interactions) {
-    if (interaction.type !== 'bounced') continue;
-    const dateStr = interaction.created_at.slice(0, 10);
-    dayMap.set(dateStr, (dayMap.get(dateStr) ?? 0) + 1);
-  }
+  for (const date of firstBounced.values()) dayMap.set(date, (dayMap.get(date) ?? 0) + 1);
 
   return Array.from(dayMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
@@ -169,10 +189,10 @@ function buildBounceTrend(interactions: InteractionQueryRow[]): DailyBounceTrend
     }));
 }
 
-
 function emptyData(): EmailAnalyticsData {
   return {
     totalSent: 0,
+    emailedLeads: 0,
     totalDelivered: 0,
     totalOpened: 0,
     totalClicked: 0,
@@ -181,6 +201,7 @@ function emptyData(): EmailAnalyticsData {
     openRate: 0,
     clickRate: 0,
     replyRate: 0,
+    bounceRate: 0,
     funnel: [],
     dailyTrend: [],
     bounceTrend: [],
