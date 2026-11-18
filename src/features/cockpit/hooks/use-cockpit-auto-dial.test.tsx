@@ -15,7 +15,10 @@ vi.mock('../actions/auto-dial', () => ({
   getNextAutoDialCardAction: vi.fn(),
   dialAutoLeadAction: vi.fn(),
   resolveAutoDialNoAnswerAction: vi.fn(),
+  // Veredito padrão: conversou (as ligações atendidas dos testes seguem para awaiting-sdr).
+  classifyAutoDialAnsweredAction: vi.fn(async () => ({ success: true, data: { status: 'verdict', verdict: 'conversou', reason: 'long_enough', machine: false } })),
   confirmAutoDialOutcomeAction: vi.fn(),
+  getAutoDialCarrierHangupAction: vi.fn(async () => ({ success: true, data: { status: 'none' } })),
 }));
 vi.mock('@/features/integrations/webphone/useApi4ComWebphone', () => ({ useApi4ComWebphone: vi.fn() }));
 vi.mock('@/features/integrations/webphone/useWebphoneLeadAnswer', () => ({ useWebphoneLeadAnswer: vi.fn() }));
@@ -217,6 +220,28 @@ describe('motor simulado (FR-18)', () => {
     expect(vi.mocked(getNextAutoDialCardAction).mock.calls[1]?.[0]).toMatchObject({ excludeLeadIds: ['A'] });
   });
 
+  it('lead_unavailable (ganho / não retomar): pula o lead, escolhe o PRÓXIMO elegível e disca esse, sem pausar', async () => {
+    vi.mocked(getNextAutoDialCardAction).mockResolvedValueOnce(ok('W')).mockResolvedValueOnce(ok('B'));
+    vi.mocked(dialAutoLeadAction)
+      .mockResolvedValueOnce({ success: true, data: { status: 'refused', code: 'lead_unavailable' } })
+      .mockResolvedValueOnce(sim());
+    const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));
+    await startIt(result);
+    await advance(5000);
+    expect(result.current.state).toMatchObject({ phase: 'countdown' });
+    expect(vi.mocked(getNextAutoDialCardAction).mock.calls[1]?.[0]).toMatchObject({ excludeLeadIds: ['W'] });
+    await advance(5000);
+    expect(vi.mocked(dialAutoLeadAction).mock.calls[1]?.[0]).toMatchObject({ leadId: 'B' });
+  });
+
+  it('lead_unavailable sempre: não fica em laço (pausa depois de recusas demais)', async () => {
+    vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'refused', code: 'lead_unavailable' } });
+    const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));
+    await startIt(result);
+    for (let i = 0; i < 8; i++) await advance(5000);
+    expect(result.current.state).toMatchObject({ phase: 'paused', reason: 'dial_failed' });
+  });
+
   it('recusas seguidas demais pausam o motor (sem laço infinito)', async () => {
     vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'refused', code: 'held' } });
     const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));
@@ -325,7 +350,7 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     await advance(5000);
     // o navegador manda só o leadId; o telefone é lido no servidor
     expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: true });
-    expect(setWebphoneCallContext).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call-1', ownerHandlesResult: true, dialToken: 'tok' }));
+    expect(setWebphoneCallContext).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call-1', ownerHandlesResult: true, hideNotes: true, dialToken: 'tok' }));
     expect(result.current.state.phase).toBe('awaiting-session');
 
     phone.call = liveCall('active');
@@ -394,7 +419,7 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     expect(result.current.state).toEqual({ phase: 'awaiting-sdr', reason: 'answered' });
   });
 
-  it('20 s sem sinal da operadora: espera o SDR (não segue sozinho)', async () => {
+  it('45 s sem sinal da operadora: espera o SDR (não segue sozinho)', async () => {
     vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'dialed', callId: 'call-1', providerCallId: 'prov-1', attemptNo: 1 } });
     phone.call = liveCall('active');
     const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
@@ -402,7 +427,7 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     await advance(5000);
     phone.call = liveCall('ended');
     rerender();
-    await advance(20_000);
+    await advance(45_000);
     expect(result.current.state).toEqual({ phase: 'awaiting-sdr', reason: 'timeout' });
   });
 
@@ -465,13 +490,15 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     expect(result.current.leadCardExtras).toBeNull();
   });
 
-  it('POST aceito sem a sessão SIP desta aba em 2 s: pausa e não repete', async () => {
+  it('POST aceito sem a sessão SIP desta aba em 15 s: pausa e não repete', async () => {
     vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'dialed', callId: 'call-1', providerCallId: 'prov-1', attemptNo: 1 } });
     const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
     await startIt(result);
     await advance(5000);
     expect(result.current.state.phase).toBe('awaiting-session');
     await advance(2100);
+    expect(result.current.state.phase).toBe('awaiting-session'); // 2 s não pausa mais (prazo do Cockpit = 15 s)
+    await advance(14_000);
     expect(result.current.state).toMatchObject({ phase: 'paused', reason: 'blocked' });
     expect(dialAutoLeadAction).toHaveBeenCalledTimes(1);
   });

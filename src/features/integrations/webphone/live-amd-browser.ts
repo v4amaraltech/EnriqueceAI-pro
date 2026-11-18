@@ -1,4 +1,5 @@
 import { recordLiveAmd } from '@/features/calls/actions/record-live-amd';
+import type { AutoHangupMarker } from '@/features/calls/live-amd-metadata';
 import { isCarrierAutoHangupDecision } from '@/features/calls/live-amd-phrases';
 
 import { setActiveLiveAmdStop, stopActiveLiveAmd } from './live-amd-active';
@@ -28,6 +29,9 @@ export function startLiveAmdBrowser(options: {
   onCarrierHangup?: (view: LiveAmdView) => void;
 }): () => void {
   let hungUp = false;
+  // Marcador já gravado: reenviado em todo registro seguinte. A RPC troca o live_amd
+  // inteiro, então um registro que leu o estado antes do marcador chegar o apagaria.
+  let autoHangup: AutoHangupMarker | undefined;
   let stopped = false;
   let socket: WebSocket | null = null;
   let stopPump: () => void = () => undefined;
@@ -43,24 +47,47 @@ export function startLiveAmdBrowser(options: {
 
   const persist = (view: LiveAmdView, requestNextActivity: boolean) => {
     // Telemetria da captura vai junto de todo registro (o do fim da ligação inclusive).
-    void recordLiveAmd({
-      telemetry: session.telemetry(),
-      callId: options.callId,
-      prediction: view.prediction,
-      phrase: view.phrase,
-      confidence: view.confidence,
-      latencyMs: view.latencyMs,
-      predictedAt: new Date().toISOString(),
-      transcript: view.transcript,
-      requestNextActivity,
-    }).then((result) => {
-      if (!result.success || !result.data.nextActivity) return;
-      publish({
-        ...view,
-        nextActivity: result.data.nextActivity,
-        nextActivityReason: result.data.nextActivityReason,
-      });
-    });
+    // Erro síncrono ou rejeição da gravação só vão pro console: nunca derrubam a escuta nem o desligamento.
+    try {
+      void recordLiveAmd({
+        telemetry: session.telemetry(),
+        callId: options.callId,
+        prediction: view.prediction,
+        phrase: view.phrase,
+        confidence: view.confidence,
+        latencyMs: view.latencyMs,
+        predictedAt: new Date().toISOString(),
+        transcript: view.transcript,
+        requestNextActivity,
+        ...(autoHangup ? { autoHangup } : {}),
+      })
+        .then((result) => {
+          if (!result.success || !result.data.nextActivity) return;
+          publish({
+            ...view,
+            nextActivity: result.data.nextActivity,
+            nextActivityReason: result.data.nextActivityReason,
+          });
+        })
+        .catch((err) => console.error('[webphone-live-amd] registro falhou:', err));
+    } catch (err) {
+      console.error('[webphone-live-amd] registro falhou:', err);
+    }
+  };
+
+  // Fire-and-forget: falha ao gravar o marcador não impede nem atrasa o desligamento.
+  const markAutoHangup = (view: LiveAmdView) => {
+    try {
+      autoHangup = {
+        at: new Date().toISOString(),
+        phrase: view.phrase,
+        prediction: view.prediction,
+        confidence: view.confidence,
+      };
+      persist(view, false);
+    } catch (err) {
+      console.error('[webphone-live-amd] marcador de desligamento falhou:', err);
+    }
   };
 
   const apply = (effect: ReturnType<typeof session.onMessage>) => {
@@ -75,6 +102,7 @@ export function startLiveAmdBrowser(options: {
         confidence: effect.view.confidence,
       })) {
       hungUp = true;
+      markAutoHangup(effect.view);
       options.onCarrierHangup(effect.view);
     }
     if (effect.view && (effect.record || effect.requestNextActivity))

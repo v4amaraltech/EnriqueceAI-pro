@@ -289,6 +289,7 @@ export function LeadTimeline({ entries: rawEntries }: LeadTimelineProps) {
                   step_skipped_manual: 'Atividade pulada',
                   step_skipped_whatsapp_invalid: 'Passo de WhatsApp pulado (sem WhatsApp)',
                   step_skipped_email_bounced: 'Passo de e-mail pulado (bounce)',
+                  step_skipped_email_no_lead_email: 'Passo de e-mail pulado (lead sem e-mail)',
                   email_bounced: 'E-mail com bounce',
                   paused_cadence_followup: 'Tarefa criada: definir destino da cadência pausada',
                   cadence_limbo_triaged: 'Retirado do limbo de cadência',

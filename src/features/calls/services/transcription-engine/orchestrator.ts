@@ -25,6 +25,7 @@ import { formatEngineError } from './errors';
 import { isTranscriptionEngineEnabled } from './flag';
 import { type JevClient, createJevClient, resolveJevApiKey } from './jev.client';
 import { hasDurationWarning } from './review';
+import { isVoicemailTranscript } from './voicemail';
 
 /** `processing` parado há mais que isso é execução que morreu. */
 const STALE_PROCESSING_MS = 15 * 60 * 1000;
@@ -444,6 +445,19 @@ export async function processEngineCall(
       await finish(deps, 'call_qualifications', qId, {
         status: 'skipped',
         error: 'empty_transcript',
+      });
+      return 'completed';
+    }
+    // Caixa postal marcada como atendida pela operadora: não gasta o Jev.
+    if (isVoicemailTranscript(transcript.text)) {
+      await finish(deps, 'call_qualifications', qId, {
+        status: 'skipped',
+        error: 'voicemail',
+        outcome: 'not_connected',
+        interest: 'none',
+        needs_review: false,
+        model: null,
+        cost_usd: 0,
       });
       return 'completed';
     }

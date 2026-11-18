@@ -26,6 +26,8 @@ export interface WebphoneCallContext {
    * meio da ligação (o SDR trocou de tela) — aí o painel assume o resultado.
    */
   ownerHandlesResult: boolean;
+  /** O discador dono tem o próprio campo de anotação (Cockpit): o painel flutuante não mostra o dele. Ausente = mostra. */
+  hideNotes?: boolean;
   startedAt: number;
   /**
    * Token da discagem desta aba. Casa a perna SIP com o POST /calls.

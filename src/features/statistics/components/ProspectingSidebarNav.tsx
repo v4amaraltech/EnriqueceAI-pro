@@ -7,6 +7,7 @@ import {
   Activity,
   BarChart3,
   GitBranch,
+  HeartPulse,
   Mail,
   TrendingUp,
   XCircle,
@@ -27,6 +28,7 @@ const navItems: NavItem[] = [
   { label: 'Conversão', href: '/statistics/prospecting/conversion', icon: BarChart3 },
   { label: 'Desempenho', href: '/statistics/prospecting/performance', icon: TrendingUp },
   { label: 'E-mails', href: '/statistics/prospecting/emails', icon: Mail },
+  { label: 'Saúde do e-mail', href: '/statistics/prospecting/email-health', icon: HeartPulse },
   { label: 'Motivos de Perda', href: '/statistics/prospecting/loss-reasons', icon: XCircle },
 ];
 

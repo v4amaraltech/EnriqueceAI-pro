@@ -13,7 +13,10 @@ vi.mock('../actions/auto-dial', () => ({
   getNextAutoDialCardAction: vi.fn(),
   dialAutoLeadAction: vi.fn(),
   resolveAutoDialNoAnswerAction: vi.fn(),
+  // Veredito padrão: conversou (as ligações atendidas dos testes seguem para awaiting-sdr).
+  classifyAutoDialAnsweredAction: vi.fn(async () => ({ success: true, data: { status: 'verdict', verdict: 'conversou', reason: 'long_enough', machine: false } })),
   confirmAutoDialOutcomeAction: vi.fn(),
+  getAutoDialCarrierHangupAction: vi.fn(async () => ({ success: true, data: { status: 'none' } })),
   concludeAutoDialCallAction: vi.fn(),
 }));
 vi.mock('@/features/integrations/webphone/useApi4ComWebphone', () => ({ useApi4ComWebphone: vi.fn() }));
@@ -114,7 +117,7 @@ describe('live_mismatch: a página e o servidor discordam do modo (item 2)', () 
     expect(vi.mocked(getNextAutoDialCardAction).mock.calls.at(-1)?.[0]).toMatchObject({ simulatedAttempts: { A: [expect.any(String)] } });
     await advance(5000); // 2ª discagem: o servidor diz que o modo mudou
     expect(result.current.state).toEqual({ phase: 'paused', reason: 'dial_failed', message: LIVE_MISMATCH_MESSAGE });
-    expect(LIVE_MISMATCH_MESSAGE).toBe('O modo do motor mudou (simulado/real). Recarregue a página para continuar.');
+    expect(LIVE_MISMATCH_MESSAGE).toBe('O modo da discagem mudou (simulado/real). Recarregue a página para continuar.');
     await advance(30_000);
     expect(dialAutoLeadAction).toHaveBeenCalledTimes(2); // não tenta de novo sozinho
     // retomar começa limpo: as tentativas simuladas foram zeradas
@@ -148,7 +151,7 @@ describe('too_soon: ligação sua em curso ou recém-iniciada (item 3a)', () => 
 });
 
 describe('uma aba só por navegador (item 3b)', () => {
-  it('a 2ª aba vê "O motor já está rodando em outra aba." e NÃO inicia (também no simulado)', async () => {
+  it('a 2ª aba vê "A discagem já está rodando em outra aba." e NÃO inicia (também no simulado)', async () => {
     const first = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));
     await startIt(first.result);
     expect(first.result.current.state.phase).toBe('countdown');
@@ -156,8 +159,8 @@ describe('uma aba só por navegador (item 3b)', () => {
     const second = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));
     await startIt(second.result);
     expect(second.result.current.state).toEqual({ phase: 'off' });
-    expect(second.result.current.startError).toBe('O motor já está rodando em outra aba.');
-    expect(toast.error).toHaveBeenCalledWith('O motor já está rodando em outra aba.');
+    expect(second.result.current.startError).toBe('A discagem já está rodando em outra aba.');
+    expect(toast.error).toHaveBeenCalledWith('A discagem já está rodando em outra aba.');
     expect(vi.mocked(getNextAutoDialCardAction).mock.calls.length).toBe(calls);
   });
 
@@ -183,7 +186,7 @@ describe('uma aba só por navegador (item 3b)', () => {
     const second = renderHook(() => useCockpitAutoDial({ enabled: true, live: false }));
     await startIt(second.result);
     expect(second.result.current.state.phase).toBe('off');
-    expect(second.result.current.startError).toBe('O motor já está rodando em outra aba.');
+    expect(second.result.current.startError).toBe('A discagem já está rodando em outra aba.');
   });
 
   it('lock abandonado (aba fechada sem soltar, >10 s) não bloqueia', async () => {
@@ -198,7 +201,7 @@ describe('uma aba só por navegador (item 3b)', () => {
     await startIt(result);
     window.localStorage.setItem(TAB_LOCK_KEY, JSON.stringify({ tabId: 'outra-aba', at: Date.now() }));
     await advance(4000);
-    expect(result.current.state).toMatchObject({ phase: 'paused', message: 'O motor passou para outra aba.' });
+    expect(result.current.state).toMatchObject({ phase: 'paused', message: 'A discagem passou para outra aba.' });
   });
 
   it('desmontar solta o lock (e não apaga o de outra aba)', async () => {

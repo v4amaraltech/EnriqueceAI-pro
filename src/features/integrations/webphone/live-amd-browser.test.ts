@@ -25,7 +25,9 @@ function fakeSocket() {
   return socket;
 }
 
-function harness(opts: { autoHangup?: boolean; onCarrierHangup?: () => void } = {}) {
+function harness(
+  opts: { autoHangup?: boolean; onCarrierHangup?: () => void } = {},
+) {
   const socket = fakeSocket();
   const openSocket = vi.fn(() => socket as unknown as WebSocket);
   const startPump = vi.fn();
@@ -213,5 +215,66 @@ describe('desligamento automático por frase de operadora', () => {
     h.socket.emit('message', turn('Alô, quem fala? Pode falar, estou ouvindo'));
     expect(hangup).not.toHaveBeenCalled();
     h.stop();
+  });
+
+  describe('marcador de quem desligou', () => {
+    const calls = () => record.recordLiveAmd.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    const CARRIER = 'Sua chamada está sendo encaminhada para a caixa postal';
+
+    it('grava auto_hangup ANTES de chamar o desligar', async () => {
+      const order: string[] = [];
+      record.recordLiveAmd.mockImplementation(async (input: Record<string, unknown>) => {
+        if (input.autoHangup) order.push('marker');
+        return { success: false, error: 'x' };
+      });
+      const hangup = vi.fn(() => order.push('hangup'));
+      const h = await open(hangup);
+      h.socket.emit('message', turn(CARRIER));
+      expect(order.slice(0, 2)).toEqual(['marker', 'hangup']);
+      const marker = calls().find((c) => c.autoHangup)?.autoHangup as Record<string, unknown>;
+      expect(Object.keys(marker).sort()).toEqual(['at', 'confidence', 'phrase', 'prediction']);
+      expect(marker).toMatchObject({ prediction: 'voicemail' });
+      expect(typeof marker.at).toBe('string');
+      expect(marker.phrase).toBeTruthy();
+      h.stop();
+    });
+
+    it('falha ao gravar o marcador não impede o desligar', async () => {
+      record.recordLiveAmd.mockImplementation(() => {
+        throw new Error('boom');
+      });
+      const hangup = vi.fn();
+      const h = await open(hangup);
+      h.socket.emit('message', turn(CARRIER));
+      expect(hangup).toHaveBeenCalledTimes(1);
+      h.stop();
+    });
+
+    it('gravação que rejeita não impede o desligar nem vira erro não tratado', async () => {
+      record.recordLiveAmd.mockRejectedValue(new Error('rede'));
+      const hangup = vi.fn();
+      const h = await open(hangup);
+      h.socket.emit('message', turn(CARRIER));
+      await flush();
+      expect(hangup).toHaveBeenCalledTimes(1);
+      h.stop();
+    });
+
+    it('sem desligar não há marcador (pessoa atendendo)', async () => {
+      const h = await open(vi.fn());
+      h.socket.emit('message', turn('Alô, quem fala? Pode falar, estou ouvindo'));
+      h.stop();
+      expect(calls().some((c) => c.autoHangup)).toBe(false);
+    });
+
+    it('o registro do fim da ligação reenvia o marcador (a RPC troca o live_amd inteiro)', async () => {
+      const h = await open(vi.fn());
+      h.socket.emit('message', turn(CARRIER));
+      record.recordLiveAmd.mockClear();
+      h.stop();
+      const final = calls();
+      expect(final.length).toBeGreaterThan(0);
+      expect(final.every((c) => c.autoHangup)).toBe(true);
+    });
   });
 });

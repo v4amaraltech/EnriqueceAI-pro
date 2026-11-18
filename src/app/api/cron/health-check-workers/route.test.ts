@@ -16,6 +16,10 @@ vi.mock('@/lib/auth/verify-cron-secret', () => ({
   verifyCronSecret: () => true,
 }));
 
+// Mailbox alerts have their own tests (email-health-alerts.test.ts).
+vi.mock('@/features/statistics/services/email-health-alerts', () => ({
+  checkMailboxAlerts: vi.fn().mockResolvedValue({ disconnected: [], high_bounce: [] }),
+}));
 vi.mock('@/features/notifications/services/notification.service', () => ({
   createNotificationsForOrgMembers: (params: unknown) => mockNotify(params),
 }));

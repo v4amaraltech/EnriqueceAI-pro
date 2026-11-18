@@ -5,6 +5,7 @@ import { RECOVERY_BLOCKED_REASON_NAMES } from '../utils/recovery-queue';
 
 import { makeAutoDialClient, type AutoDialDb, type Row } from './auto-dial.testkit';
 import { checkDialGate, pickAutoDialLead } from './cockpit-auto-dial.service';
+import { fetchRecoveryCandidates } from './cockpit-recovery-candidates.service';
 
 vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: vi.fn() }));
 vi.mock('./cockpit-auto-dial-flag', () => ({ isCockpitAutoDialEnabled: vi.fn(), isCockpitAutoDialLive: vi.fn() }));
@@ -20,7 +21,7 @@ const ME = 'user-1';
 const viewer: CockpitViewer = { viewerId: ME, orgId: ORG, isManager: false, targetUserId: ME, targetName: 'U', sdrOptions: [] };
 
 const rec = (id: string, rank: number, over: Row = {}): Row => ({
-  lead_id: id, lost_at: daysAgo(10), loss_reason_name: 'Sem interesse', updated_at: '2026-11-06T00:00:00Z', calls_today: 0, attempts_window: 0,
+  lead_id: id, lost_at: daysAgo(10), loss_reason_name: 'Preço', updated_at: '2026-11-06T00:00:00Z', calls_today: 0, attempts_window: 0,
   last_call_at: null, conversation_today: false, callback_pending: false, recovery_rank: rank, ...over,
 });
 const normal = (id: string, rank: number): Row => ({
@@ -41,7 +42,7 @@ function setup(recovery: Row[] | null, tables: Record<string, Row[]> = {}, norma
   db = {
     tables: {
       calls: [], contact_holds: [], interactions: [], leads: [lostLead('A')], custom_fields: [], decision_events: [], scheduled_activities: [],
-      loss_reasons: [{ id: 'r-ok', org_id: ORG, name: 'Sem interesse' }, { id: 'r-block', org_id: ORG, name: 'Blocklist' }, { id: 'r-cliente', org_id: ORG, name: 'Cliente' }],
+      loss_reasons: [{ id: 'r-ok', org_id: ORG, name: 'Preço' }, { id: 'r-si', org_id: ORG, name: 'Sem interesse' }, { id: 'r-block', org_id: ORG, name: 'Blocklist' }, { id: 'r-spam', org_id: ORG, name: 'SPAM' }, { id: 'r-cliente', org_id: ORG, name: 'Cliente' }],
       ...tables,
     },
     failReads: new Set(),
@@ -83,6 +84,13 @@ describe('pickAutoDialLead: fila de recuperação', () => {
   it('D-14: a ordem vem do SQL (recovery_rank): o rank 1 vence, mesmo vindo por último na lista', async () => {
     const client = setup([rec('C', 3), rec('B', 2), rec('A', 1)]);
     expect(await pickAutoDialLead({ viewer, now: NOW, queue: 'recovery', client })).toMatchObject({ kind: 'picked', leadId: 'A' });
+  });
+
+  it('D1/D2 na ESCOLHA da recuperação: ganho e SPAM/Blocklist saem; unqualified comum continua elegível', async () => {
+    const client = setup([rec('S', 1), rec('W', 2), rec('B', 3)], {
+      leads: [lostLead('S', { loss_reason_id: 'r-spam' }), lostLead('W', { status: 'won' }), lostLead('B', { loss_reason_id: 'r-ok' })],
+    });
+    expect(await pickAutoDialLead({ viewer, now: NOW, queue: 'recovery', client })).toMatchObject({ kind: 'picked', leadId: 'B' });
   });
 
   it('normal INTACTO: sem o parâmetro (ou com "normal") chama só a RPC do #641 e a escolha é a de sempre', async () => {
@@ -163,6 +171,7 @@ describe('checkDialGate: fila de recuperação', () => {
 
   it('A-D5 reconferido no portão: motivo bloqueado recusa; "Cliente" passa; erro de leitura do motivo = não disca', async () => {
     expect(await gate(setup([], { leads: [lostLead('A', { loss_reason_id: 'r-block' })] }), 'recovery')).toEqual({ ok: false, code: 'lead_unavailable' });
+    expect(await gate(setup([], { leads: [lostLead('A', { loss_reason_id: 'r-spam' })] }), 'recovery')).toEqual({ ok: false, code: 'lead_unavailable' });
     expect(await gate(setup([], { leads: [lostLead('A', { loss_reason_id: 'r-cliente' })] }), 'recovery')).toMatchObject({ ok: true });
     const client = setup([]);
     db.failReads.add('loss_reasons');
@@ -195,5 +204,84 @@ describe('checkDialGate: fila de recuperação', () => {
     expect(await gate(client, 'recovery')).toEqual({ ok: false, code: 'flag_off' });
     expect(db.reads).toEqual([]);
     expect(db.writes).toEqual([]);
+  });
+});
+
+describe('recuperação: "Sem interesse" fica 90 dias fora e retorno futuro protege o lead', () => {
+  const lostInteraction = (leadId: string, days: number, event = 'lead_lost'): Row => ({
+    id: `i-${leadId}-${days}`, org_id: ORG, lead_id: leadId, channel: 'system', created_at: daysAgo(days), metadata: { system_event: event },
+  });
+  const future = (leadId: string, over: Row = {}): Row => ({ ...callback(leadId, -60 * 24 * 30), ...over });
+
+  it('Sem interesse perdido há menos de 90 dias sai; há mais de 90 dias entra; outros motivos intactos', async () => {
+    const client = setup([
+      rec('NOVO', 1, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(89) }),
+      rec('VELHO', 2, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(91) }),
+      rec('OUTRO', 3, { loss_reason_name: 'Preço', lost_at: daysAgo(5) }),
+      rec('ACENTO', 4, { loss_reason_name: ' SEM  interesse ', lost_at: daysAgo(5) }),
+    ]);
+    const rows = await fetchRecoveryCandidates(client, { viewer, now: NOW });
+    expect(rows?.map((r) => r.leadId)).toEqual(['VELHO', 'OUTRO']);
+  });
+
+  it('o motivo foi TROCADO há pouco num lead perdido há muito (lost_at antigo): a interação lead_lost recente mantém fora', async () => {
+    const client = setup(
+      [rec('TROCADO', 1, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(200) }), rec('ANTIGO', 2, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(200) })],
+      { interactions: [lostInteraction('TROCADO', 1), lostInteraction('ANTIGO', 120), lostInteraction('ANTIGO', 1, 'note')] },
+    );
+    const rows = await fetchRecoveryCandidates(client, { viewer, now: NOW });
+    expect(rows?.map((r) => r.leadId)).toEqual(['ANTIGO']);
+  });
+
+  it('retorno VENCIDO dispensa a quarentena (o SDR marcou a data)', async () => {
+    const client = setup([rec('R', 1, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(5), callback_pending: true })]);
+    expect((await fetchRecoveryCandidates(client, { viewer, now: NOW }))?.map((r) => r.leadId)).toEqual(['R']);
+  });
+
+  it('retorno FUTURO pendente exclui; retorno vencido inclui; outro canal/kind/status não conta', async () => {
+    const client = setup([rec('F', 1), rec('V', 2, { callback_pending: true }), rec('W', 3), rec('K', 4), rec('S', 5)], {
+      scheduled_activities: [
+        future('F'),
+        callback('V', 30),
+        future('W', { channel: 'whatsapp' }),
+        future('K', { kind: 'task' }),
+        future('S', { status: 'cancelled' }),
+      ],
+    });
+    const rows = await fetchRecoveryCandidates(client, { viewer, now: NOW });
+    expect(rows?.map((r) => r.leadId).sort()).toEqual(['K', 'S', 'V', 'W']);
+  });
+
+  it('falha de leitura das interações ou dos retornos: fila indisponível (falha fechada)', async () => {
+    for (const table of ['interactions', 'scheduled_activities']) {
+      const client = setup([rec('X', 1, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(200) })]);
+      db.failReads.add(table);
+      expect(await fetchRecoveryCandidates(client, { viewer, now: NOW })).toBeNull();
+    }
+  });
+
+  it('pick: Sem interesse recente não é escolhido; sem outro candidato a fila fica vazia', async () => {
+    const client = setup([rec('A', 1, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(10) })]);
+    expect(await pickAutoDialLead({ viewer, now: NOW, queue: 'recovery', client })).toEqual({ kind: 'empty' });
+  });
+
+  it('portão: Sem interesse recente e retorno futuro recusam; passados os 90 dias, ou com retorno vencido, liberam', async () => {
+    const gate = (leads: Row[], tables: Record<string, Row[]> = {}) =>
+      checkDialGate({ orgId: ORG, userId: ME, leadId: 'A', now: NOW, queue: 'recovery', holidays: [], client: setup([], { leads, ...tables }) });
+    expect(await gate([lostLead('A', { loss_reason_id: 'r-si', lost_at: daysAgo(10) })])).toMatchObject({ ok: false, code: 'lead_unavailable' });
+    expect(await gate([lostLead('A', { loss_reason_id: 'r-si', lost_at: daysAgo(100) })])).toMatchObject({ ok: true });
+    expect(await gate([lostLead('A', { loss_reason_id: 'r-si', lost_at: daysAgo(100) })], { interactions: [lostInteraction('A', 2)] })).toMatchObject({ ok: false, code: 'lead_unavailable' });
+    expect(await gate([lostLead('A')], { scheduled_activities: [future('A')] })).toMatchObject({ ok: false, code: 'lead_unavailable' });
+    expect(await gate([lostLead('A', { loss_reason_id: 'r-si', lost_at: daysAgo(10) })], { scheduled_activities: [callback('A', 30)] })).toMatchObject({ ok: true });
+  });
+
+  it('o filtro lead_lost é feito NO BANCO e a resposta com 1000 linhas (possível truncamento) é falha fechada', async () => {
+    const client = setup([rec('X', 1, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(200) })]);
+    await fetchRecoveryCandidates(client, { viewer, now: NOW });
+    const read = db.reads.find((r) => r.table === 'interactions');
+    expect(read?.eq).toMatchObject({ org_id: ORG, channel: 'system', 'metadata->>system_event': 'lead_lost' });
+    const many = Array.from({ length: 1000 }, (_, i) => lostInteraction('Y', 1 + (i % 80), 'lead_lost'));
+    const full = setup([rec('Y', 1, { loss_reason_name: 'Sem interesse', lost_at: daysAgo(200) })], { interactions: many.map((r, i) => ({ ...r, id: `m${i}` })) });
+    expect(await fetchRecoveryCandidates(full, { viewer, now: NOW })).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ import { Calendar } from '@/shared/components/ui/calendar';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -29,12 +30,9 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
 
-import { fetchActiveCadences, type ActiveCadence } from '../actions/fetch-active-cadences';
-import {
-  fetchLossReasons,
-  markLeadAsLost,
-  scheduleNewProspection,
-} from '../actions/lead-lifecycle';
+import type { ActiveCadence } from '../actions/fetch-active-cadences';
+import { markLeadAsLost, scheduleNewProspection } from '../actions/lead-lifecycle';
+import { fetchLossDialogOptions, getCachedLossDialogOptions } from '../fetch-loss-dialog-options';
 
 interface MarkLeadLostDialogProps {
   leadId: string;
@@ -42,6 +40,10 @@ interface MarkLeadLostDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Called after the server confirms the lead was marked as lost. */
   onSuccess?: () => void;
+  /** Título do diálogo. Padrão: "Desqualificar lead". */
+  title?: string;
+  /** Texto de apoio sob o título (ex.: lead que já está perdido). Padrão: nenhum. */
+  description?: string;
 }
 
 export function MarkLeadLostDialog({
@@ -49,14 +51,24 @@ export function MarkLeadLostDialog({
   open,
   onOpenChange,
   onSuccess,
+  title = 'Desqualificar lead',
+  description,
 }: MarkLeadLostDialogProps) {
   const [isPending, startTransition] = useTransition();
 
-  const [lossReasons, setLossReasons] = useState<LossReasonRow[]>([]);
+  // Começa com a última lista carregada: reabrir o modal não espera a rede.
+  const [lossReasons, setLossReasons] = useState<LossReasonRow[]>(
+    () => getCachedLossDialogOptions()?.lossReasons ?? [],
+  );
+  // Vira true quando a primeira busca termina (com ou sem erro).
+  const [reasonsSettled, setReasonsSettled] = useState(false);
+  const loadingReasons = lossReasons.length === 0 && !reasonsSettled;
   const [selectedReasonId, setSelectedReasonId] = useState<string | null>(null);
   const [lossNotes, setLossNotes] = useState('');
 
-  const [cadences, setCadences] = useState<ActiveCadence[]>([]);
+  const [cadences, setCadences] = useState<ActiveCadence[]>(
+    () => getCachedLossDialogOptions()?.cadences ?? [],
+  );
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
   const [scheduleCadenceId, setScheduleCadenceId] = useState<string | null>(null);
@@ -68,16 +80,21 @@ export function MarkLeadLostDialog({
     if (!open) return;
 
     let cancelled = false;
-
-    Promise.all([fetchLossReasons(), fetchActiveCadences()]).then(([reasonsResult, cadencesResult]) => {
+    // Rota GET (fora da fila de Server Actions) — ver fetch-loss-dialog-options.
+    fetchLossDialogOptions().then((options) => {
       if (cancelled) return;
-      if (reasonsResult.success) {
-        setLossReasons(reasonsResult.data);
-      } else {
-        toast.error(reasonsResult.error);
+      setReasonsSettled(true);
+      if (!options) {
+        toast.error('Não foi possível carregar os motivos de perda');
+        return;
       }
-      if (cadencesResult.success) {
-        setCadences(cadencesResult.data);
+      if (options.lossReasons.success) {
+        setLossReasons(options.lossReasons.data);
+      } else {
+        toast.error(options.lossReasons.error);
+      }
+      if (options.cadences.success) {
+        setCadences(options.cadences.data);
       }
     });
 
@@ -147,7 +164,8 @@ export function MarkLeadLostDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-xl">Desqualificar lead</DialogTitle>
+          <DialogTitle className="text-xl">{title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <div className="space-y-5">
           <div className="space-y-2">
@@ -156,8 +174,14 @@ export function MarkLeadLostDialog({
               value={selectedReasonId ?? undefined}
               onValueChange={setSelectedReasonId}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecione o motivo" />
+              <SelectTrigger className="w-full" disabled={lossReasons.length === 0}>
+                <SelectValue
+                  placeholder={
+                    lossReasons.length > 0 || !loadingReasons
+                      ? 'Selecione o motivo'
+                      : 'Carregando motivos…'
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {lossReasons.map((reason) => (

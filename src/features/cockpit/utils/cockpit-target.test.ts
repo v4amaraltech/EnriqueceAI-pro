@@ -13,9 +13,28 @@ describe('pickCockpitTarget', () => {
     expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: 'sdr-b', sdrIds })).toBe('sdr-b');
   });
 
-  it('gestor pedindo alguém fora da lista cai no primeiro SDR', () => {
-    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: 'intruso', sdrIds })).toBe('sdr-a');
-    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: null, sdrIds })).toBe('sdr-a');
+  it('gestor pedindo alguém fora da lista cai nele mesmo', () => {
+    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: 'intruso', sdrIds })).toBe('mgr');
+    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: null, sdrIds })).toBe('mgr');
+  });
+
+  it('gestor pedindo string vazia, null, uuid de outra org ou inexistente cai nele mesmo', () => {
+    for (const requested of ['', null, undefined, 'nao-existe', '00000000-0000-4000-8000-000000000000']) {
+      expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested, sdrIds })).toBe('mgr');
+    }
+  });
+
+  it('gestor sem pedido: o padrão é o próprio Cockpit', () => {
+    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: undefined, sdrIds })).toBe('mgr');
+  });
+
+  it('gestor pode escolher a si mesmo (próprio Cockpit)', () => {
+    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: 'mgr', sdrIds })).toBe('mgr');
+    expect(pickCockpitTarget({ isManager: true, viewerId: 'mgr', requested: 'mgr', sdrIds: [] })).toBe('mgr');
+  });
+
+  it('SDR pedindo o gestor continua vendo só o próprio', () => {
+    expect(pickCockpitTarget({ isManager: false, viewerId: 'sdr-a', requested: 'mgr', sdrIds })).toBe('sdr-a');
   });
 
   it('gestor sem SDR na org vê a si mesmo', () => {

@@ -26,7 +26,7 @@ export function autoDialStatusLine(engine: Pick<UseCockpitAutoDialResult, 'state
   const s = engine.state;
   switch (s.phase) {
     case 'off':
-      return 'Motor desligado';
+      return 'Discagem desligada';
     case 'countdown':
       return `Discando em ${s.secondsLeft} s`;
     case 'dialing':
@@ -43,7 +43,7 @@ export function autoDialStatusLine(engine: Pick<UseCockpitAutoDialResult, 'state
     case 'blocked':
       if (s.reason === 'outside_hours') return 'Fora do horário (seg-sex 8h-20h)';
       if (s.reason === 'daily_cap') return `Teto do dia atingido (${AUTO_DIAL_RULES.dailyCap})`;
-      return engine.statusText ?? 'Motor bloqueado';
+      return engine.statusText ?? 'Discagem bloqueada';
     default:
       return engine.statusText ?? '';
   }
@@ -62,7 +62,7 @@ export function CockpitAutoDialBar({ engine, sessionCalls, onHangup }: CockpitAu
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex items-center gap-1.5 text-xs font-semibold">
           <Zap className="h-3.5 w-3.5" />
-          Motor automático
+          Discagem automática
         </span>
         {simulated ? (
           <Badge variant="outline" className="border-amber-500 font-bold text-amber-600 dark:text-amber-400" data-testid="auto-dial-simulated">
@@ -88,7 +88,7 @@ export function CockpitAutoDialBar({ engine, sessionCalls, onHangup }: CockpitAu
           </TooltipProvider>
         )}
         <span className="text-muted-foreground ml-auto text-xs tabular-nums" data-testid="auto-dial-counter">
-          Ligações do motor nesta sessão: {sessionCalls}
+          Ligações da discagem nesta sessão: {sessionCalls}
         </span>
       </div>
 
@@ -99,7 +99,7 @@ export function CockpitAutoDialBar({ engine, sessionCalls, onHangup }: CockpitAu
         {off && (
           <Button size="sm" onClick={() => void engine.start()} data-testid="auto-dial-start">
             <Play className="mr-1.5 h-3.5 w-3.5" />
-            Iniciar motor
+            Iniciar discagem
           </Button>
         )}
         {!off && !paused && !blocked && (

@@ -226,3 +226,16 @@ describe('noAnswerEvent', () => {
     expect(noAnswerEvent(2, { maxAttemptsPerDay: 2 })).toEqual({ type: 'lead_answer', answer: 'not_answered' });
   });
 });
+
+describe('not_conversation (link "Não foi conversa")', () => {
+  it('1ª/2ª tentativa: vai para o próximo lead (advancing), sem gravar', () => {
+    expect(reduceCockpitAutoDial({ phase: 'awaiting-sdr', reason: 'answered' }, { type: 'not_conversation', attemptNo: 1 })).toEqual({ phase: 'advancing' });
+    expect(reduceCockpitAutoDial({ phase: 'awaiting-sdr', reason: 'timeout' }, { type: 'not_conversation', attemptNo: 2 })).toEqual({ phase: 'advancing' });
+  });
+  it('3ª tentativa: auto-completing(no_answer) = sinal para gravar', () => {
+    expect(reduceCockpitAutoDial({ phase: 'awaiting-sdr', reason: 'answered' }, { type: 'not_conversation', attemptNo: 3 })).toEqual({ phase: 'auto-completing', outcome: 'no_answer' });
+  });
+  it.each([{ phase: 'off' }, { phase: 'in-call' }, { phase: 'resolving' }, { phase: 'concluded-call' }] as CockpitAutoDialState[])('fora do awaiting-sdr (%o) é ignorado', (from) => {
+    expect(reduceCockpitAutoDial(from, { type: 'not_conversation', attemptNo: 1 })).toEqual(from);
+  });
+});

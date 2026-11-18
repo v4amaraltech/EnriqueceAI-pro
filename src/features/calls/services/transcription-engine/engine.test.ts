@@ -267,6 +267,32 @@ describe('processEngineCall', () => {
     expect(writes.every((w) => w.table !== 'calls')).toBe(true);
   });
 
+  it('caixa postal: grava skipped/voicemail sem chamar o Jev', async () => {
+    const { db, tables } = fakeDb(CALL);
+    const { deps, transcribe, qualify } = makeDeps(db);
+    transcribe.mockResolvedValueOnce({
+      text: 'Sua chamada está sendo encaminhada para o correio de voz.',
+      utterances: [],
+      speakersCount: 1,
+      audioSeconds: 60,
+      model: 'universal-3-5-pro',
+    });
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(qualify).not.toHaveBeenCalled();
+    expect(tables.call_qualifications?.[0]).toMatchObject({
+      call_id: 'call-1',
+      provider: 'jev',
+      status: 'skipped',
+      error: 'voicemail',
+      outcome: 'not_connected',
+      interest: 'none',
+      needs_review: false,
+      model: null,
+      cost_usd: 0,
+    });
+    expect(tables.call_qualifications?.[0]?.transcript_id).toBe(tables.call_transcripts_v2?.[0]?.id);
+  });
+
   it('sem gravação persistida ok: usa recording_url e depois busca durável, sem Storage', async () => {
     const { db } = fakeDb({
       ...CALL,

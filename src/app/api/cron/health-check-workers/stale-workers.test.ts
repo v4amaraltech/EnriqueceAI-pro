@@ -11,6 +11,10 @@ vi.mock('@/lib/auth/verify-cron-secret', () => ({ verifyCronSecret: () => true }
 vi.mock('@/lib/supabase/from', () => ({
   from: (client: { from: (t: string) => unknown }, table: string) => client.from(table),
 }));
+// Mailbox alerts have their own tests (email-health-alerts.test.ts).
+vi.mock('@/features/statistics/services/email-health-alerts', () => ({
+  checkMailboxAlerts: vi.fn().mockResolvedValue({ disconnected: [], high_bounce: [] }),
+}));
 vi.mock('@/features/notifications/services/notification.service', () => ({
   createNotificationsForOrgMembers: (p: unknown) => mocks.notify(p),
 }));

@@ -6,14 +6,17 @@ import { hangupCall } from '@/features/integrations/webphone/webphone-client';
 import { Button } from '@/shared/components/ui/button';
 
 import type { AutoDialView } from '../auto-dial.types';
-import { useCockpitAutoDial } from '../hooks/use-cockpit-auto-dial';
+import { useCockpitAutoDial, type UseCockpitAutoDialResult } from '../hooks/use-cockpit-auto-dial';
 import type { NextCallCardData } from '../types';
 
-import { AutoDialOutcomeConfirm } from './AutoDialOutcomeConfirm';
+import { AutoDialAnsweredActions } from './AutoDialAnsweredActions';
 import { autoDialStatusLine, CockpitAutoDialBar } from './CockpitAutoDialBar';
 import type { SchedulingPreview } from './CallMeetingDialogs';
 import { MotorLeadSidePanel } from './MotorLeadSidePanel';
 import { NextCallCardBody } from './NextCallCard';
+
+/** `notConversation` chega com o PR-B no hook; até lá o tipo é declarado aqui (opcional). */
+type EngineWithNotConversation = UseCockpitAutoDialResult & { notConversation?: () => void };
 
 interface Props {
   card: NextCallCardData | null;
@@ -28,8 +31,6 @@ interface Props {
 
 /** Fases em que o motor está com a ligação do lead atual (painel abre sozinho). */
 const CALL_PHASES: ReadonlySet<string> = new Set(['dialing', 'awaiting-session', 'in-call', 'resolving', 'auto-completing', 'awaiting-sdr']);
-/** Ligação no ar ou sendo conferida: Agendar/Desqualificar esperam o fim (igual ao painel da aba Tarefas). */
-const LIVE_PHASES: ReadonlySet<string> = new Set(['dialing', 'awaiting-session', 'in-call', 'resolving', 'auto-completing']);
 /** Motor parado de verdade: o cartão completo e o "Ligar agora" voltam como hoje. */
 const IDLE_PHASES: ReadonlySet<string> = new Set(['off', 'paused', 'blocked']);
 
@@ -75,9 +76,6 @@ export function NextCallCardWithEngine({ card: serverCard, dialerProvider, autoD
       }}
       statusLine={autoDialStatusLine(engine)}
       simulated={engine.simulated}
-      actionsDisabled={LIVE_PHASES.has(phase)}
-      previewOnly={previewOnly}
-      schedulingPreview={schedulingPreview}
     />
   ) : null;
 
@@ -89,7 +87,7 @@ export function NextCallCardWithEngine({ card: serverCard, dialerProvider, autoD
     return (
       <>
         {panel}
-        <section className={SHELL} aria-label="Motor automático" data-testid="next-call-card" data-clean="true">
+        <section className={SHELL} aria-label="Discagem automática" data-testid="next-call-card" data-clean="true">
           {bar}
           <p className="text-muted-foreground text-sm" data-testid="auto-dial-clean-state">
             {shortState}
@@ -99,12 +97,19 @@ export function NextCallCardWithEngine({ card: serverCard, dialerProvider, autoD
               Ver dados do lead
             </Button>
           )}
-          {phase === 'awaiting-sdr' && engine.card && (
-            <AutoDialOutcomeConfirm
-              callId={engine.callId}
-              leadId={engine.card.context.leadId}
+          {phase === 'awaiting-sdr' && panelCard && (
+            <AutoDialAnsweredActions
+              leadId={panelCard.context.leadId}
+              leadName={panelCard.context.company.name}
+              leadEmail={panelCard.context.decisionMaker.email}
+              isLost={panelCard.context.company.status === 'unqualified'}
               simulated={engine.simulated}
-              onConfirm={engine.confirmOutcome}
+              previewOnly={previewOnly}
+              schedulingPreview={schedulingPreview}
+              onLeadActed={(kind) => engine.concludeExternally?.(panelCard.context.leadId, kind)}
+              scheduleCallback={engine.scheduleCallback}
+              attemptsToday={engine.attemptNo ?? 0}
+              onNotConversation={(engine as EngineWithNotConversation).notConversation}
             />
           )}
         </section>

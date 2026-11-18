@@ -85,6 +85,6 @@ describe('conclusão pelo painel (Agendar / Desqualificar)', () => {
   it('a ligação segue "em curso" para a tela e o motor está ligado', () => {
     expect(isCallInProgress(concludedCall)).toBe(true);
     expect(isCockpitAutoDialOn(concludedCall)).toBe(true);
-    expect(describeCockpitAutoDial(concludedCall)).toBe('Lead concluído pelo painel: o motor segue quando a ligação terminar');
+    expect(describeCockpitAutoDial(concludedCall)).toBe('Lead concluído pelo painel: a discagem segue quando a ligação terminar');
   });
 });

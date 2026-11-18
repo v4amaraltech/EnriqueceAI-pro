@@ -7,13 +7,29 @@ export type AutoDialQueue = 'normal' | 'recovery';
 export const DEFAULT_AUTO_DIAL_QUEUE: AutoDialQueue = 'normal';
 
 /**
+ * Motivos de perda em que NUNCA se retoma o contato (D2): o motor não liga nas DUAS filas (normal e recuperação) e o
+ * cartão do lead mostra "restrição". Nomes exatos de `loss_reasons` (a comparação ignora caixa e acento).
+ */
+export const NO_RESUME_REASON_NAMES: readonly string[] = ['Blocklist', 'SPAM', 'Adolescente/Criança'];
+
+export function normalizeReasonName(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** O motivo de perda é de "não retomar" (blocklist, spam, adolescente/criança)? */
+export function isNoResumeReason(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const key = normalizeReasonName(name);
+  return NO_RESUME_REASON_NAMES.some((n) => normalizeReasonName(n) === key);
+}
+
+/**
  * Motivos de perda que NUNCA entram na recuperação (A-D5 + decisão do usuário de 16/11), comparados pelo NOME em
  * `loss_reasons` da própria org. Mesma lista do padrão da função SQL; o TypeScript a passa explicitamente e o portão
  * a confere de novo na hora de discar. "Cliente" e "Cliente oculto" NÃO estão aqui de propósito.
  */
 export const RECOVERY_BLOCKED_REASON_NAMES: readonly string[] = [
-  'Blocklist',
-  'Adolescente/Criança',
+  ...NO_RESUME_REASON_NAMES,
   'Ex-cliente (detrator)',
   'Duplicado',
   'Engano/Não Lembra',
@@ -23,3 +39,17 @@ export const RECOVERY_BLOCKED_REASON_NAMES: readonly string[] = [
 
 /** Linhas pedidas à função SQL (a mais recente primeiro). */
 export const RECOVERY_QUEUE_LIMIT = 1000;
+
+/** Motivo "Sem interesse": o lead fica FORA da recuperação por `SEM_INTERESSE_COOLDOWN_DAYS` dias (decisão do usuário, 17/11). */
+export const SEM_INTERESSE_REASON_NAME = 'Sem interesse';
+export const SEM_INTERESSE_COOLDOWN_DAYS = 90;
+
+/** O motivo de perda é "Sem interesse"? (ignora caixa e acento) */
+export function isSemInteresseReason(name: string | null | undefined): boolean {
+  return Boolean(name) && normalizeReasonName(name as string) === normalizeReasonName(SEM_INTERESSE_REASON_NAME);
+}
+
+/** Início da janela de 90 dias: a perda "Sem interesse" feita a partir daqui ainda está em quarentena. */
+export function semInteresseCooldownCutoff(now: Date): Date {
+  return new Date(now.getTime() - SEM_INTERESSE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+}

@@ -46,8 +46,8 @@ export type AutoDialRefusalCode =
 
 export const AUTO_DIAL_REFUSAL_MESSAGES: Record<AutoDialRefusalCode, string> = {
   outside_hours: 'Fora do horário (seg–sex 8h–20h, Brasília)',
-  holiday: 'Feriado: o motor não liga',
-  daily_cap: 'Teto de ligações do motor no dia atingido',
+  holiday: 'Feriado: a discagem não liga',
+  daily_cap: 'Teto de ligações da discagem no dia atingido',
   held: 'Lead com bloqueio de contato',
   answered_today: 'Lead já conversou hoje',
   attempts: 'Lead já teve as tentativas do dia',

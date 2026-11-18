@@ -33,3 +33,25 @@ describe('CockpitShell: item "Discador"', () => {
     expect(screen.getByRole('link', { name: 'Discador' }).getAttribute('aria-current')).toBe('page');
   });
 });
+
+describe('CockpitShell: gestor no próprio Cockpit', () => {
+  const mgr: CockpitViewer = {
+    viewerId: 'm1',
+    orgId: 'o1',
+    isManager: true,
+    targetUserId: 'm1',
+    targetName: 'Vini Mercante',
+    sdrOptions: [
+      { userId: 'm1', name: 'Vini Mercante (você)' },
+      { userId: 's1', name: 'Ana' },
+    ],
+  };
+
+  it('Discador herda o sdr do próprio gestor e o seletor mostra a opção "(você)"', () => {
+    render(<CockpitShell viewer={mgr} tab="tarefas" dialerTabEnabled><div /></CockpitShell>);
+    expect(screen.getByRole('link', { name: 'Discador' }).getAttribute('href')).toBe('/cockpit?tab=discador&sdr=m1');
+    expect(screen.getByText('Olá, Vini')).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'SDR exibido' }).textContent).toContain('(você)');
+  });
+});
+

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
-import { getWebphoneCallOutcome } from '@/features/calls/actions/get-webphone-call-outcome';
+import { fetchWebphoneCallOutcome } from '@/features/calls/fetch-webphone-call-outcome';
 import type { LiveAmdView } from '@/features/integrations/webphone/live-amd-session';
 import {
   getLiveAmdView,
@@ -91,7 +91,7 @@ export function usePostCallSuggestion(args: {
 
     async function tick() {
       polls += 1;
-      const result = await getWebphoneCallOutcome({ callId: id }).catch(() => null);
+      const result = await fetchWebphoneCallOutcome(id);
       if (cancelled) return;
       if (result?.success) {
         setServer({
