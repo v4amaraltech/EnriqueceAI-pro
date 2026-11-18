@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { getWebphoneCallOutcome } from '@/features/calls/actions/get-webphone-call-outcome';
+import { fetchWebphoneCallOutcome } from '@/features/calls/fetch-webphone-call-outcome';
 
 import { LEAD_ANSWER_MAX_POLLS, LEAD_ANSWER_POLL_INTERVAL_MS, type LeadAnswer } from './webphone-lead-answer';
 
@@ -41,13 +41,14 @@ export function useWebphoneCallOutcome(callId: string | null, untilHangup = fals
 
   useEffect(() => {
     if (!callId) return;
+    const id = callId;
     let cancelled = false;
     let polls = 0;
     let timer: number | null = null;
 
     async function tick() {
       polls += 1;
-      const result = await getWebphoneCallOutcome({ callId }).catch(() => null);
+      const result = await fetchWebphoneCallOutcome(id);
       if (cancelled) return;
       if (result?.success) {
         setState({

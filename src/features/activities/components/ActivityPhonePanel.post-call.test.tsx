@@ -189,6 +189,25 @@ describe('ActivityPhonePanel pós-ligação no cockpit', () => {
     expect(onMarkDone).not.toHaveBeenCalled();
   });
 
+  it('ligar de novo disca ANTES de gravar a tentativa (as actions saem em fila)', async () => {
+    const user = userEvent.setup();
+    renderDock();
+    await finishCall(user);
+    actions.classifyWebphoneCall.mockClear();
+    const order: string[] = [];
+    actions.initiateCall.mockImplementationOnce(async () => {
+      order.push('initiateCall');
+      return { success: true, data: { callId: 'c-2', providerCallId: 'p-2' } };
+    });
+    actions.classifyWebphoneCall.mockImplementationOnce(async () => {
+      order.push('classify');
+      return { success: true, data: { callId: CALL_ID } };
+    });
+    await user.click(screen.getByRole('button', { name: /Ligar de novo/ }));
+    await waitFor(() => expect(order).toHaveLength(2));
+    expect(order).toEqual(['initiateCall', 'classify']);
+  });
+
   it('retorno pausa a cadência, cria a atividade e conclui a tarefa', async () => {
     const user = userEvent.setup();
     leadAnswer.value = 'answered';
