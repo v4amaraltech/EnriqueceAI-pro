@@ -24,7 +24,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { LossReasonRow } from '@/features/settings-prospecting/actions/loss-reasons-crud';
 
-import { fetchLossReasons } from '../actions/lead-lifecycle';
+import { fetchLossDialogOptions, getCachedLossDialogOptions } from '../fetch-loss-dialog-options';
 import { bulkMarkLeadsLost } from '../actions/bulk-actions';
 
 interface BulkMarkLeadsLostDialogProps {
@@ -42,17 +42,21 @@ export function BulkMarkLeadsLostDialog({
   onSuccess,
 }: BulkMarkLeadsLostDialogProps) {
   const [isPending, startTransition] = useTransition();
-  const [lossReasons, setLossReasons] = useState<LossReasonRow[]>([]);
+  const [lossReasons, setLossReasons] = useState<LossReasonRow[]>(
+    () => getCachedLossDialogOptions()?.lossReasons ?? [],
+  );
   const [selectedReasonId, setSelectedReasonId] = useState<string | null>(null);
   const [lossNotes, setLossNotes] = useState('');
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    fetchLossReasons().then((result) => {
+    // Rota GET (fora da fila de Server Actions) — ver fetch-loss-dialog-options.
+    fetchLossDialogOptions().then((options) => {
       if (cancelled) return;
-      if (result.success) setLossReasons(result.data);
-      else toast.error(result.error);
+      if (!options) toast.error('Não foi possível carregar os motivos de perda');
+      else if (options.lossReasons.success) setLossReasons(options.lossReasons.data);
+      else toast.error(options.lossReasons.error);
     });
     return () => {
       cancelled = true;
