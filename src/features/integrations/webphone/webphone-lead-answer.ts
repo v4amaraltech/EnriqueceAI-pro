@@ -46,7 +46,8 @@ export function leadConnected(leadAnswer: LeadAnswer, fallback: boolean): boolea
  * Ligação com linha em `calls` (API4COM): só o webhook diz que o lead atendeu.
  * O ramal atende o INVITE na hora e a operadora toca a locução ("número fora
  * do ar ou indisponível") nessa perna, então o sinal do cliente não vale.
- * Até o `answered_at` chegar, a tela mostra "Não atendida".
+ * Até o `answered_at` chegar a tela mostra um texto neutro ("Confirmando com a
+ * operadora…", e "Resultado não confirmado" se as consultas se esgotarem).
  */
 export function leadAnsweredByServer(leadAnswer: LeadAnswer): boolean {
   return leadAnswer === 'answered';

@@ -261,6 +261,7 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
     followNew,
   );
   const { leadAnswer, hangupCause } = outcome;
+  const outcomeExhausted = outcome.exhausted === true;
   const durationSeconds = outcome.durationSeconds ?? 0;
 
   // Hangup já gravado no servidor e a sessão SIP ainda em curso: o BYE pode
@@ -543,6 +544,7 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
           call={stage.call}
           leadAnswer={leadAnswer}
           hangupCause={hangupCause}
+          exhausted={outcomeExhausted}
           notes={ctxState.notes}
           noteStatus={noteStatus(ctxState.notes, stage.call.context?.callId ?? null)}
           onNotesChange={(value) =>
@@ -1022,6 +1024,7 @@ function FinishedView({
   call,
   leadAnswer,
   hangupCause,
+  exhausted = false,
   notes,
   noteStatus: status,
   onNotesChange,
@@ -1030,6 +1033,8 @@ function FinishedView({
   call: FinishedCall;
   leadAnswer: LeadAnswer;
   hangupCause: string | null;
+  /** Consultas ao servidor esgotadas sem resposta: o resultado segue desconhecido. */
+  exhausted?: boolean;
   notes: string;
   noteStatus: string | null;
   onNotesChange: (notes: string) => void;
@@ -1057,6 +1062,17 @@ function FinishedView({
               : leadConnected(leadAnswer, call.answered)
           ) ? (
             formatDuration(call.talkSeconds)
+          ) : call.context && leadAnswer === 'unknown' ? (
+            // O webhook da operadora chega 7–24 s depois: até lá não afirmamos "Não atendida".
+            exhausted ? (
+              <span className="text-sm text-[var(--muted-foreground)]" data-testid="webphone-unconfirmed">
+                Resultado não confirmado
+              </span>
+            ) : (
+              <span className="text-sm text-[var(--muted-foreground)]" data-testid="webphone-confirming">
+                Confirmando com a operadora…
+              </span>
+            )
           ) : (
             <span className="text-sm text-amber-600">
               {isOutOfAreaCall({ hangupCause }) ? OUT_OF_AREA_LABEL : 'Não atendida'}

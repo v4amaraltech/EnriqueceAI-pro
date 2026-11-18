@@ -12,6 +12,8 @@ export interface WebphoneCallOutcomeView {
   hangupCause: string | null;
   /** `calls.duration_seconds` já gravado. 0 enquanto a ligação não fechou. */
   durationSeconds: number;
+  /** true quando as consultas acabaram (teto de tentativas) sem resposta definitiva: o resultado segue desconhecido. */
+  exhausted?: boolean;
 }
 
 interface LeadAnswerState extends WebphoneCallOutcomeView {
@@ -66,6 +68,7 @@ export function useWebphoneCallOutcome(callId: string | null, untilHangup = fals
       // Unmount, troca de id ou hangup cancelam o próximo timeout.
       const capped = !untilHangup && polls >= LEAD_ANSWER_MAX_POLLS;
       if (!capped) timer = window.setTimeout(() => void tick(), LEAD_ANSWER_POLL_INTERVAL_MS);
+      else setState((prev) => ({ ...(prev.callId === id ? prev : { callId: id, ...UNKNOWN_OUTCOME }), exhausted: true }));
     }
 
     void tick();
