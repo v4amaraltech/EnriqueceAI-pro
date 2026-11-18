@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { Button } from '@/shared/components/ui/button';
 
 import { leadActionsAvailability } from '../utils/lead-actions-availability';
@@ -123,6 +125,32 @@ export function AutoDialAnsweredBlock({
           Não foi conversa
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Prazo estourou sem o resultado da operadora (`awaiting-sdr` com reason 'timeout'): NÃO se sabe se o lead atendeu, então o
+ * bloco é neutro. "Não atendeu" segue como não atendida; "Atendeu e conversou" abre as três ações (o bloco de conversa).
+ */
+export function AutoDialUnknownResultBlock({
+  actions,
+  onNotConversation,
+  ...block
+}: AnsweredBlockProps & { actions: MotorLeadActions }) {
+  const [answered, setAnswered] = useState(false);
+  if (answered) return <AutoDialAnsweredBlock {...block} actions={actions} onNotConversation={onNotConversation} />;
+  return (
+    <div className="space-y-3 rounded-md border border-amber-500/60 p-3" data-testid="dialer-unknown-result" aria-live="polite">
+      <p className="text-sm font-medium">Não recebemos o resultado da operadora. O lead atendeu?</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button type="button" variant="outline" className="h-11 flex-1" disabled={block.disabled} data-testid="dialer-unknown-not-answered" onClick={onNotConversation}>
+          Não atendeu
+        </Button>
+        <Button type="button" className="h-11 flex-1" disabled={block.disabled} data-testid="dialer-unknown-answered" onClick={() => setAnswered(true)}>
+          Atendeu e conversou
+        </Button>
+      </div>
     </div>
   );
 }

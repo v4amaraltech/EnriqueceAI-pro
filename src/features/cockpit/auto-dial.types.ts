@@ -62,6 +62,12 @@ export type AutoDialAnsweredClassification =
   | { status: 'pending' }
   | { status: 'refused' };
 
+/** A escuta ao vivo DESLIGOU esta ligação (marca `live_amd.auto_hangup`)? `none` = não (ou ainda não gravou). */
+export type AutoDialCarrierHangup =
+  | { status: 'auto_hangup'; prediction: 'voicemail' | 'no_answer' | 'number_not_exist' }
+  | { status: 'none' }
+  | { status: 'refused' };
+
 /** Conclusão do lead pelo painel durante a ligação do motor (`concludeAutoDialCallAction`). */
 export type AutoDialConcludeResult =
   | { status: 'recorded'; disposition: string }

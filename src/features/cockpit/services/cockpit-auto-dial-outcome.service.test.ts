@@ -9,7 +9,7 @@ vi.mock('./cockpit-auto-dial.service', () => ({
   loadLeadCallStats: vi.fn(async () => ({ callsToday: stats.callsToday, lastCallAt: null, conversationToday: false })),
 }));
 
-import { classifyMotorAnsweredCall, resolveMotorNoAnswer } from './cockpit-auto-dial-outcome.service';
+import { classifyMotorAnsweredCall, readMotorCarrierHangup, resolveMotorNoAnswer } from './cockpit-auto-dial-outcome.service';
 
 const NOW = new Date('2026-11-17T15:00:00Z');
 type CallRow = Record<string, unknown>;
@@ -185,3 +185,31 @@ describe('resolveMotorNoAnswer com ligação atendida', () => {
   });
 });
 
+
+describe('readMotorCarrierHangup: só a marca live_amd.auto_hangup decide', () => {
+  const read = (row: CallRow | null, userId = 'u1') => readMotorCarrierHangup({ supabase: client(row), orgId: 'o1', userId, callId: 'call-1' });
+  const hang = (over: Record<string, unknown> = {}) => ({ at: '2026-11-17T14:59:45Z', phrase: 'caixa postal', prediction: 'voicemail', confidence: 0.9, ...over });
+  const withAmd = (live: Record<string, unknown>) => callRow({ metadata: { cockpit_auto_dial: { attempt: 1 }, live_amd: live } });
+
+  it('marca presente com predição de operadora e confiança >= 0,84: auto_hangup', async () => {
+    expect(await read(withAmd({ prediction: 'voicemail', auto_hangup: hang() }))).toEqual({ status: 'auto_hangup', prediction: 'voicemail' });
+    expect(await read(withAmd({ auto_hangup: hang({ prediction: 'no_answer', confidence: 0.84 }) }))).toEqual({ status: 'auto_hangup', prediction: 'no_answer' });
+    expect(await read(withAmd({ auto_hangup: hang({ prediction: 'number_not_exist' }) }))).toEqual({ status: 'auto_hangup', prediction: 'number_not_exist' });
+  });
+
+  it('no_answer SEM auto_hangup, mesmo com next_activity_confidence 0,9: NÃO decide', async () => {
+    expect(await read(withAmd({ prediction: 'no_answer', confidence: 0.9, next_activity_suggestion: 'not_connected', next_activity_confidence: 0.9 }))).toEqual({ status: 'none' });
+  });
+
+  it('marca sem frase, com predição humana, confiança baixa ou inválida: NÃO decide', async () => {
+    for (const bad of [hang({ phrase: null }), hang({ phrase: '  ' }), hang({ prediction: 'human' }), hang({ confidence: 0.8 }), hang({ confidence: 1.5 }), hang({ confidence: '0.9' })]) {
+      expect(await read(withAmd({ prediction: 'voicemail', auto_hangup: bad }))).toEqual({ status: 'none' });
+    }
+  });
+
+  it('ligação de outro usuário, inexistente ou sem lead: refused', async () => {
+    expect(await read(withAmd({ auto_hangup: hang() }), 'outro')).toEqual({ status: 'refused' });
+    expect(await read(null)).toEqual({ status: 'refused' });
+    expect(await read({ ...withAmd({ auto_hangup: hang() }), lead_id: null })).toEqual({ status: 'refused' });
+  });
+});

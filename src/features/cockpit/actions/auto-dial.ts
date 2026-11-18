@@ -11,6 +11,7 @@ import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metada
 import { DISPOSITION_OPTIONS } from '@/features/calls/disposition';
 
 import type {
+  AutoDialCarrierHangup,
   AutoDialAnsweredClassification,
   AutoDialBlockCode,
   AutoDialConcludeResult,
@@ -20,7 +21,7 @@ import type {
 } from '../auto-dial.types';
 import type { CockpitViewer } from '../types';
 import { isCockpitAutoDialEnabled, isCockpitAutoDialLive } from '../services/cockpit-auto-dial-flag';
-import { classifyMotorAnsweredCall, concludeMotorCallExternally, confirmMotorOutcome, resolveMotorNoAnswer } from '../services/cockpit-auto-dial-outcome.service';
+import { classifyMotorAnsweredCall, concludeMotorCallExternally, confirmMotorOutcome, readMotorCarrierHangup, resolveMotorNoAnswer } from '../services/cockpit-auto-dial-outcome.service';
 import { AUTO_DIAL_METADATA_KEY, checkDialGate, countMotorCallsToday, loadMotorHolidays, pickAutoDialLead } from '../services/cockpit-auto-dial.service';
 import { armCockpitCallOutcome } from '../services/call-outcome.service';
 import { loadLeadCardExtras } from '../services/cockpit-auto-dial-extras.service';
@@ -198,6 +199,21 @@ export async function classifyAutoDialAnsweredAction(input: unknown): Promise<Ac
 
   const r = await classifyMotorAnsweredCall({ supabase, orgId, userId, callId: parsed.data.callId });
   if (r.status === 'error') return { success: false, error: 'Falha ao classificar a ligação atendida' };
+  return { success: true, data: r };
+}
+
+/** A escuta ao vivo desligou esta ligação (caixa postal / não atendeu / número inexistente)? Lê só a marca `auto_hangup`. */
+export async function getAutoDialCarrierHangupAction(input: unknown): Promise<ActionResult<AutoDialCarrierHangup>> {
+  const parsed = callSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: 'Dados inválidos' };
+
+  const auth = await getAuthOrgIdResult();
+  if (!auth.success) return auth;
+  const { orgId, userId, supabase } = auth.data;
+  if (!(await isCockpitAutoDialEnabled({ orgId, userId }))) return { success: true, data: { status: 'refused' } };
+
+  const r = await readMotorCarrierHangup({ supabase, orgId, userId, callId: parsed.data.callId });
+  if (r.status === 'error') return { success: false, error: 'Falha ao ler a ligação' };
   return { success: true, data: r };
 }
 

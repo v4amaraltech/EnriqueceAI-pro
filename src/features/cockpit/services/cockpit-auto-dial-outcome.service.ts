@@ -6,8 +6,8 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { applySdrCallResult } from '@/features/calls/services/apply-sdr-call-result';
 import type { CallDisposition } from '@/features/calls/types';
 
-import type { AutoDialAnsweredClassification, AutoDialConcludeResult, AutoDialNoAnswerResult } from '../auto-dial.types';
-import { extractAmd, getAnsweredVerdict, type AnsweredVerdict } from '../utils/answered-verdict';
+import type { AutoDialAnsweredClassification, AutoDialCarrierHangup, AutoDialConcludeResult, AutoDialNoAnswerResult } from '../auto-dial.types';
+import { extractAmd, extractAutoHangup, getAnsweredVerdict, type AnsweredVerdict } from '../utils/answered-verdict';
 import { AUTO_DIAL_RULES, isLastAttemptOfDay, type AutoDialRules } from '../utils/auto-dial-rules';
 import { dispositionForExternalConclusion, type ExternalConclusionKind } from '../utils/external-conclusion';
 import { buildNoAnswerNote } from '../utils/no-answer-note';
@@ -85,6 +85,25 @@ function verdictOfCall(call: MotorCallRow): AnsweredVerdict {
 function machineDisposition(call: MotorCallRow, verdict: AnsweredVerdict | null): 'voicemail' | 'no_answer' {
   const prediction = extractAmd(call.metadata)?.prediction;
   return verdict?.reason === 'machine' && (prediction === 'voicemail' || prediction === 'number_not_exist') ? 'voicemail' : 'no_answer';
+}
+
+/** A escuta ao vivo desligou a ligação do motor (marca `live_amd.auto_hangup`)? Só ligação do PRÓPRIO usuário e do motor. */
+export async function readMotorCarrierHangup(input: {
+  supabase: SupabaseClient;
+  orgId: string;
+  userId: string;
+  callId: string;
+}): Promise<AutoDialCarrierHangup | { status: 'error' }> {
+  try {
+    const call = await loadMotorCall(input.supabase, input.orgId, input.userId, input.callId);
+    if (call === 'error') return { status: 'error' };
+    if (!call || !call.lead_id) return { status: 'refused' };
+    const mark = extractAutoHangup(call.metadata);
+    return mark ? { status: 'auto_hangup', prediction: mark.prediction } : { status: 'none' };
+  } catch (err) {
+    console.error('[cockpit-auto-dial] auto_hangup:', err instanceof Error ? err.message : 'erro');
+    return { status: 'error' };
+  }
 }
 
 /**

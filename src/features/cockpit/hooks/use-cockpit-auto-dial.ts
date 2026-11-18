@@ -25,6 +25,7 @@ import {
   concludeAutoDialCallAction,
   confirmAutoDialOutcomeAction,
   dialAutoLeadAction,
+  getAutoDialCarrierHangupAction,
   getNextAutoDialCardAction,
   resolveAutoDialNoAnswerAction,
 } from '../actions/auto-dial';
@@ -46,6 +47,7 @@ import {
   refreshTabLock,
   releaseTabLock,
 } from '../utils/auto-dial-tab-lock';
+import { COCKPIT_ANSWER_TIMEOUT_MS } from '../utils/cockpit-answer-timeout';
 import { COCKPIT_SESSION_GRACE_MS, COCKPIT_SESSION_MISSING_MESSAGE } from '../utils/cockpit-session-grace';
 import { nextRamalBusyStep } from '../utils/ramal-busy-retry';
 import type { CockpitTier } from '../utils/next-call-pick';
@@ -214,6 +216,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   const callbackScheduledCalls = useRef(new Set<string>());
   // Ligações atendidas que viraram "não atendida" (veredito ou "Não foi conversa"): o servidor precisa saber.
   const notConversationCalls = useRef(new Set<string>());
+  // Ligações decididas pela escuta (auto_hangup): o webhook com hangup_cause pode levar ~45 s, então o 3º `no_answer` espera mais.
+  const carrierHangupCalls = useRef(new Set<string>());
   const pendingConclusion = useRef<{ callId: string | null; kind: ExternalConclusionKind } | null>(null);
   const prevPhase = useRef<CockpitAutoDialState['phase']>('off');
   // Lead cuja ligação ficou sem a sessão desta aba (pausa por `session_missing`): o painel dele segue aberto e as ações valem.
@@ -623,8 +627,38 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       dispatch(noAnswerEvent(attemptNoRef.current)); // FR-6/FR-7
       return;
     }
-    const t = setTimeout(() => dispatch({ type: 'answer_timeout' }), AUTO_DIAL_ANSWER_TIMEOUT_MS); // FR-16
-    return () => clearTimeout(t);
+    // Sem resposta do webhook (`unknown`). Antes de entregar ao SDR, a escuta ao vivo pode já ter dito "caixa postal / não
+    // atendeu" e desligado a ligação: isso é não atendida, não conversa. Consulta a linha da ligação a cada 2 s até o prazo.
+    let cancelled = false;
+    let poll: ReturnType<typeof setTimeout> | null = null;
+    if (callId) {
+      const id = callId;
+      const check = async () => {
+        let r: Awaited<ReturnType<typeof getAutoDialCarrierHangupAction>> | null = null;
+        try {
+          r = await getAutoDialCarrierHangupAction({ callId: id });
+        } catch {
+          r = null; // falha de rede/da action: sem decisão, tenta de novo no próximo ciclo (até o prazo de 45 s)
+        }
+        if (cancelled) return;
+        // Só vale a marca que a escuta grava quando REALMENTE desligou (frase + predição de operadora + confiança >= 0,84).
+        if (r?.success && r.data.status === 'auto_hangup') {
+          notConversationCalls.current.add(id);
+          carrierHangupCalls.current.add(id);
+          setNoticeState({ callId: id, text: r.data.prediction === 'voicemail' ? VOICEMAIL_NOTICE : NOT_ANSWERED_NOTICE });
+          dispatch(noAnswerEvent(attemptNoRef.current));
+          return;
+        }
+        poll = setTimeout(() => void check(), ANSWERED_VERDICT_RETRY_MS);
+      };
+      void check();
+    }
+    const t = setTimeout(() => dispatch({ type: 'answer_timeout' }), COCKPIT_ANSWER_TIMEOUT_MS); // FR-16
+    return () => {
+      cancelled = true;
+      if (poll) clearTimeout(poll);
+      clearTimeout(t);
+    };
   }, [live, state.phase, leadAnswer, callId]);
 
   // Não atendeu na 1ª/2ª: volta para a contagem do próximo lead (o servidor devolve este lead só após 1 h).
@@ -648,7 +682,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       dispatch({ type: 'completed' });
       return;
     }
-    for (let i = 0; i <= NO_ANSWER_MAX_RETRIES; i++) {
+    const maxRetries = carrierHangupCalls.current.has(callId) ? Math.ceil(COCKPIT_ANSWER_TIMEOUT_MS / NO_ANSWER_RETRY_MS) : NO_ANSWER_MAX_RETRIES;
+    for (let i = 0; i <= maxRetries; i++) {
       // O SDR concluiu o lead pelo painel no meio: nada de `no_answer` para ele (o desfecho já é o da conclusão).
       if (concludedCalls.current.has(callId)) return;
       const forced = notConversationCalls.current.has(callId);
