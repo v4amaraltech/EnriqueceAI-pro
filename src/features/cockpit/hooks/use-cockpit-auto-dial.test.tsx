@@ -18,6 +18,7 @@ vi.mock('../actions/auto-dial', () => ({
   // Veredito padrão: conversou (as ligações atendidas dos testes seguem para awaiting-sdr).
   classifyAutoDialAnsweredAction: vi.fn(async () => ({ success: true, data: { status: 'verdict', verdict: 'conversou', reason: 'long_enough', machine: false } })),
   confirmAutoDialOutcomeAction: vi.fn(),
+  getAutoDialCarrierHangupAction: vi.fn(async () => ({ success: true, data: { status: 'none' } })),
 }));
 vi.mock('@/features/integrations/webphone/useApi4ComWebphone', () => ({ useApi4ComWebphone: vi.fn() }));
 vi.mock('@/features/integrations/webphone/useWebphoneLeadAnswer', () => ({ useWebphoneLeadAnswer: vi.fn() }));
@@ -418,7 +419,7 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     expect(result.current.state).toEqual({ phase: 'awaiting-sdr', reason: 'answered' });
   });
 
-  it('20 s sem sinal da operadora: espera o SDR (não segue sozinho)', async () => {
+  it('45 s sem sinal da operadora: espera o SDR (não segue sozinho)', async () => {
     vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'dialed', callId: 'call-1', providerCallId: 'prov-1', attemptNo: 1 } });
     phone.call = liveCall('active');
     const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
@@ -426,7 +427,7 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     await advance(5000);
     phone.call = liveCall('ended');
     rerender();
-    await advance(20_000);
+    await advance(45_000);
     expect(result.current.state).toEqual({ phase: 'awaiting-sdr', reason: 'timeout' });
   });
 

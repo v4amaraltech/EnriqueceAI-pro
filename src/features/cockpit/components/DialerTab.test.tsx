@@ -187,6 +187,28 @@ describe('aba Discador', () => {
     expect(screen.getByTestId('dialer-tab').getAttribute('data-panel-open')).toBe('true');
   });
 
+  it("awaiting-sdr com reason 'timeout': NÃO mostra 'O lead conversou', mostra o bloco neutro; 'Atendeu e conversou' abre as 3 ações", () => {
+    const notConversation = vi.fn();
+    setEngine({ phase: 'awaiting-sdr', reason: 'timeout' }, { card, notConversation } as Partial<UseCockpitAutoDialResult>);
+    render(<DialerTab autoDial={AUTO} />);
+    expect(screen.queryByText(/O lead conversou/)).toBeNull();
+    expect(screen.queryByTestId('dialer-answered')).toBeNull();
+    expect(screen.getByText('Não recebemos o resultado da operadora. O lead atendeu?')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('dialer-unknown-not-answered'));
+    expect(notConversation).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('dialer-unknown-answered'));
+    expect(screen.getByTestId('dialer-answered')).toBeTruthy();
+    expect(screen.getByTestId('dialer-answered-schedule')).toBeTruthy();
+    expect(screen.getByTestId('dialer-answered-callback')).toBeTruthy();
+  });
+
+  it("awaiting-sdr com reason 'answered': igual a hoje (O lead conversou, sem bloco neutro)", () => {
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card });
+    render(<DialerTab autoDial={AUTO} />);
+    expect(screen.getByText(/O lead conversou/)).toBeTruthy();
+    expect(screen.queryByTestId('dialer-unknown-result')).toBeNull();
+  });
+
   it('o bloco das 3 ações só existe em awaiting-sdr (nem título, nem botões, nem link nas outras fases)', () => {
     setEngine({ phase: 'in-call' }, { card });
     const { rerender } = render(<DialerTab autoDial={AUTO} />);

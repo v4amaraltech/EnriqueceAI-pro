@@ -84,3 +84,29 @@ export function getAnsweredVerdict(input: AnsweredVerdictInput): AnsweredVerdict
   }
   return { verdict: 'conversou', reason: 'unknown_fail_open' };
 }
+
+/** Mesmo piso do desligamento automático da escuta (`LIVE_AMD_AUTOHANGUP_MIN_CONFIDENCE`, calls/live-amd-phrases). */
+export const AUTO_HANGUP_MIN_CONFIDENCE = 0.84;
+
+export interface AutoHangupReading {
+  prediction: 'voicemail' | 'no_answer' | 'number_not_exist';
+  confidence: number;
+}
+
+/**
+ * Lê `metadata.live_amd.auto_hangup`: a marca que a escuta grava SÓ quando de fato desligou a ligação (live-amd-browser).
+ * Exige a frase, a predição de operadora (caixa postal / não atendeu / número inexistente) e a confiança DA PRÓPRIA marca
+ * >= 0,84. Nada além disso vale: `prediction`/`next_activity_confidence` soltos podem ser de conversa real.
+ */
+export function extractAutoHangup(metadata: unknown): AutoHangupReading | null {
+  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) return null;
+  const amd = (metadata as Record<string, unknown>).live_amd;
+  if (typeof amd !== 'object' || amd === null || Array.isArray(amd)) return null;
+  const mark = (amd as Record<string, unknown>).auto_hangup;
+  if (typeof mark !== 'object' || mark === null || Array.isArray(mark)) return null;
+  const { prediction, confidence, phrase } = mark as Record<string, unknown>;
+  if (typeof phrase !== 'string' || !phrase.trim()) return null;
+  if (prediction !== 'voicemail' && prediction !== 'no_answer' && prediction !== 'number_not_exist') return null;
+  if (!isNumber(confidence) || confidence < AUTO_HANGUP_MIN_CONFIDENCE || confidence > 1) return null;
+  return { prediction, confidence };
+}

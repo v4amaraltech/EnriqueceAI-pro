@@ -14,7 +14,7 @@ import { useMotorPanelNote } from '../hooks/use-motor-panel-note';
 import { useMotorWebphoneNotes } from '../hooks/use-motor-webphone-notes';
 import type { AutoDialQueue } from '../utils/recovery-queue';
 
-import { AutoDialAnsweredBlock } from './AutoDialAnsweredActions';
+import { AutoDialAnsweredBlock, AutoDialUnknownResultBlock } from './AutoDialAnsweredActions';
 import { autoDialStatusLine, CockpitAutoDialBar } from './CockpitAutoDialBar';
 import type { SchedulingPreview } from './CallMeetingDialogs';
 import { MotorLeadSidePanel } from './MotorLeadSidePanel';
@@ -203,7 +203,9 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
             </Button>
           )}
           {phase === 'awaiting-sdr' && panelCard && (
-            <AutoDialAnsweredBlock
+            <AwaitingSdrBlock
+              key={panelCard.context.leadId}
+              reason={engine.state.phase === 'awaiting-sdr' ? engine.state.reason : 'answered'}
               isLost={panelCard.context.company.status === 'unqualified'}
               status={panelCard.context.company.status}
               actions={leadActions}
@@ -234,4 +236,9 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
       {panelCard && leadActions.dialogs}
     </section>
   );
+}
+
+/** Só `answered` (o servidor confirmou que o lead atendeu) mostra "O lead conversou"; `timeout` pergunta primeiro. */
+function AwaitingSdrBlock({ reason, ...props }: { reason: 'answered' | 'timeout' } & Parameters<typeof AutoDialAnsweredBlock>[0]) {
+  return reason === 'answered' ? <AutoDialAnsweredBlock {...props} /> : <AutoDialUnknownResultBlock {...props} />;
 }
