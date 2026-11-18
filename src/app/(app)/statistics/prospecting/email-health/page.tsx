@@ -1,0 +1,25 @@
+import { requireManager } from '@/lib/auth/require-manager';
+
+import { fetchEmailHealth } from '@/features/statistics/actions/fetch-email-health';
+import { EmailHealthView } from '@/features/statistics/components/EmailHealthView';
+import { currentMonthRange } from '@/shared/utils/date-range';
+
+interface PageProps {
+  searchParams: Promise<{ from?: string; to?: string; user?: string; cadence?: string }>;
+}
+
+export default async function ProspectingEmailHealthPage({ searchParams }: PageProps) {
+  await requireManager();
+  const params = await searchParams;
+  const userIds = params.user ? [params.user] : undefined;
+  const cadenceId = params.cadence || undefined;
+  const dateRange = params.from && params.to ? { from: params.from, to: params.to } : currentMonthRange();
+
+  const result = await fetchEmailHealth(userIds, cadenceId, dateRange);
+
+  if (!result.success) {
+    return <p className="text-[var(--destructive)]">Erro: {result.error}</p>;
+  }
+
+  return <EmailHealthView data={result.data} />;
+}

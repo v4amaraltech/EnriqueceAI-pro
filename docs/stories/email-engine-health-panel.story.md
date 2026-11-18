@@ -1,11 +1,12 @@
 # Story: Painel de saúde do e-mail — motor, caixas, bounce e Gmail desconectado
 
 ## Status
-Ready
+InReview
 
 ## Change Log
 | Data | Autor | Mudança |
 |------|-------|---------|
+| 2026-11-18 | @dev (Dex) | Implementado. Conferido com o serviço real contra o banco (V4 Amaral, 01–18/nov): enviados, leads e bounce por caixa batem exatamente com SQL independente (ex.: 177/87/6, 163/130/16). Tela vista localmente (página temporária, já apagada); não vista logado em produção. Ready → InReview. |
 | 2026-11-18 | @po (Pax) | Validação: GO 9/10. Ajustes aplicados: filtros da barra lateral (AC1), "vencido" com folga de 30 min e só no horário de envio (AC2), os dois avisos no `health-check-workers` com cooldown pela tabela `notifications` (AC8–9, sem migration), dono da caixa = `gmail_connections.user_id` casado com `metadata.sender_user_id` (99% dos envios de out–nov têm o campo). Draft → Ready. |
 | 2026-11-18 | Vini + Claude | Story criada a partir da auditoria do motor de e-mail (18/nov). Depende da regra de "e-mail de prospecção" do PR #660 (`email-scope.ts`). |
 
@@ -85,22 +86,37 @@ O motor de e-mail passou meses com falhas que só apareceram em auditoria: respo
 - **Caixa errada em envios antigos:** linhas sem `sender_user_id` podem cair na caixa errada; por isso existe a linha "Caixa não identificada".
 
 ## Definition of Done
-- [ ] AC 1–9 atendidos
-- [ ] `pnpm typecheck`, `pnpm lint` e testes da feature passando
-- [ ] Números da tela conferidos contra o banco num período real
+- [x] AC 1–9 atendidos
+- [x] `pnpm typecheck`, `pnpm lint` e testes da feature passando (+ `pnpm build`)
+- [x] Números da tela conferidos contra o banco num período real (01–18/nov)
 - [ ] Tela conferida logado como gestor (e bloqueada para SDR)
 
 ## Tasks
-- [ ] Serviço de saúde por caixa e por dia (reaproveitando `email-scope.ts`)
-- [ ] Bloco "Motor agora" (`worker_run_state` + passos vencidos)
-- [ ] Tela e aba nova em Prospecção
-- [ ] Aviso de Gmail desconectado no health-check (cooldown 24h por caixa)
-- [ ] Aviso de bounce alto por caixa no health-check (cooldown 24h por caixa)
-- [ ] Testes
-- [ ] Conferência no banco e na tela
+- [x] Serviço de saúde por caixa e por dia (reaproveitando `email-scope.ts`)
+- [x] Bloco "Motor agora" (`worker_run_state` + passos vencidos)
+- [x] Tela e aba nova em Prospecção
+- [x] Aviso de Gmail desconectado no health-check (cooldown 24h por caixa)
+- [x] Aviso de bounce alto por caixa no health-check (cooldown 24h por caixa)
+- [x] Testes
+- [x] Conferência no banco e na tela (local); falta ver logado em produção
 
 ## File List
 - `docs/stories/email-engine-health-panel.story.md`
+- `src/app/(app)/statistics/prospecting/email-health/page.tsx` (novo)
+- `src/features/statistics/actions/fetch-email-health.ts` (novo)
+- `src/features/statistics/components/EmailHealthView.tsx` (novo)
+- `src/features/statistics/components/ProspectingSidebarNav.tsx`
+- `src/features/statistics/services/email-health.logic.ts` (novo) + `.test.ts`
+- `src/features/statistics/services/email-health.service.ts` (novo)
+- `src/features/statistics/services/email-health-alerts.ts` (novo) + `.test.ts`
+- `src/features/statistics/types/email-health.types.ts` (novo)
+- `src/app/api/cron/health-check-workers/route.ts` + testes (mock dos avisos de caixa)
+
+## Dev Notes
+- `gmail_connections` (RLS: só o dono lê) e `worker_run_state` (sem acesso para `authenticated`) são lidos com service role **depois** de `getManagerOrgId()`, só colunas sem segredo e filtrados pela org.
+- Cadência automática = `cadences.type = 'auto_email'` ou passo com `auto_send`; o cron do motor roda a cada 5 min (`*/5 11-20 * * 1-5` UTC), daí a folga de 30 min.
+- Avisos usam `resource_type = 'mailbox'` (sem rota no sino, de propósito) e `resource_id = <conexão>:disconnected|bounce` para o controle de 24h.
+- Na conferência (18/nov) a caixa do Vini estava em `status='error'` e 3 caixas acima de 5% de bounce (6,9%, 12,3%, 13,5%): os avisos vão disparar logo após o deploy.
 
 ## Validação @po (2026-11-18)
 

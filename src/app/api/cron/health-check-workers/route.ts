@@ -6,6 +6,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { CRITICAL_WORKERS } from '@/lib/workers/critical-workers';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
+import { checkMailboxAlerts } from '@/features/statistics/services/email-health-alerts';
 import {
   findZeroFetchCandidates,
   ZERO_FETCH_MIN_DIALER_CALLS,
@@ -234,7 +235,15 @@ async function handle(request: Request) {
 
   const zeroFetch = await checkReconcileZeroFetch(supabase, cooldownCutoff);
 
-  return NextResponse.json({ checked_at: now.toISOString(), summary, zero_fetch: zeroFetch });
+  // Gmail desconectado e bounce alto por caixa (story email-engine-health-panel).
+  // A failure here must not hide the worker checks above.
+  const mailboxes = await checkMailboxAlerts(supabase, now, cooldownCutoff).catch((err: unknown) => {
+    Sentry.captureException(err, { tags: { worker: 'mailbox-alerts' } });
+    console.error('[health-check] mailbox alerts failed:', err);
+    return null;
+  });
+
+  return NextResponse.json({ checked_at: now.toISOString(), summary, zero_fetch: zeroFetch, mailboxes });
 }
 
 export const POST = handle;
