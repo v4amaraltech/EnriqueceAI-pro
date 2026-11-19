@@ -287,9 +287,12 @@ export const CONTEXT_MATCH_WINDOW_MS = 60_000;
  */
 export function contextMatchesCall(
   context: WebphoneCallContext | null | undefined,
-  call: { startedAt: number } | null | undefined,
+  call: { startedAt: number; dialToken?: string | null } | null | undefined,
 ): context is WebphoneCallContext {
   if (!context || !call) return false;
+  // Vínculo inequívoco: as duas pontas carregam o token da discagem e são de discagens DIFERENTES. O contexto é de
+  // outra ligação (o motor só publica o novo depois do POST /calls) e não pode ser casado só pela janela de tempo.
+  if (context.dialToken && call.dialToken && context.dialToken !== call.dialToken) return false;
   return context.startedAt >= call.startedAt - CONTEXT_MATCH_WINDOW_MS;
 }
 
