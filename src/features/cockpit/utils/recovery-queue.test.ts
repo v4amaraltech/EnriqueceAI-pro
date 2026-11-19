@@ -17,4 +17,13 @@ describe('motivos de perda "não retomar"', () => {
     expect(RECOVERY_BLOCKED_REASON_NAMES).toContain('Pessoa Física');
     expect(RECOVERY_BLOCKED_REASON_NAMES.length).toBeGreaterThan(NO_RESUME_REASON_NAMES.length);
   });
+
+  it('decisão de 19/11: Não ICP, Contatos inválidos e Serviço fora de escopo bloqueiam a recuperação (nomes EXATOS, o SQL compara sem normalizar) mas NÃO são "não retomar"', () => {
+    for (const name of ['Não ICP', 'Contatos inválidos', 'Serviço fora de escopo']) {
+      expect(RECOVERY_BLOCKED_REASON_NAMES, name).toContain(name);
+      expect(isNoResumeReason(name), name).toBe(false);
+      expect(NO_RESUME_REASON_NAMES, name).not.toContain(name);
+    }
+    for (const name of ['Sem interesse', 'Sem budget', 'Preço', 'Cliente']) expect(RECOVERY_BLOCKED_REASON_NAMES).not.toContain(name);
+  });
 });

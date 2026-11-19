@@ -24,9 +24,12 @@ export function isNoResumeReason(name: string | null | undefined): boolean {
 }
 
 /**
- * Motivos de perda que NUNCA entram na recuperação (A-D5 + decisão do usuário de 16/11), comparados pelo NOME em
- * `loss_reasons` da própria org. Mesma lista do padrão da função SQL; o TypeScript a passa explicitamente e o portão
- * a confere de novo na hora de discar. "Cliente" e "Cliente oculto" NÃO estão aqui de propósito.
+ * Motivos de perda que NUNCA entram na recuperação (A-D5 + decisão do usuário de 16/11 + decisão de 19/11: "Não ICP",
+ * "Contatos inválidos" e "Serviço fora de escopo"), comparados pelo NOME em `loss_reasons` da própria org. O SQL
+ * (`lr.name <> ALL(p_blocked_reason_names)`) e o portão do TypeScript (`includes`) comparam o texto EXATO, com acento
+ * e caixa: estes nomes precisam ser idênticos aos de `loss_reasons`. O TypeScript passa a lista ao SQL e o portão a
+ * confere de novo na hora de discar. Valem SÓ na recuperação (a fila normal segue ligando). "Cliente" e "Cliente
+ * oculto" NÃO estão aqui de propósito.
  */
 export const RECOVERY_BLOCKED_REASON_NAMES: readonly string[] = [
   ...NO_RESUME_REASON_NAMES,
@@ -35,6 +38,9 @@ export const RECOVERY_BLOCKED_REASON_NAMES: readonly string[] = [
   'Engano/Não Lembra',
   'Pessoa Física',
   'Desqualificado pelo closer',
+  'Não ICP',
+  'Contatos inválidos',
+  'Serviço fora de escopo',
 ];
 
 /** Linhas pedidas à função SQL (a mais recente primeiro). */

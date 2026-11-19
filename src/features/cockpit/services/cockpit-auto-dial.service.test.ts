@@ -364,6 +364,17 @@ describe('checkDialGate (travas no servidor)', () => {
     expect((await gate(setup([], { leads: [lead('A', { loss_reason_id: null })], loss_reasons: reasons }))).ok).toBe(true);
   });
 
+  it('Não ICP, Contatos inválidos e Serviço fora de escopo NÃO são "não retomar": a fila NORMAL não os recusa por motivo', async () => {
+    const reasons = [
+      { id: 'r-nicp', org_id: ORG, name: 'Não ICP' },
+      { id: 'r-inv', org_id: ORG, name: 'Contatos inválidos' },
+      { id: 'r-escopo', org_id: ORG, name: 'Serviço fora de escopo' },
+    ];
+    for (const id of ['r-nicp', 'r-inv', 'r-escopo']) {
+      expect((await gate(setup([], { leads: [lead('A', { loss_reason_id: id })], loss_reasons: reasons }))).ok, id).toBe(true);
+    }
+  });
+
   it('erro ao ler o motivo de perda na fila normal: não disca (falha fechada)', async () => {
     const client = setup([], { leads: [lead('A', { loss_reason_id: 'r-ok' })], loss_reasons: [{ id: 'r-ok', org_id: ORG, name: 'Sem interesse' }] });
     db.failReads.add('loss_reasons');
