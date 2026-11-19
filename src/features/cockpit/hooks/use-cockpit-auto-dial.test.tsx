@@ -442,6 +442,19 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     expect(dialAutoLeadAction).toHaveBeenCalledTimes(13);
   });
 
+  it('424: registra no console o estado do webphone, sem dados pessoais', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.mocked(dialAutoLeadAction).mockResolvedValue({ success: true, data: { status: 'ramal_busy', error: 'ocupado' } });
+    const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await startIt(result);
+    await advance(5000);
+    const call = warn.mock.calls.find((c) => String(c[0]).includes('424'));
+    expect(call).toBeDefined();
+    expect(Object.keys(call?.[1] as object).sort()).toEqual(['callPhase', 'hasCall', 'registration', 'sessionConflict', 'sipSessionOpen']);
+    expect(JSON.stringify(call)).not.toMatch(/55\d{8,}|\d{10,}/);
+    warn.mockRestore();
+  });
+
   it('424 que passa na 3ª tentativa: o motor segue e a contagem de 1 min recomeça no próximo 424', async () => {
     vi.mocked(dialAutoLeadAction)
       .mockResolvedValueOnce({ success: true, data: { status: 'ramal_busy', error: 'ocupado' } })

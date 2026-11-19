@@ -406,6 +406,15 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     if (r.status === 'ramal_busy') {
       // A-D11 (424): tenta de novo a cada 5 s por até 1 min; depois pausa com o motivo.
       if (reserved) cancelWebphoneDial(reserved.token);
+      // Diagnóstico do 424: estado do webphone desta aba no momento da recusa (sem número, nome ou id).
+      const wp = getWebphoneState();
+      console.warn('[cockpit-auto-dial] 424 ramal ocupado', {
+        registration: wp.registration,
+        hasCall: wp.call != null,
+        callPhase: wp.call?.phase ?? null,
+        sipSessionOpen: wp.call != null && wp.call.endedAt == null,
+        sessionConflict: wp.sessionConflict != null,
+      });
       const step = nextRamalBusyStep({ firstBusyAt: ramalBusyFirstAtRef.current, now: Date.now() });
       ramalBusyFirstAtRef.current = step.firstBusyAt;
       if (step.action === 'wait') {
