@@ -142,8 +142,8 @@ describe('NextCallCard com o motor', () => {
     expect(within(panel).getByTestId('lead-card-segmento').textContent).toContain('Telecom');
     expect(within(panel).getByTestId('lead-card-cnpj').textContent).toContain('47.301.384/0001-46');
     expect(within(panel).getByTestId('call-lead-opening')).toBeTruthy();
-    expect(within(panel).getByTestId('motor-lead-status-line').textContent).toBe('Em ligação · tentativa 2/3');
-    expect(within(panel).getByText('SIMULADO')).toBeTruthy();
+    expect(within(panel).queryByTestId('motor-lead-status')).toBeNull();
+    expect(within(panel).queryByText('SIMULADO')).toBeNull();
     // a área principal continua limpa
     expect(screen.getByTestId('auto-dial-clean-state').textContent).toContain('Acme Ltda');
     expect(screen.queryByTestId('why-now')).toBeNull();
@@ -227,10 +227,10 @@ describe('NextCallCard com o motor', () => {
     expect(screen.queryByLabelText('Observação do desfecho')).toBeNull();
   });
 
-  it('ligação real: LIGAÇÃO REAL na barra e no painel; sem resumo da IA nem sugestão de desfecho', () => {
+  it('ligação real: LIGAÇÃO REAL só na barra (o painel não repete); sem resumo da IA nem sugestão de desfecho', () => {
     setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { simulated: false });
     render(<NextCallCard card={null} dialerProvider="api4com" autoDial={{ enabled: true, live: true }} />);
-    expect(screen.getAllByText('LIGAÇÃO REAL').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('LIGAÇÃO REAL')).toHaveLength(1);
     expect(screen.queryByTestId('call-outcome')).toBeNull();
     expect(screen.queryByTestId('next-lead-button')).toBeNull();
   });

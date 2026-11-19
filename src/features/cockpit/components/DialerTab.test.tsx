@@ -311,7 +311,7 @@ describe('aba Discador: ações do lead sempre visíveis no painel', () => {
     render(<DialerTab autoDial={AUTO} />);
     const panel = screen.getByTestId('motor-lead-panel');
     for (const id of ids) expect(within(panel).getByTestId(id)).toBeTruthy();
-    expect(within(panel).getByText(/Quem liga é a discagem automática/)).toBeTruthy();
+    expect(within(panel).queryByText(/Quem liga é a discagem automática/)).toBeNull();
   });
 
   it('lead perdido: "Mudar motivo de perda"; qualificado sem ela; ganho e arquivado: nenhum botão', () => {

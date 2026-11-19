@@ -2,16 +2,14 @@
 
 import { useState } from 'react';
 
-import { PhoneCall, XIcon } from 'lucide-react';
+import { XIcon } from 'lucide-react';
 
-import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import type { AutoDialLeadCardExtras } from '../auto-dial.types';
 import type { NextCallCardData } from '../types';
 import { callNoteKey, readCallNote, writeCallNote } from '../utils/call-note-draft';
-import { AUTO_DIAL_RULES } from '../utils/auto-dial-rules';
 import { formatLostAgo } from '../utils/lead-card';
 import { leadCardFromCallContext } from '../utils/lead-card-from-context';
 
@@ -42,8 +40,6 @@ interface MotorLeadSidePanelProps {
   onOpenChange: (open: boolean) => void;
   /** Origem, cadastro, último SDR e perda do lead (servidor). Nulo/ausente: nada disso aparece. */
   extras?: AutoDialLeadCardExtras | null;
-  /** Estado da ligação do motor, no lugar da linha do telefone ("Em ligação"). Sem botão de discar. */
-  statusLine: string;
   simulated: boolean;
   /** Instância única das ações do lead (a da tela da discagem). Ausente: o painel fica só de leitura. */
   actions?: MotorLeadActions;
@@ -68,7 +64,6 @@ export function MotorLeadSidePanel({
   leadCardEnabled,
   open,
   onOpenChange,
-  statusLine,
   simulated,
   actions,
   queue = 'normal',
@@ -126,27 +121,6 @@ export function MotorLeadSidePanel({
             )}
             {closeButton}
           </header>
-
-          <div className="space-y-1 border-b px-4 py-3" data-testid="motor-lead-status">
-            <p className="text-sm font-semibold tabular-nums">{ctx.decisionMaker.phone ?? 'Sem telefone'}</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <PhoneCall className="text-muted-foreground h-3.5 w-3.5" />
-              <p className="text-muted-foreground text-sm" role="status" aria-live="polite" data-testid="motor-lead-status-line">
-                {statusLine}
-                {attemptNo ? ` · tentativa ${attemptNo}/${AUTO_DIAL_RULES.maxAttemptsPerDay}` : ''}
-              </p>
-              {simulated ? (
-                <Badge variant="outline" className="border-amber-500 font-bold text-amber-600 dark:text-amber-400">
-                  SIMULADO
-                </Badge>
-              ) : (
-                <Badge variant="destructive" className="font-bold">
-                  LIGAÇÃO REAL
-                </Badge>
-              )}
-            </div>
-            <p className="text-muted-foreground text-xs">Quem liga é a discagem automática. Para encerrar a ligação use o botão Desligar da barra da discagem.</p>
-          </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
             {model ? (

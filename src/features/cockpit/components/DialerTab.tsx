@@ -15,7 +15,7 @@ import { useMotorWebphoneNotes } from '../hooks/use-motor-webphone-notes';
 import type { AutoDialQueue } from '../utils/recovery-queue';
 
 import { AutoDialAnsweredBlock, AutoDialUnknownResultBlock } from './AutoDialAnsweredActions';
-import { autoDialStatusLine, CockpitAutoDialBar } from './CockpitAutoDialBar';
+import { CockpitAutoDialBar } from './CockpitAutoDialBar';
 import type { SchedulingPreview } from './CallMeetingDialogs';
 import { MotorLeadSidePanel } from './MotorLeadSidePanel';
 import { RecoveryTag, showsRecoveryTag } from './RecoveryTag';
@@ -226,7 +226,6 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
           onOpenChange={(next) => {
             if (!next) setDismissedLead(panelCard.context.leadId);
           }}
-          statusLine={autoDialStatusLine(engine)}
           simulated={engine.simulated}
           actions={leadActions}
           queue={queue}
