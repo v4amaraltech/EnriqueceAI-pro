@@ -31,7 +31,6 @@ function renderPanel(over: Partial<React.ComponentProps<typeof MotorLeadSidePane
       leadCardEnabled={false}
       open
       onOpenChange={vi.fn()}
-      statusLine="Em ligação"
       simulated={false}
       {...over}
     />,

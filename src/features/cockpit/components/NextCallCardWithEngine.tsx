@@ -10,7 +10,7 @@ import { useCockpitAutoDial, type UseCockpitAutoDialResult } from '../hooks/use-
 import type { NextCallCardData } from '../types';
 
 import { AutoDialAnsweredActions } from './AutoDialAnsweredActions';
-import { autoDialStatusLine, CockpitAutoDialBar } from './CockpitAutoDialBar';
+import { CockpitAutoDialBar } from './CockpitAutoDialBar';
 import type { SchedulingPreview } from './CallMeetingDialogs';
 import { MotorLeadSidePanel } from './MotorLeadSidePanel';
 import { NextCallCardBody } from './NextCallCard';
@@ -74,7 +74,6 @@ export function NextCallCardWithEngine({ card: serverCard, dialerProvider, autoD
       onOpenChange={(next) => {
         if (!next) setDismissedLead(panelCard.context.leadId);
       }}
-      statusLine={autoDialStatusLine(engine)}
       simulated={engine.simulated}
     />
   ) : null;
