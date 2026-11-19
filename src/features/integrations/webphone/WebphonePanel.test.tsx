@@ -65,13 +65,18 @@ const answer = vi.hoisted(() => ({
   hangupCause: null as string | null,
   durationSeconds: 0,
   exhausted: false,
+  /** Se definido, o hangup só existe para ESTE id (como no servidor: cada ligação tem o seu). */
+  hangupOnlyFor: null as string | null,
+  queried: [] as Array<string | null>,
 }));
 vi.mock('./useWebphoneLeadAnswer', () => ({
   useWebphoneLeadAnswer: (callId: string | null) => (callId ? answer.value : 'unknown'),
-  useWebphoneCallOutcome: (callId: string | null) =>
-    callId
-      ? { leadAnswer: answer.value, hangupCause: answer.hangupCause, durationSeconds: answer.durationSeconds, exhausted: answer.exhausted }
-      : { leadAnswer: 'unknown', hangupCause: null, durationSeconds: 0 },
+  useWebphoneCallOutcome: (callId: string | null) => {
+    answer.queried.push(callId);
+    return callId
+      ? { leadAnswer: answer.value, hangupCause: answer.hangupOnlyFor && answer.hangupOnlyFor !== callId ? null : answer.hangupCause, durationSeconds: answer.durationSeconds, exhausted: answer.exhausted }
+      : { leadAnswer: 'unknown', hangupCause: null, durationSeconds: 0 };
+  },
 }));
 
 const actions = vi.hoisted(() => ({
@@ -997,5 +1002,134 @@ describe('WebphonePanel — hideNotes (o Cockpit tem o próprio campo de anotaç
       phone.set({ ...ready, call: sipCall('in-call', started) });
     });
     expect(screen.getByRole('textbox', { name: 'Anotações da ligação' })).toBeInTheDocument();
+  });
+});
+
+describe('WebphonePanel — hangup gravado só desliga a MESMA ligação que está viva', () => {
+  const ctxOf = (callId: string, startedAt: number, dialToken: string | null) => ({
+    callId,
+    providerCallId: `prov-${callId.slice(0, 2)}`,
+    leadId: '6455684e-1111-4111-8111-111111111111',
+    leadName: null,
+    phone: '1151350071',
+    ownerHandlesResult: false,
+    startedAt,
+    dialToken,
+  });
+  const liveCallOf = (phase: WebphoneCall['phase'], startedAt: number, dialToken: string | null, id: string) => ({
+    ...sipCall(phase, startedAt, dialToken),
+    id,
+  });
+
+  beforeEach(() => {
+    resetWebphoneCallContextForTests();
+    resetWebphoneDialCorrelation();
+    answer.value = 'answered';
+    answer.hangupCause = 'NORMAL_CLEARING';
+    answer.durationSeconds = 30;
+    answer.hangupOnlyFor = null;
+    answer.queried = [];
+    phone.set(ready);
+    carrier.hangupLeg.mockClear();
+  });
+
+  it('chamada NOVA viva + contexto da ANTERIOR já com hangup_cause: NÃO desliga e avisa no console sem dados pessoais', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const t0 = Date.now();
+      setWebphoneCallContext(ctxOf(CALL_A, t0 - 20_000, 'token-a'));
+      render(<WebphonePanel />);
+      await act(async () => {
+        phone.set({ ...ready, call: sipCall('in-call', t0, 'token-b') });
+      });
+      expect(carrier.hangupLeg).not.toHaveBeenCalled();
+      const call = warn.mock.calls.find((c) => String(c[0]).includes('[webphone]'));
+      expect(call).toBeDefined();
+      const payload = call?.[1] as Record<string, unknown>;
+      expect(Object.keys(payload).sort()).toEqual(['contextCallId', 'contextStartedAt', 'hasDialToken', 'liveCallStartedAt', 'motivo']);
+      expect(payload.motivo).toBe('hangup_sem_contexto_da_chamada_viva');
+      expect(payload.contextCallId).toBe(CALL_A.slice(0, 8));
+      expect(JSON.stringify(payload)).not.toContain('1151350071');
+      // não há mais o aviso de ruído "contexto de outra ligação não casado"
+      expect(warn.mock.calls.some((c) => (c[1] as { motivo?: string } | undefined)?.motivo === 'contexto_de_outra_ligacao_nao_casado')).toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('caso legítimo: BYE não chegou, hangup gravado e a MESMA discagem viva (mesmo token) => desliga', async () => {
+    const t0 = Date.now();
+    setWebphoneCallContext(ctxOf(CALL_A, t0 - 1_000, 'token-a'));
+    render(<WebphonePanel />);
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('in-call', t0, 'token-a') });
+    });
+    expect(carrier.hangupLeg).toHaveBeenCalled();
+  });
+
+  it('contexto SEM token + chamada SEM token (manual/recebida) dentro da janela continua desligando', async () => {
+    const t0 = Date.now();
+    setWebphoneCallContext(ctxOf(CALL_A, t0 - 1_000, null));
+    render(<WebphonePanel />);
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('in-call', t0, null) });
+    });
+    expect(carrier.hangupLeg).toHaveBeenCalled();
+  });
+
+  it('chamada viva SEM token + contexto antigo COM token e hangup_cause: NÃO desliga e avisa hangup_sem_token_na_chamada_viva', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const t0 = Date.now();
+      setWebphoneCallContext(ctxOf(CALL_A, t0 - 20_000, 'token-a'));
+      render(<WebphonePanel />);
+      await act(async () => {
+        phone.set({ ...ready, call: sipCall('in-call', t0, null) });
+      });
+      expect(carrier.hangupLeg).not.toHaveBeenCalled();
+      expect(warn.mock.calls.some((c) => (c[1] as { motivo?: string } | undefined)?.motivo === 'hangup_sem_token_na_chamada_viva')).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('fluxo completo: A termina (finalizada), B entra viva com o contexto de A ainda publicado e só depois chega o de B', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const t0 = Date.now();
+      answer.hangupOnlyFor = CALL_A; // o servidor só tem hangup_cause da ligação A
+      setWebphoneCallContext(ctxOf(CALL_A, t0, 'token-a'));
+      render(<WebphonePanel />);
+      await act(async () => {
+        phone.set({ ...ready, call: liveCallOf('ended', t0, 'token-a', 'wp-a') });
+      });
+      expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+      carrier.hangupLeg.mockClear();
+      answer.queried = [];
+
+      // B entra viva; o contexto publicado ainda é o de A.
+      await act(async () => {
+        phone.set({ ...ready, call: liveCallOf('in-call', t0 + 5_000, 'token-b', 'wp-b') });
+      });
+      expect(carrier.hangupLeg).not.toHaveBeenCalled();
+
+      // O motor publica o contexto de B: o painel passa a seguir B e consulta o resultado de B (não o de A).
+      answer.queried = [];
+      await act(async () => {
+        setWebphoneCallContext(ctxOf(CALL_B, t0 + 5_500, 'token-b'));
+      });
+      expect(carrier.hangupLeg).not.toHaveBeenCalled();
+      expect(answer.queried).toContain(CALL_B);
+
+      // Quando o hangup de B for gravado e a MESMA sessão (token-b) seguir viva, aí sim desliga.
+      answer.hangupOnlyFor = CALL_B;
+      await act(async () => {
+        phone.set({ ...ready, call: liveCallOf('in-call', t0 + 5_000, 'token-b', 'wp-b') });
+        setWebphoneCallContext(ctxOf(CALL_B, t0 + 5_501, 'token-b'));
+      });
+      expect(carrier.hangupLeg).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

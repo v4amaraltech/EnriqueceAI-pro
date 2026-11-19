@@ -267,10 +267,22 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   // Hangup já gravado no servidor e a sessão SIP ainda em curso: o BYE pode
   // não ter chegado (a escuta segura o clone da faixa). Pede o desligamento
   // daqui, que primeiro para a escuta.
+  // Só vale se o hangup é da MESMA ligação que está viva: sem contexto casado com a chamada viva, o resultado
+  // consultado pode ser o da ligação anterior (contexto antigo ainda publicado) e derrubaria a chamada nova.
+  // Se o contexto casado tem dialToken, a chamada viva precisa ter o MESMO token.
   useEffect(() => {
     if (!hangupCause || !liveCall || liveCall.phase === 'ended') return;
+    if (!liveCallContext) {
+      warnOnce('hangup_sem_contexto_da_chamada_viva', liveCall, ctxState.context);
+      return;
+    }
+    if (liveCallContext.dialToken && liveCall.dialToken !== liveCallContext.dialToken) {
+      if (!liveCall.dialToken) warnOnce('hangup_sem_token_na_chamada_viva', liveCall, liveCallContext);
+      else warnOnce('hangup_token_diferente', liveCall, liveCallContext);
+      return;
+    }
     void hangupWebphoneLeg();
-  }, [hangupCause, liveCall]);
+  }, [hangupCause, liveCall, liveCallContext, ctxState.context]);
 
   // A ligação acabou de encerrar: congela a fotografia dela até o SDR concluir.
   // Ajuste durante o render (padrão do React para derivar estado de uma prop)
@@ -1178,4 +1190,25 @@ function RecoverableNotes({
       })}
     </div>
   );
+}
+
+const warnedPairs = new Set<string>();
+const WARNED_PAIRS_MAX = 200;
+/** console.warn de diagnóstico, uma vez por par contexto/chamada. Sem telefone, nome ou dados pessoais. */
+function warnOnce(
+  motivo: string,
+  liveCall: { startedAt: number; dialToken?: string | null },
+  ctx: { callId: string; startedAt: number } | null,
+): void {
+  const key = `${motivo}:${ctx?.callId ?? '-'}:${liveCall.startedAt}`;
+  if (warnedPairs.has(key)) return;
+  if (warnedPairs.size >= WARNED_PAIRS_MAX) warnedPairs.clear();
+  warnedPairs.add(key);
+  console.warn('[webphone] contexto x chamada viva', {
+    motivo,
+    contextCallId: ctx ? ctx.callId.slice(0, 8) : null,
+    liveCallStartedAt: liveCall.startedAt,
+    contextStartedAt: ctx?.startedAt ?? null,
+    hasDialToken: Boolean(liveCall.dialToken),
+  });
 }

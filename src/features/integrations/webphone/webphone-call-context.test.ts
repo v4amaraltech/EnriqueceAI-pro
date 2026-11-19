@@ -137,6 +137,14 @@ describe('contextMatchesCall', () => {
     expect(contextMatchesCall({ ...ctx, startedAt: 10_000 }, { startedAt: 70_001 })).toBe(false);
   });
 
+  it('tokens de discagem diferentes: não casa mesmo dentro da janela; token ausente em um dos lados mantém a janela', () => {
+    const c = { ...ctx, startedAt: 10_000, dialToken: 'a' };
+    expect(contextMatchesCall(c, { startedAt: 11_000, dialToken: 'b' })).toBe(false);
+    expect(contextMatchesCall(c, { startedAt: 11_000, dialToken: 'a' })).toBe(true);
+    expect(contextMatchesCall(c, { startedAt: 11_000, dialToken: null })).toBe(true);
+    expect(contextMatchesCall({ ...c, dialToken: null }, { startedAt: 11_000, dialToken: 'b' })).toBe(true);
+  });
+
   it('sem contexto ou sem ligação não casa', () => {
     expect(contextMatchesCall(null, { startedAt: 1 })).toBe(false);
     expect(contextMatchesCall(ctx, null)).toBe(false);
