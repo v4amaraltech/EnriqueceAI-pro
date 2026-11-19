@@ -42,7 +42,7 @@ function setup(recovery: Row[] | null, tables: Record<string, Row[]> = {}, norma
   db = {
     tables: {
       calls: [], contact_holds: [], interactions: [], leads: [lostLead('A')], custom_fields: [], decision_events: [], scheduled_activities: [],
-      loss_reasons: [{ id: 'r-ok', org_id: ORG, name: 'Preço' }, { id: 'r-si', org_id: ORG, name: 'Sem interesse' }, { id: 'r-block', org_id: ORG, name: 'Blocklist' }, { id: 'r-spam', org_id: ORG, name: 'SPAM' }, { id: 'r-cliente', org_id: ORG, name: 'Cliente' }],
+      loss_reasons: [{ id: 'r-ok', org_id: ORG, name: 'Preço' }, { id: 'r-si', org_id: ORG, name: 'Sem interesse' }, { id: 'r-block', org_id: ORG, name: 'Blocklist' }, { id: 'r-spam', org_id: ORG, name: 'SPAM' }, { id: 'r-cliente', org_id: ORG, name: 'Cliente' }, { id: 'r-nicp', org_id: ORG, name: 'Não ICP' }, { id: 'r-inv', org_id: ORG, name: 'Contatos inválidos' }, { id: 'r-escopo', org_id: ORG, name: 'Serviço fora de escopo' }, { id: 'r-preco', org_id: ORG, name: 'Sem budget' }],
       ...tables,
     },
     failReads: new Set(),
@@ -173,6 +173,13 @@ describe('checkDialGate: fila de recuperação', () => {
     expect(await gate(setup([], { leads: [lostLead('A', { loss_reason_id: 'r-block' })] }), 'recovery')).toEqual({ ok: false, code: 'lead_unavailable' });
     expect(await gate(setup([], { leads: [lostLead('A', { loss_reason_id: 'r-spam' })] }), 'recovery')).toEqual({ ok: false, code: 'lead_unavailable' });
     expect(await gate(setup([], { leads: [lostLead('A', { loss_reason_id: 'r-cliente' })] }), 'recovery')).toMatchObject({ ok: true });
+    // Decisão de 19/11: Não ICP, Contatos inválidos e Serviço fora de escopo saem da recuperação; Sem interesse/Sem budget/Preço seguem.
+    for (const id of ['r-nicp', 'r-inv', 'r-escopo']) {
+      expect(await gate(setup([], { leads: [lostLead('A', { loss_reason_id: id })] }), 'recovery'), id).toEqual({ ok: false, code: 'lead_unavailable' });
+    }
+    for (const id of ['r-si', 'r-preco', 'r-ok']) {
+      expect(await gate(setup([], { leads: [lostLead('A', { loss_reason_id: id, lost_at: daysAgo(200) })] }), 'recovery'), id).toMatchObject({ ok: true });
+    }
     const client = setup([]);
     db.failReads.add('loss_reasons');
     expect(await gate(client, 'recovery')).toEqual({ ok: false, code: 'error' });
