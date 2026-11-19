@@ -488,34 +488,47 @@ export async function checkDialGate(input: {
     const live = await isCockpitAutoDialLive(scope);
 
     const client = input.client ?? createServiceRoleClient();
-    const holidays = input.holidays ?? (await loadMotorHolidays(client));
+    // Leituras independentes em paralelo (antes eram uma atrás da outra); as recusas continuam avaliadas na MESMA ordem abaixo.
+    const [holidays, motorCalls, recent, leadRes, holds, callStats, callbacks] = await Promise.all([
+      input.holidays ?? loadMotorHolidays(client),
+      countMotorCallsToday(client, orgId, userId, now),
+      // Trava suave contra disparo duplo (duas abas, cliques rápidos): ligação recente ou do motor ainda sem término.
+      loadRecentUserCalls(client, orgId, userId, now),
+      from(client, 'leads')
+        .select('id, assigned_to, closer_id, telefone, status, lost_at, loss_reason_id')
+        .eq('id', leadId)
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .maybeSingle() as PromiseLike<
+        One<{
+          id: string;
+          assigned_to: string | null;
+          closer_id: string | null;
+          telefone: string | null;
+          status: string;
+          lost_at: string | null;
+          loss_reason_id: string | null;
+        }>
+      >,
+      from(client, 'contact_holds')
+        .select('lead_id, tipo')
+        .eq('org_id', orgId)
+        .eq('lead_id', leadId)
+        .in('tipo', [...rules.blockedHoldTypes]) as PromiseLike<Rows<{ lead_id: string; tipo: string }>>,
+      loadLeadCallStats(client, orgId, leadId, now),
+      loadDueCallbacks(client, orgId, [leadId], now),
+    ]);
+
     const window = isWithinDialWindow(now, holidays, rules);
     if (!window.allowed) return refuse(window.code);
 
-    const motorCalls = await countMotorCallsToday(client, orgId, userId, now);
     if (motorCalls === null) return refuse('error');
     if (isDailyCapReached(motorCalls, rules)) return refuse('daily_cap');
 
-    // Trava suave contra disparo duplo (duas abas, cliques rápidos): ligação recente ou do motor ainda sem término.
-    const recent = await loadRecentUserCalls(client, orgId, userId, now);
     if (!recent) return refuse('error');
     const spacing = evaluateDialSpacing(recent, now);
     if (!spacing.allowed) return refuse(spacing.code);
 
-    const leadRes = (await from(client, 'leads')
-      .select('id, assigned_to, closer_id, telefone, status, lost_at, loss_reason_id')
-      .eq('id', leadId)
-      .eq('org_id', orgId)
-      .is('deleted_at', null)
-      .maybeSingle()) as One<{
-      id: string;
-      assigned_to: string | null;
-      closer_id: string | null;
-      telefone: string | null;
-      status: string;
-      lost_at: string | null;
-      loss_reason_id: string | null;
-    }>;
     if (leadRes.error) return refuse('error');
     const lead = leadRes.data;
     if (!lead) return refuse('lead_unavailable');
@@ -529,18 +542,8 @@ export async function checkDialGate(input: {
     const phone = lead.telefone?.trim();
     if (!phone) return refuse('no_phone');
 
-    const holds = (await from(client, 'contact_holds')
-      .select('lead_id, tipo')
-      .eq('org_id', orgId)
-      .eq('lead_id', leadId)
-      .in('tipo', [...rules.blockedHoldTypes])) as Rows<{ lead_id: string; tipo: string }>;
     if (holds.error || !holds.data) return refuse('error');
-
-    const callStats = await loadLeadCallStats(client, orgId, leadId, now);
     if (!callStats) return refuse('error');
-
-    // Retorno vencido (FR-23): fura "conversa hoje" e o intervalo, mas não bloqueio, dono nem as 3 tentativas.
-    const callbacks = await loadDueCallbacks(client, orgId, [leadId], now);
     if (!callbacks) return refuse('error');
 
     // Fila normal: lead qualificado (reunião marcada) não entra, salvo retorno vencido; conversa sem ação final fica 7 dias fora.
