@@ -34,11 +34,18 @@ vi.mock('@/features/integrations/webphone/webphone-dial-correlation', () => ({
   }),
   cancelWebphoneDial: vi.fn(),
 }));
-vi.mock('@/features/integrations/webphone/webphone-call-context', () => ({ setWebphoneCallContext: vi.fn() }));
+vi.mock('@/features/integrations/webphone/webphone-call-context', () => ({ setWebphoneCallContext: vi.fn(), requestWebphoneAutoConclude: vi.fn() }));
+const autoConclude = vi.hoisted(() => ({ on: true }));
+vi.mock('../utils/auto-conclude', () => ({
+  get AUTO_CONCLUDE_NO_CONVERSATION() {
+    return autoConclude.on;
+  },
+}));
 vi.mock('@/features/calls/hooks/use-call-hangup-detection', () => ({ useCallHangupDetection: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));
 
 import { getWebphoneState } from '@/features/integrations/webphone/webphone-client';
+import { requestWebphoneAutoConclude } from '@/features/integrations/webphone/webphone-call-context';
 
 const cardOf = (leadId: string) =>
   ({
@@ -77,6 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   phone.call = null;
   leadAnswer = 'unknown';
+  autoConclude.on = true;
   vi.mocked(useApi4ComWebphone).mockImplementation(() => ({ call: phone.call }) as never);
   vi.mocked(useWebphoneLeadAnswer).mockImplementation(() => leadAnswer);
   vi.mocked(getWebphoneState).mockImplementation(() => ({ call: phone.call }) as never);
@@ -256,5 +264,56 @@ describe('resolving sem resposta da operadora (timeout próprio de 45 s)', () =>
     await advance(3000);
     expect(hook.result.current.state.phase).not.toBe('awaiting-sdr');
     expect(hook.result.current.notice).toBe(NOT_ANSWERED_NOTICE);
+  });
+});
+
+describe('Concluir automático: só quando o motor decidiu "sem conversa" com segurança', () => {
+  it('escuta desligou (caixa postal, não atendeu, número inexistente): pede conclusão UMA vez, para a ligação certa', async () => {
+    for (const prediction of ['voicemail', 'no_answer', 'number_not_exist'] as const) {
+      vi.mocked(requestWebphoneAutoConclude).mockClear();
+      vi.mocked(getAutoDialCarrierHangupAction).mockResolvedValue(hungUp(prediction));
+      const h = await endUnknown(1);
+      await advance(3000); // antes de o motor discar o próximo lead (o mock reaproveita o mesmo callId)
+      expect(requestWebphoneAutoConclude, prediction).toHaveBeenCalledTimes(1);
+      expect(requestWebphoneAutoConclude).toHaveBeenCalledWith('call-1');
+      h.unmount();
+    }
+  });
+
+  it('operadora trouxe not_answered (hangup_cause conhecido): pede conclusão UMA vez', async () => {
+    const h = await endUnknown(1);
+    leadAnswer = 'not_answered';
+    h.rerender();
+    await advance(3000);
+    expect(requestWebphoneAutoConclude).toHaveBeenCalledTimes(1);
+    expect(requestWebphoneAutoConclude).toHaveBeenCalledWith('call-1');
+  });
+
+  it('lead atendeu e conversou: NÃO pede conclusão', async () => {
+    const h = await endUnknown(1);
+    leadAnswer = 'answered';
+    h.rerender();
+    await advance(60_000);
+    expect(requestWebphoneAutoConclude).not.toHaveBeenCalled();
+  });
+
+  it('sem resposta (unknown) até o prazo de 45 s, ou escuta sem marca auto_hangup: NÃO pede conclusão', async () => {
+    await endUnknown(1);
+    await advance(60_000);
+    expect(requestWebphoneAutoConclude).not.toHaveBeenCalled();
+  });
+
+  it('interruptor desligado: não pede conclusão em nenhum dos dois caminhos', async () => {
+    autoConclude.on = false;
+    vi.mocked(getAutoDialCarrierHangupAction).mockResolvedValue(hungUp('voicemail'));
+    const a = await endUnknown(1);
+    await advance(10_000);
+    a.unmount();
+    vi.mocked(getAutoDialCarrierHangupAction).mockResolvedValue({ success: true, data: { status: 'none' } });
+    const b = await endUnknown(1);
+    leadAnswer = 'not_answered';
+    b.rerender();
+    await advance(10_000);
+    expect(requestWebphoneAutoConclude).not.toHaveBeenCalled();
   });
 });

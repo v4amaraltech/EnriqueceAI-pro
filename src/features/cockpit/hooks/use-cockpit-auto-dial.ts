@@ -15,7 +15,7 @@ import {
 } from '@/features/activities/utils/power-dialer-webphone-sync';
 import { useApi4ComWebphone } from '@/features/integrations/webphone/useApi4ComWebphone';
 import { useWebphoneLeadAnswer } from '@/features/integrations/webphone/useWebphoneLeadAnswer';
-import { setWebphoneCallContext } from '@/features/integrations/webphone/webphone-call-context';
+import { requestWebphoneAutoConclude, setWebphoneCallContext } from '@/features/integrations/webphone/webphone-call-context';
 import { cancelWebphoneDial, publishWebphoneDial, reserveWebphoneDial } from '@/features/integrations/webphone/webphone-dial-correlation';
 import { getWebphoneState, prepareWebphoneMicForDial } from '@/features/integrations/webphone/webphone-client';
 import { dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
@@ -47,6 +47,7 @@ import {
   refreshTabLock,
   releaseTabLock,
 } from '../utils/auto-dial-tab-lock';
+import { AUTO_CONCLUDE_NO_CONVERSATION } from '../utils/auto-conclude';
 import { COCKPIT_ANSWER_TIMEOUT_MS } from '../utils/cockpit-answer-timeout';
 import { COCKPIT_SESSION_GRACE_MS, COCKPIT_SESSION_MISSING_MESSAGE } from '../utils/cockpit-session-grace';
 import { nextRamalBusyStep } from '../utils/ramal-busy-retry';
@@ -633,6 +634,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     }
     if (leadAnswer === 'not_answered') {
       if (callId) setNoticeState({ callId, text: NOT_ANSWERED_NOTICE });
+      // Webhook com o desfecho: o lead NÃO atendeu. O cartão do webphone conclui sozinho (só ligação real, com callId).
+      if (callId && AUTO_CONCLUDE_NO_CONVERSATION) requestWebphoneAutoConclude(callId);
       dispatch(noAnswerEvent(attemptNoRef.current)); // FR-6/FR-7
       return;
     }
@@ -655,6 +658,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
           notConversationCalls.current.add(id);
           carrierHangupCalls.current.add(id);
           setNoticeState({ callId: id, text: r.data.prediction === 'voicemail' ? VOICEMAIL_NOTICE : NOT_ANSWERED_NOTICE });
+          if (AUTO_CONCLUDE_NO_CONVERSATION) requestWebphoneAutoConclude(id);
           dispatch(noAnswerEvent(attemptNoRef.current));
           return;
         }
