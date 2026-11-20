@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 // Cada tabela devolve um "builder" encadeável que, ao ser aguardado, resolve com
 // os dados configurados no teste.
@@ -159,6 +159,12 @@ describe('fetchDialerQueueWithStats', () => {
   });
 
   it('com a flag ligada, sobe resposta, no-show e abertura na frente da cadência atrasada', async () => {
+    // Relógio fixo: a resposta (13/11) só prioriza por 7 dias. Com o relógio real o teste quebrava a partir de 20/11.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-14T15:00:00Z'));
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     vi.mocked(isCallPriorityV2Enabled).mockResolvedValue(true);
     const overdue = enrollment('e1', lead('l1', { telefone: '11999990001' }));
     overdue.next_step_due = '2026-11-01T09:00:00Z';
