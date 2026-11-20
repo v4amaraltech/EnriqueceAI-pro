@@ -301,6 +301,9 @@ describe('WebphonePanel — motivo quando o lead não atende', () => {
     await endCall(Date.now());
 
     expect(screen.getByTestId('webphone-confirming')).toHaveTextContent('Confirmando com a operadora…');
+    // Linha própria (role=status), fora do slot da direita (font-mono/shrink-0) que sobrepunha o título.
+    expect(screen.getByTestId('webphone-confirming')).toHaveAttribute('role', 'status');
+    expect(screen.getByTestId('webphone-confirming').closest('.font-mono')).toBeNull();
     expect(screen.queryByText('Não atendida')).not.toBeInTheDocument();
   });
 

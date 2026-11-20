@@ -1055,10 +1055,12 @@ function FinishedView({
   const name = call.context?.leadName ?? null;
   const number = call.context?.phone ?? call.remoteNumber;
   const reason = leadAnswer === 'not_answered' ? hangupReasonLabel(hangupCause) : null;
+  const answered = call.context ? leadAnsweredByServer(leadAnswer) : leadConnected(leadAnswer, call.answered);
+  const pendingResult = !answered && Boolean(call.context) && leadAnswer === 'unknown';
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
             Ligação finalizada
           </p>
@@ -1067,31 +1069,29 @@ function FinishedView({
             <p className="truncate text-xs text-[var(--muted-foreground)]">{number}</p>
           )}
         </div>
-        <p className="shrink-0 text-right font-mono text-lg tabular-nums">
-          {(
-            call.context
-              ? leadAnsweredByServer(leadAnswer)
-              : leadConnected(leadAnswer, call.answered)
-          ) ? (
-            formatDuration(call.talkSeconds)
-          ) : call.context && leadAnswer === 'unknown' ? (
-            // O webhook da operadora chega 7–24 s depois: até lá não afirmamos "Não atendida".
-            exhausted ? (
-              <span className="text-sm text-[var(--muted-foreground)]" data-testid="webphone-unconfirmed">
-                Resultado não confirmado
-              </span>
+        {!pendingResult && (
+          <p className="shrink-0 text-right font-mono text-lg tabular-nums">
+            {answered ? (
+              formatDuration(call.talkSeconds)
             ) : (
-              <span className="text-sm text-[var(--muted-foreground)]" data-testid="webphone-confirming">
-                Confirmando com a operadora…
+              <span className="text-sm text-amber-600">
+                {isOutOfAreaCall({ hangupCause }) ? OUT_OF_AREA_LABEL : 'Não atendida'}
               </span>
-            )
-          ) : (
-            <span className="text-sm text-amber-600">
-              {isOutOfAreaCall({ hangupCause }) ? OUT_OF_AREA_LABEL : 'Não atendida'}
-            </span>
-          )}
-        </p>
+            )}
+          </p>
+        )}
       </div>
+      {pendingResult && (
+        // O webhook da operadora chega 7–24 s depois: até lá não afirmamos "Não atendida".
+        // Linha própria (texto longo não cabe no slot da direita, que é shrink-0).
+        <p
+          className="text-xs text-[var(--muted-foreground)]"
+          role="status"
+          data-testid={exhausted ? 'webphone-unconfirmed' : 'webphone-confirming'}
+        >
+          {exhausted ? 'Resultado não confirmado' : 'Confirmando com a operadora…'}
+        </p>
+      )}
       {reason && (
         <p
           className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400"
