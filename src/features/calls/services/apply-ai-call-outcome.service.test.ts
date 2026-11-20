@@ -149,6 +149,36 @@ describe('applyAiCallOutcome', () => {
     expect(vi.mocked(applySdrCallResult).mock.calls[0]?.[1].sdrOutcome).toBeUndefined();
   });
 
+  it('SDR marca o desfecho DURANTE a classificação: a IA não sobrescreve (leitura fresca)', async () => {
+    const { client, state } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+    await applyAiCallOutcome(client, CALL, 'alô', {
+      classify: async () => {
+        state.sdr_disposition = 'answered_no_progress'; // o SDR clicou enquanto a IA classificava
+        return classification();
+      },
+      now: NOW,
+    });
+    expect(vi.mocked(applySdrCallResult).mock.calls[0]?.[1].sdrOutcome).toBeUndefined();
+  });
+
+  it('SDR escreve a anotação DURANTE a classificação: a IA junta a anotação nova, não a antiga', async () => {
+    const { client, state } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } }, notes: 'antiga' });
+    await applyAiCallOutcome(client, CALL, 'alô', {
+      classify: async () => {
+        state.notes = 'ligar pro sócio às 15h'; // o SDR digitou enquanto a IA classificava
+        return classification();
+      },
+      now: NOW,
+    });
+    expect(vi.mocked(applySdrCallResult).mock.calls[0]?.[1].notes).toContain('Anotação do SDR: ligar pro sócio às 15h');
+  });
+
+  it('controle: SDR não marcou nada => a IA aplica o desfecho como hoje', async () => {
+    const { client } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+    await applyAiCallOutcome(client, CALL, 'alô', { classify: async () => classification(), now: NOW });
+    expect(vi.mocked(applySdrCallResult).mock.calls[0]?.[1].sdrOutcome).toBe('relevant_conversation');
+  });
+
   it('falha da IA → failed + Revisar, sem aplicar nada', async () => {
     const { client, state } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
     const out = await applyAiCallOutcome(client, CALL, 'alô', {
@@ -185,6 +215,40 @@ describe('applyAiCallOutcome', () => {
       scheduledAt: '2026-11-06T18:00:00.000Z',
     });
     expect(state.metadata.ai_outcome).toMatchObject({ scheduled_activity_id: 'sched-1', callback_at: '2026-11-06T18:00:00.000Z' });
+  });
+
+  describe('retorno da IA × retorno do SDR (R1)', () => {
+    const callbackAi = () =>
+      classification({ disposition: 'callback_requested', callback_at: '2026-11-06T18:00:00.000Z', callback_time_from_lead: true });
+
+    it('SDR já registrou o desfecho: a IA NÃO agenda retorno (não sobrescreve o horário do SDR)', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { client, state } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } }, sdr_disposition: 'callback_requested' });
+      const out = await applyAiCallOutcome(client, CALL, 'me liga amanhã', { classify: async () => callbackAi(), now: NOW });
+      expect(scheduleCallbackActivity).not.toHaveBeenCalled();
+      expect(out).toMatchObject({ status: 'done', scheduled_activity_id: null });
+      expect(state.metadata.ai_outcome).toMatchObject({ scheduled_activity_id: null });
+    });
+
+    it('SDR marca o desfecho DURANTE a classificação (leitura fresca): a IA também não agenda', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { client, state } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+      await applyAiCallOutcome(client, CALL, 'me liga amanhã', {
+        classify: async () => {
+          state.sdr_disposition = 'callback_requested'; // o SDR clicou enquanto a IA classificava
+          return callbackAi();
+        },
+        now: NOW,
+      });
+      expect(scheduleCallbackActivity).not.toHaveBeenCalled();
+    });
+
+    it('controle: SDR sem desfecho => a IA agenda como sempre', async () => {
+      const { client } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } }, sdr_disposition: null });
+      const out = await applyAiCallOutcome(client, CALL, 'me liga amanhã', { classify: async () => callbackAi(), now: NOW });
+      expect(scheduleCallbackActivity).toHaveBeenCalledTimes(1);
+      expect(out).toMatchObject({ scheduled_activity_id: 'sched-1' });
+    });
   });
 
   it('outra execução já pegou (não está mais pending) → não classifica de novo', async () => {

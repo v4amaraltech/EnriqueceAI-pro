@@ -136,14 +136,21 @@ export async function applyAiCallOutcome(
   let needsReview = result.needs_review;
   let error: string | null = null;
 
+  // Leitura fresca ANTES de aplicar: a classificação leva segundos e o SDR pode ter marcado o desfecho (e o retorno
+  // dele) nesse meio tempo. Depois do `applySdrCallResult` a coluna já traz o desfecho da própria IA, então não dá mais
+  // para saber quem marcou.
+  // A mesma leitura fresca vale para a anotação: o SDR pode ter escrito nela enquanto a IA classificava.
+  const fresh = (await readCallState(supabase, call.id)) ?? state;
+  const sdrAlreadyMarked = Boolean(state?.sdr_disposition || fresh?.sdr_disposition);
+
   const applied = await applySdrCallResult(supabase, {
     orgId: call.org_id,
     userId: call.user_id ?? '',
     callId: call.id,
     // Nunca sobrescreve o que o SDR marcou.
-    sdrOutcome: state?.sdr_disposition ? undefined : result.disposition,
+    sdrOutcome: sdrAlreadyMarked ? undefined : result.disposition,
     clientDurationSeconds: 0,
-    notes: composeAiNotes(result.summary, state?.notes ?? null),
+    notes: composeAiNotes(result.summary, fresh?.notes ?? null),
     leadId: call.lead_id ?? undefined,
     via: 'power_dialer',
   });
@@ -153,7 +160,10 @@ export async function applyAiCallOutcome(
   }
 
   let scheduledActivityId: string | null = null;
-  if (result.disposition === 'callback_requested' && result.callback_at) {
+  if (result.disposition === 'callback_requested' && result.callback_at && sdrAlreadyMarked) {
+    // O SDR já registrou o desfecho (e o retorno dele): agendar aqui cancelaria o horário que ele marcou.
+    console.warn(`[ai-outcome] ligação ${call.id}: o SDR já marcou o desfecho; retorno da IA não agendado`);
+  } else if (result.disposition === 'callback_requested' && result.callback_at) {
     if (call.lead_id && call.user_id) {
       try {
         const scheduled = await scheduleCallbackActivity(supabase, {
