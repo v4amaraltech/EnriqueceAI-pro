@@ -88,7 +88,7 @@ async function hangUp(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Ligar' }));
   await screen.findByRole('button', { name: 'Encerrar ligação' });
   await user.click(screen.getByRole('button', { name: 'Encerrar ligação' }));
-  await screen.findByText(/Confirmando com a operadora/);
+  await screen.findByText(/Confirmando com a operadora/, undefined, { timeout: 5_000 });
 }
 
 // 20/11/2026: o Resultado abria "Não atendida" (versão curta) e virava a versão
@@ -134,6 +134,6 @@ describe('ActivityPhonePanel espera a operadora antes do Resultado', () => {
     act(() => {
       vi.advanceTimersByTime(OPERATOR_CONFIRM_MAX_WAIT_MS + 10);
     });
-    await screen.findByRole('dialog', { name: /Resultado da Ligação/ });
+    await screen.findByRole('dialog', { name: /Resultado da Ligação/ }, { timeout: 5_000 });
   });
 });

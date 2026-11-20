@@ -168,10 +168,7 @@ export function ActivityPhonePanel({
   useEffect(() => {
     if (!waitingOperator || !callId) return;
     const id = callId;
-    const timer = window.setTimeout(
-      () => setConfirmGiveUpCallId(id),
-      OPERATOR_CONFIRM_MAX_WAIT_MS,
-    );
+    const timer = window.setTimeout(() => setConfirmGiveUpCallId(id), OPERATOR_CONFIRM_MAX_WAIT_MS);
     return () => window.clearTimeout(timer);
   }, [waitingOperator, callId]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
