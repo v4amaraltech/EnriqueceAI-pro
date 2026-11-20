@@ -455,3 +455,29 @@ export function onWebphoneConcludeRequested(handler: (detail: WebphoneConcludeRe
   window.addEventListener(WEBPHONE_CONCLUDE_REQUESTED_EVENT, listener);
   return () => window.removeEventListener(WEBPHONE_CONCLUDE_REQUESTED_EVENT, listener);
 }
+
+// ---------------------------------------------------------------------------
+// Pedido de conclusão AUTOMÁTICA: discador dono → painel flutuante
+// ---------------------------------------------------------------------------
+
+export const WEBPHONE_AUTO_CONCLUDE_REQUESTED_EVENT = 'webphone:auto-conclude-requested';
+
+/**
+ * O discador dono (motor do Cockpit) decidiu que a ligação foi SEM CONVERSA: pede ao painel que conclua sozinho, como se
+ * o SDR clicasse em "Concluir". O painel guarda o pedido até o cartão "Ligação finalizada" existir e só age sobre este `callId`.
+ */
+export function requestWebphoneAutoConclude(callId: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent<string>(WEBPHONE_AUTO_CONCLUDE_REQUESTED_EVENT, { detail: callId }));
+}
+
+/** Assinatura do painel. Devolve a função de cancelar. */
+export function onWebphoneAutoConcludeRequested(handler: (callId: string) => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const listener = (e: Event) => {
+    const callId = (e as CustomEvent<string>).detail;
+    if (typeof callId === 'string' && callId) handler(callId);
+  };
+  window.addEventListener(WEBPHONE_AUTO_CONCLUDE_REQUESTED_EVENT, listener);
+  return () => window.removeEventListener(WEBPHONE_AUTO_CONCLUDE_REQUESTED_EVENT, listener);
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -45,6 +45,7 @@ import {
   parkWebphoneCallNotes,
   rehydrateWebphonePendingNotes,
   reportHeldWebphoneNotes,
+  onWebphoneAutoConcludeRequested,
   requestWebphoneConclude,
   retryHeldWebphoneNotes,
   setWebphoneCallNotes,
@@ -455,6 +456,33 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
     // Sem linha em `calls` (inbound que não passou por initiateCall): nada a classificar.
     finish(call);
   }
+
+  // Conclusão automática pedida pelo discador dono (ligação do motor SEM conversa). O pedido pode chegar ANTES de o cartão
+  // estar em 'finished' (a escuta derruba a ligação antes do fim da sessão SIP): fica guardado (só o mais recente) e é
+  // consumido quando o cartão desta ligação existir. Um disparo por callId; usa o MESMO handleConclude do clique manual.
+  const autoConcludeRequested = useRef<string | null>(null);
+  const autoConcluded = useRef(new Set<string>());
+  const [autoConcludeTick, setAutoConcludeTick] = useState(0);
+  useEffect(
+    () =>
+      onWebphoneAutoConcludeRequested((id) => {
+        autoConcludeRequested.current = id;
+        setAutoConcludeTick((n) => n + 1);
+      }),
+    [],
+  );
+  const runAutoConclude = useEffectEvent(() => {
+    const id = autoConcludeRequested.current;
+    if (!id || stage.kind !== 'finished' || !liveContext?.ownerHandlesResult) return;
+    if (liveContext.callId !== id || stage.call.context?.callId !== id) return;
+    autoConcludeRequested.current = null;
+    if (autoConcluded.current.has(id)) return;
+    autoConcluded.current.add(id);
+    handleConclude();
+  });
+  useEffect(() => {
+    runAutoConclude();
+  }, [stage, liveContext?.callId, autoConcludeTick]);
 
   function handleOwnResult(
     call: FinishedCall,

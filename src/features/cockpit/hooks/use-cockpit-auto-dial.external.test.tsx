@@ -41,7 +41,7 @@ vi.mock('@/features/integrations/webphone/webphone-dial-correlation', () => ({
   }),
   cancelWebphoneDial: vi.fn(),
 }));
-vi.mock('@/features/integrations/webphone/webphone-call-context', () => ({ setWebphoneCallContext: vi.fn() }));
+vi.mock('@/features/integrations/webphone/webphone-call-context', () => ({ setWebphoneCallContext: vi.fn(), requestWebphoneAutoConclude: vi.fn() }));
 vi.mock('@/features/calls/hooks/use-call-hangup-detection', () => ({ useCallHangupDetection: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));
 

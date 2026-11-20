@@ -106,6 +106,7 @@ vi.mock('@/features/calls/use-post-call-suggestion', () => ({
 import {
   clearWebphoneCallContext,
   onWebphoneConcludeRequested,
+  requestWebphoneAutoConclude,
   resetWebphoneCallContextForTests,
   setWebphoneCallContext,
   setWebphoneCallNotes,
@@ -1134,5 +1135,120 @@ describe('WebphonePanel — hangup gravado só desliga a MESMA ligação que est
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe('WebphonePanel — Concluir automático pedido pelo discador dono (motor, sem conversa)', () => {
+  beforeEach(() => {
+    resetWebphoneCallContextForTests();
+    resetWebphoneDialCorrelation();
+    answer.value = 'not_answered';
+    answer.hangupCause = 'NORMAL_TEMPORARY_FAILURE';
+    answer.durationSeconds = 0;
+    answer.exhausted = false;
+    for (const fn of Object.values(actions)) fn.mockClear();
+    phone.set(ready);
+  });
+
+  async function inCall(started: number) {
+    await act(async () => {
+      phone.set({ ...ready, call: sipCall('in-call', started) });
+    });
+  }
+
+  it('pedido com o cartão já finalizado: conclui UMA vez, com as anotações e a duração do clique manual', async () => {
+    const started = Date.now();
+    publish(true);
+    const concluded = vi.fn();
+    const off = onWebphoneConcludeRequested(concluded);
+    render(<WebphonePanel />);
+    await inCall(started);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Anotações da ligação' }), { target: { value: 'caixa postal' } });
+    await endCall(started);
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+
+    await act(async () => {
+      requestWebphoneAutoConclude(CALL_ID);
+      requestWebphoneAutoConclude(CALL_ID);
+    });
+
+    expect(concluded).toHaveBeenCalledTimes(1);
+    expect(concluded).toHaveBeenCalledWith({ callId: CALL_ID, durationSeconds: 0, notes: 'caixa postal' });
+    expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
+    off();
+  });
+
+  it('pedido ANTES do cartão finalizar (a escuta derruba a ligação antes do fim da sessão): guarda e conclui quando finalizar', async () => {
+    const started = Date.now();
+    answer.hangupCause = null; // com hangup_cause já no servidor o cartão finaliza sem SIP; aqui ele só finaliza com o fim da sessão
+    publish(true);
+    const concluded = vi.fn();
+    const off = onWebphoneConcludeRequested(concluded);
+    render(<WebphonePanel />);
+    await inCall(started);
+
+    await act(async () => {
+      requestWebphoneAutoConclude(CALL_ID);
+    });
+    expect(concluded).not.toHaveBeenCalled();
+
+    await endCall(started);
+
+    expect(concluded).toHaveBeenCalledTimes(1);
+    expect(concluded).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID }));
+    expect(screen.queryByText('Ligação finalizada')).not.toBeInTheDocument();
+    off();
+  });
+
+  it('callId diferente: ignora, o cartão continua esperando o clique', async () => {
+    const started = Date.now();
+    publish(true);
+    const concluded = vi.fn();
+    const off = onWebphoneConcludeRequested(concluded);
+    render(<WebphonePanel />);
+    await inCall(started);
+    await endCall(started);
+
+    await act(async () => {
+      requestWebphoneAutoConclude('outra-ligacao');
+    });
+
+    expect(concluded).not.toHaveBeenCalled();
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    off();
+  });
+
+  it('sem ownerHandlesResult (ligação fora do motor): ignora', async () => {
+    const started = Date.now();
+    publish(false);
+    const concluded = vi.fn();
+    const off = onWebphoneConcludeRequested(concluded);
+    render(<WebphonePanel />);
+    await inCall(started);
+    await endCall(started);
+
+    await act(async () => {
+      requestWebphoneAutoConclude(CALL_ID);
+    });
+
+    expect(concluded).not.toHaveBeenCalled();
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    off();
+  });
+
+  it('sem pedido (conversa, "Confirmando…" ou sem decisão): o cartão NÃO conclui sozinho', async () => {
+    const started = Date.now();
+    answer.value = 'unknown';
+    answer.hangupCause = null;
+    publish(true);
+    const concluded = vi.fn();
+    const off = onWebphoneConcludeRequested(concluded);
+    render(<WebphonePanel />);
+    await inCall(started);
+    await endCall(started);
+
+    expect(concluded).not.toHaveBeenCalled();
+    expect(screen.getByText('Ligação finalizada')).toBeInTheDocument();
+    off();
   });
 });
