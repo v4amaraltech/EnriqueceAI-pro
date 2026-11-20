@@ -8,6 +8,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
 import type { AutoDialView } from '../auto-dial.types';
+import { useAutoDialDayStats } from '../hooks/use-auto-dial-day-stats';
 import { useCockpitAutoDial, type UseCockpitAutoDialResult } from '../hooks/use-cockpit-auto-dial';
 import { useMotorCallNoteSaver } from '../hooks/use-motor-call-note-saver';
 import { useMotorPanelNote } from '../hooks/use-motor-panel-note';
@@ -17,6 +18,7 @@ import type { AutoDialQueue } from '../utils/recovery-queue';
 import { AutoDialAnsweredBlock, AutoDialUnknownResultBlock } from './AutoDialAnsweredActions';
 import { CockpitAutoDialBar } from './CockpitAutoDialBar';
 import type { SchedulingPreview } from './CallMeetingDialogs';
+import { DialerDaySummary } from './DialerDaySummary';
 import { MotorLeadSidePanel } from './MotorLeadSidePanel';
 import { RecoveryTag, showsRecoveryTag } from './RecoveryTag';
 import { useMotorLeadActions } from './use-motor-lead-actions';
@@ -80,6 +82,11 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
   const phase = engine.state.phase;
   const running = phase !== 'off';
   const inCallPhase = CALL_PHASES.has(phase);
+  // Resumo do dia: relê no início (nova ligação) e no fim (sai da fase de ligação) de cada ligação. Simulado não grava.
+  const dayStats = useAutoDialDayStats({
+    enabled: !engine.simulated && !previewOnly,
+    refreshKey: `${seenCalls.length}:${inCallPhase ? 'call' : 'idle'}`,
+  });
   // "Concluir" do webphone grava a nota da ligação do motor (antes ninguém no Cockpit escutava).
   const noteSaver = useMotorCallNoteSaver();
   useMotorWebphoneNotes({ live: !engine.simulated, callId: engine.callId, saver: noteSaver });
@@ -188,6 +195,8 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
             Pare a discagem para trocar de fila.
           </p>
         )}
+
+        {dayStats && <DialerDaySummary {...dayStats} />}
 
         <div className="space-y-4 rounded-lg border border-[var(--primary)]/40 bg-[var(--card)] p-4">
           <CockpitAutoDialBar engine={engine} sessionCalls={seenCalls.length} onHangup={() => void hangupCall()} />

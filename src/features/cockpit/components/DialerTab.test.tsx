@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useAutoDialDayStats } from '../hooks/use-auto-dial-day-stats';
 import { useCockpitAutoDial, type UseCockpitAutoDialResult } from '../hooks/use-cockpit-auto-dial';
 import type { NextCallCardData } from '../types';
 import { suggestApproach } from '../utils/call-approach';
@@ -10,6 +11,8 @@ import { DialerTab } from './DialerTab';
 
 const hook = vi.hoisted(() => ({ result: null as unknown }));
 vi.mock('../hooks/use-cockpit-auto-dial', () => ({ useCockpitAutoDial: vi.fn(() => hook.result) }));
+const dayStats = vi.hoisted(() => ({ value: null as unknown }));
+vi.mock('../hooks/use-auto-dial-day-stats', () => ({ useAutoDialDayStats: vi.fn(() => dayStats.value) }));
 vi.mock('@/features/integrations/webphone/webphone-client', () => ({ hangupCall: vi.fn(async () => undefined) }));
 vi.mock('./use-lead-history', () => ({ useLeadHistory: () => ({ entries: [], status: 'ready' }) }));
 vi.mock('@/features/leads/components/MarkLeadLostDialog', () => ({
@@ -67,9 +70,43 @@ function setEngine(state: CockpitAutoDialState, extra: Partial<UseCockpitAutoDia
 describe('aba Discador', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dayStats.value = null;
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.hasPointerCapture = vi.fn(() => false);
     Element.prototype.releasePointerCapture = vi.fn();
+  });
+
+  it('resumo do dia: aparece quando há números e some sem eles', () => {
+    setEngine({ phase: 'off' });
+    const { unmount } = render(<DialerTab autoDial={AUTO} />);
+    expect(screen.queryByTestId('dialer-day-summary')).toBeNull();
+    unmount();
+
+    dayStats.value = { callsToday: 12, answeredToday: 3, ratePct: 25, dailyCap: 400, remaining: 388 };
+    render(<DialerTab autoDial={AUTO} />);
+    expect(screen.getByTestId('dialer-day-calls').textContent).toContain('12');
+    expect(screen.getByTestId('dialer-day-remaining').textContent).toContain('388');
+  });
+
+  it('resumo do dia: simulado não consulta; ligação real consulta e relê no início e no fim da ligação', () => {
+    setEngine({ phase: 'off' });
+    const { unmount } = render(<DialerTab autoDial={AUTO} />);
+    expect(vi.mocked(useAutoDialDayStats).mock.calls.at(-1)?.[0]).toMatchObject({ enabled: false });
+    unmount();
+
+    setEngine({ phase: 'off' }, { simulated: false });
+    const { rerender } = render(<DialerTab autoDial={AUTO} />);
+    const first = vi.mocked(useAutoDialDayStats).mock.calls.at(-1)?.[0];
+    expect(first).toMatchObject({ enabled: true });
+
+    setEngine({ phase: 'dialing', leadId: 'lead-1' } as CockpitAutoDialState, { simulated: false, callId: 'call-9', card });
+    rerender(<DialerTab autoDial={AUTO} />);
+    const during = vi.mocked(useAutoDialDayStats).mock.calls.at(-1)?.[0];
+    expect(during?.refreshKey).not.toBe(first?.refreshKey);
+
+    setEngine({ phase: 'waiting' } as CockpitAutoDialState, { simulated: false, callId: 'call-9' });
+    rerender(<DialerTab autoDial={AUTO} />);
+    expect(vi.mocked(useAutoDialDayStats).mock.calls.at(-1)?.[0].refreshKey).not.toBe(during?.refreshKey);
   });
 
   it('tela limpa: título, fila, barra do motor e estado curto; sem cartão cheio e sem "Ligar agora"', () => {
