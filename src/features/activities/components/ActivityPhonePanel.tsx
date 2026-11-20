@@ -66,6 +66,9 @@ import { DockMicControl } from './DockMicControl';
 
 export type CallState = 'idle' | 'calling' | 'connected' | 'ended';
 
+/** Espera máxima pela resposta da operadora antes de abrir o Resultado mesmo assim. */
+export const OPERATOR_CONFIRM_MAX_WAIT_MS = 15_000;
+
 interface ActivityPhonePanelProps {
   leadName: string;
   leadId: string;
@@ -151,6 +154,26 @@ export function ActivityPhonePanel({
     connected: callConnected,
     enabled: callState === 'ended',
   });
+  // API4COM: o modal espera a operadora dizer se o lead atendeu. Sem isso ele
+  // abria como "Não atendida" (versão curta) e, segundos depois, virava a
+  // versão completa sozinho quando o webhook chegava — parecia um segundo
+  // modal (20/11/2026). Teto de espera para não prender o SDR se o webhook atrasar.
+  const [confirmGiveUpCallId, setConfirmGiveUpCallId] = useState<string | null>(null);
+  const waitingOperator =
+    dialerProvider === 'api4com' &&
+    callState === 'ended' &&
+    callId !== null &&
+    leadAnswer === 'unknown' &&
+    confirmGiveUpCallId !== callId;
+  useEffect(() => {
+    if (!waitingOperator || !callId) return;
+    const id = callId;
+    const timer = window.setTimeout(
+      () => setConfirmGiveUpCallId(id),
+      OPERATOR_CONFIRM_MAX_WAIT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [waitingOperator, callId]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, startTransition] = useTransition();
   // Synchronous guard against double-clicks. useTransition's isPending only
@@ -509,7 +532,7 @@ export function ActivityPhonePanel({
   const resultNotes = mergeCallNotes(companionNotes, webphoneNotes);
   const resultModal = (
     <CallResultModal
-      open={callState === 'ended'}
+      open={callState === 'ended' && !waitingOperator}
       callId={callId}
       hangupCause={outcome.hangupCause}
       onClose={handleDismissModal}
@@ -546,7 +569,9 @@ export function ActivityPhonePanel({
         : callState === 'connected'
           ? 'Em chamada'
           : callState === 'ended'
-            ? 'Encerrada'
+            ? waitingOperator
+              ? 'Confirmando com a operadora…'
+              : 'Encerrada'
             : 'Pronta para ligar';
     return (
       <div data-testid="call-dock-controls" className="space-y-2">
