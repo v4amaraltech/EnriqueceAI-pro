@@ -511,6 +511,12 @@ export async function reserveCloserSlot(args: {
    * reunião do Enriquece, trava, feriado nem agenda desconhecida.
    */
   allowOverlap?: boolean;
+  /**
+   * O SDR confirmou marcar por cima de outra reunião do Enriquece deste
+   * closer. Feriado e agenda desconhecida continuam recusados. A reunião fica
+   * sem trava própria quando a vaga já está travada por outra.
+   */
+  allowAppOverlap?: boolean;
 }): Promise<ReserveResult> {
   const start = meetingInstant(args.startTime);
   const end = meetingInstant(args.endTime);
@@ -541,7 +547,20 @@ export async function reserveCloserSlot(args: {
     appMeetings,
     holiday: loaded.data.holidays.includes(brtDateKeyFromInstant(start)),
   });
-  const decision = bookingDecision(kind, { allowOverlap: args.allowOverlap === true });
+  const appOverlap = kind === 'busy' && args.allowAppOverlap === true;
+  // Por cima de reunião do Enriquece: reavalia sem ela, para feriado, agenda
+  // desconhecida e Google ocupado continuarem valendo.
+  const effectiveKind = appOverlap
+    ? classifySlot({
+        start,
+        end,
+        calendarKnown: loaded.data.calendarKnown,
+        calendarBusy: loaded.data.calendarBusy,
+        appMeetings: [],
+        holiday: loaded.data.holidays.includes(brtDateKeyFromInstant(start)),
+      })
+    : kind;
+  const decision = bookingDecision(effectiveKind, { allowOverlap: args.allowOverlap === true });
   if (!decision.allow) return { ok: false, error: decision.error, code: decision.code };
 
   if (args.retargetExisting) {
@@ -555,6 +574,11 @@ export async function reserveCloserSlot(args: {
     });
     if (moved.status === 'updated') return { ok: true, holdId: moved.id };
     if (moved.status === 'conflict') {
+      if (args.allowAppOverlap === true) {
+        // A vaga nova é de outra reunião: solta a trava antiga e segue sem trava.
+        await releaseLeadHolds(args.supabase, args.orgId, args.leadId, 'released');
+        return { ok: true, holdId: null };
+      }
       return { ok: false, error: 'Este closer já tem reunião neste horário.', code: 'CLOSER_BUSY' };
     }
     if (moved.status === 'error') {
@@ -582,6 +606,7 @@ export async function reserveCloserSlot(args: {
   const outcome = interpretHoldError(inserted.error);
   if (outcome === 'ok' && inserted.id) return { ok: true, holdId: inserted.id };
   if (outcome === 'conflict') {
+    if (args.allowAppOverlap === true) return { ok: true, holdId: null };
     return { ok: false, error: 'Este closer já tem reunião neste horário.', code: 'CLOSER_BUSY' };
   }
   if (outcome === 'table_missing') {
@@ -620,8 +645,17 @@ export async function releaseCloserHold(supabase: Db, holdId: string, status: 'r
  * nova reunião por cima do horário.
  */
 export async function releaseCloserHoldsForLead(supabase: Db, orgId: string, leadId: string): Promise<void> {
+  await releaseLeadHolds(supabase, orgId, leadId, 'cancelled');
+}
+
+async function releaseLeadHolds(
+  supabase: Db,
+  orgId: string,
+  leadId: string,
+  status: 'released' | 'cancelled',
+): Promise<void> {
   const { error } = await from(supabase, 'closer_booking_holds')
-    .update({ status: 'cancelled', released_at: new Date().toISOString() } as Record<string, unknown>)
+    .update({ status, released_at: new Date().toISOString() } as Record<string, unknown>)
     .eq('org_id', orgId)
     .eq('lead_id', leadId)
     .eq('status', 'held');

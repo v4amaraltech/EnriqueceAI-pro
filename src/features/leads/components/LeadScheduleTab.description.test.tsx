@@ -66,6 +66,7 @@ describe('LeadScheduleTab descrição do convite', () => {
         startTime: '2026-11-20T09:00:00',
       }),
       100_000,
+      undefined,
     );
   });
 });
