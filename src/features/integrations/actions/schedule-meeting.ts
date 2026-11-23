@@ -45,6 +45,8 @@ import { formatMeetingDateTime } from '../utils/format-meeting-datetime';
  */
 export interface MeetingBookingOptions {
   allowOverlap?: boolean;
+  /** O SDR confirmou marcar por cima de outra reunião do Enriquece do closer. */
+  allowAppOverlap?: boolean;
 }
 
 export async function scheduleMeeting(
@@ -114,6 +116,7 @@ export async function scheduleMeeting(
     endTime: input.endTime,
     sdrConnection: connection,
     allowOverlap: options?.allowOverlap === true,
+    allowAppOverlap: options?.allowAppOverlap === true,
   });
   if (!gate.ok) return { success: false, error: gate.error, code: gate.code };
 
@@ -509,6 +512,7 @@ export async function updateMeeting(
       retargetExisting: true,
       sdrConnection: connection,
       allowOverlap: options?.allowOverlap === true,
+      allowAppOverlap: options?.allowAppOverlap === true,
     });
     if (!gate.ok) return { success: false, error: gate.error, code: gate.code };
     gateHoldId = gate.holdId;

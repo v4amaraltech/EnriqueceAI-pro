@@ -6,12 +6,26 @@ import { toast } from 'sonner';
 import { Calendar, Video } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import { getCalendarAuthUrl } from '@/features/integrations/actions/manage-calendar';
-import { scheduleMeeting, getLoggedUserEmail, checkCalendarConnected, getLeadFaturamento } from '@/features/integrations/actions/schedule-meeting';
+import {
+  scheduleMeeting,
+  getLoggedUserEmail,
+  checkCalendarConnected,
+  getLeadFaturamento,
+  type MeetingBookingOptions,
+} from '@/features/integrations/actions/schedule-meeting';
 import { getMissingMeetingFields } from '../actions/get-missing-meeting-fields';
 import type { MissingRequiredField } from '../utils/required-field-validation';
 import { listClosers, type CloserRow } from '@/features/settings-prospecting/actions/closers-crud';
@@ -52,6 +66,8 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
 
   // Closer selection
   const [closers, setClosers] = useState<CloserRow[]>([]);
+  /** Motivo do servidor quando o closer está ocupado; abre o "Marcar mesmo assim?". */
+  const [busyMessage, setBusyMessage] = useState<string | null>(null);
   const [closersLoaded, setClosersLoaded] = useState(false);
   const [selectedCloserId, setSelectedCloserId] = useState('');
   const [sdrEmail, setSdrEmail] = useState('');
@@ -249,67 +265,100 @@ export function LeadScheduleTab({ leadId, leadEmail, companyName }: LeadSchedule
       <Button
         className="w-full"
         disabled={!meetingDate || !meetingTime || isMeetingPending || parseFaturamentoInput(faturamentoStr) === null || missingFields.length > 0}
-        onClick={() => {
-          // Send local datetime string (no UTC conversion) — Google Calendar uses timeZone param
-          const startIso = `${meetingDate}T${meetingTime}:00`;
-          const endMs = new Date(startIso).getTime() + parseInt(meetingDuration, 10) * 60 * 1000;
-          const endDate = new Date(endMs);
-          const endIso = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}T${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
-          const title = meetingTitle || defaultTitle;
-
-          const faturamento = parseFaturamentoInput(faturamentoStr);
-          if (faturamento === null) {
-            toast.error('Informe o faturamento estimado do lead (em R$) antes de agendar.');
-            return;
-          }
-
-          // Closer obrigatório: sem ele, o servidor pula briefing (BANT) + grupo de
-          // WhatsApp silenciosamente (ambos são gated em closerId). Ver Imperius Fitness.
-          if (!selectedCloserId) {
-            toast.error('Selecione o closer responsável antes de agendar a reunião.');
-            return;
-          }
-
-          startMeetingTransition(async () => {
-            const result = await scheduleMeeting(leadId, {
-              title,
-              description: meetingDescription,
-              startTime: startIso,
-              endTime: endIso,
-              attendeeEmails: (meetingAttendee || leadEmail)
-                ? (meetingAttendee || leadEmail || '').split(',').map((e: string) => e.trim()).filter(Boolean)
-                : undefined,
-              generateMeetLink: meetingMeetLink,
-              closerId: selectedCloserId || undefined,
-            }, faturamento);
-
-            if (result.success) {
-              const meetInfo = result.data.meetLink ? ` | Meet: ${result.data.meetLink}` : '';
-              toast.success(`Reunião agendada!${meetInfo}`);
-              setMeetingDate('');
-              setMeetingTitle('');
-              setMeetingDescription(DEFAULT_MEETING_INVITE_DESCRIPTION);
-              setSelectedCloserId('');
-              setMeetingAttendee('');
-              router.refresh();
-            } else if (result.code === 'GCAL_TOKEN_EXPIRED') {
-              toast.info('Reconectando ao Google Calendar...');
-              const authResult = await getCalendarAuthUrl();
-              if (authResult.success) {
-                window.location.href = authResult.data.url;
-              } else {
-                toast.error('Conexão com o Google expirou. Reconecte em Configurações > Integrações.', { duration: 8000 });
-                setTimeout(() => { router.push('/settings/integrations'); }, 1500);
-              }
-            } else {
-              toast.error(result.error);
-            }
-          });
-        }}
+        onClick={() => submitMeeting()}
       >
         <Calendar className="mr-2 h-4 w-4" />
         {isMeetingPending ? 'Agendando...' : 'Agendar Reunião'}
       </Button>
+
+      <Dialog open={busyMessage !== null} onOpenChange={(next) => { if (!next) setBusyMessage(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">Closer ocupado neste horário</DialogTitle>
+            <DialogDescription className="text-foreground text-sm">
+              {busyMessage} Marcar mesmo assim?
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-muted-foreground text-xs">
+            A reunião entra na agenda do closer por cima do outro compromisso. Combine com ele antes, se precisar.
+          </p>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => setBusyMessage(null)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={isMeetingPending}
+              onClick={() => {
+                setBusyMessage(null);
+                submitMeeting({ allowOverlap: true, allowAppOverlap: true });
+              }}
+            >
+              Marcar mesmo assim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+
+  /** Sem `overlap`, closer ocupado pede confirmação. Com ela, marca por cima. */
+  function submitMeeting(overlap?: MeetingBookingOptions) {
+    // Send local datetime string (no UTC conversion) — Google Calendar uses timeZone param
+    const startIso = `${meetingDate}T${meetingTime}:00`;
+    const endMs = new Date(startIso).getTime() + parseInt(meetingDuration, 10) * 60 * 1000;
+    const endDate = new Date(endMs);
+    const endIso = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}T${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
+    const title = meetingTitle || defaultTitle;
+
+    const faturamento = parseFaturamentoInput(faturamentoStr);
+    if (faturamento === null) {
+      toast.error('Informe o faturamento estimado do lead (em R$) antes de agendar.');
+      return;
+    }
+
+    // Closer obrigatório: sem ele, o servidor pula briefing (BANT) + grupo de
+    // WhatsApp silenciosamente (ambos são gated em closerId). Ver Imperius Fitness.
+    if (!selectedCloserId) {
+      toast.error('Selecione o closer responsável antes de agendar a reunião.');
+      return;
+    }
+
+    startMeetingTransition(async () => {
+      const result = await scheduleMeeting(leadId, {
+        title,
+        description: meetingDescription,
+        startTime: startIso,
+        endTime: endIso,
+        attendeeEmails: (meetingAttendee || leadEmail)
+          ? (meetingAttendee || leadEmail || '').split(',').map((e: string) => e.trim()).filter(Boolean)
+          : undefined,
+        generateMeetLink: meetingMeetLink,
+        closerId: selectedCloserId || undefined,
+      }, faturamento, overlap);
+
+      if (result.success) {
+        const meetInfo = result.data.meetLink ? ` | Meet: ${result.data.meetLink}` : '';
+        toast.success(`Reunião agendada!${meetInfo}`);
+        setMeetingDate('');
+        setMeetingTitle('');
+        setMeetingDescription(DEFAULT_MEETING_INVITE_DESCRIPTION);
+        setSelectedCloserId('');
+        setMeetingAttendee('');
+        router.refresh();
+      } else if (result.code === 'CLOSER_BUSY' && !overlap) {
+        setBusyMessage(result.error);
+      } else if (result.code === 'GCAL_TOKEN_EXPIRED') {
+        toast.info('Reconectando ao Google Calendar...');
+        const authResult = await getCalendarAuthUrl();
+        if (authResult.success) {
+          window.location.href = authResult.data.url;
+        } else {
+          toast.error('Conexão com o Google expirou. Reconecte em Configurações > Integrações.', { duration: 8000 });
+          setTimeout(() => { router.push('/settings/integrations'); }, 1500);
+        }
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
 }

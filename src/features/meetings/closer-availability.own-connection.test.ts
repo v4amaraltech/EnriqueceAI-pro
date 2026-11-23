@@ -280,7 +280,7 @@ describe('reserva do horário com allowOverlap', () => {
     ]);
   });
 
-  function reserve(client: ReturnType<typeof reserveSupabase>, allowOverlap?: boolean) {
+  function reserve(client: ReturnType<typeof reserveSupabase>, allowOverlap?: boolean, allowAppOverlap?: boolean) {
     return reserveCloserSlot({
       supabase: client as never,
       orgId: 'org-1',
@@ -291,8 +291,34 @@ describe('reserva do horário com allowOverlap', () => {
       endTime: '2026-11-16T16:00:00.000Z',
       sdrConnection: sdr,
       ...(allowOverlap === undefined ? {} : { allowOverlap }),
+      ...(allowAppOverlap === undefined ? {} : { allowAppOverlap }),
     });
   }
+
+  it('reunião do Enriquece: SDR confirmou, marca por cima', async () => {
+    const client = reserveSupabase({ appMeetingAt: '2026-11-16T15:00:00.000Z' });
+    const result = await reserve(client, true, true);
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it('reunião do Enriquece com trava: SDR confirmou, segue sem trava própria', async () => {
+    const client = reserveSupabase({ appMeetingAt: '2026-11-16T15:00:00.000Z', holdConflict: true });
+    const result = await reserve(client, true, true);
+    expect(result).toEqual({ ok: true, holdId: null });
+  });
+
+  it('por cima de reunião do Enriquece, o Google ocupado ainda exige allowOverlap', async () => {
+    const client = reserveSupabase({ appMeetingAt: '2026-11-16T15:00:00.000Z' });
+    const result = await reserve(client, false, true);
+    expect(result).toMatchObject({ ok: false, code: 'CLOSER_BUSY' });
+  });
+
+  it('por cima de reunião do Enriquece, agenda desconhecida continua bloqueando', async () => {
+    listEvents.mockRejectedValue(new FakeCalendarEventsError('failed', 503));
+    queryFreeBusy.mockRejectedValue(new Error('rede'));
+    const result = await reserve(reserveSupabase({ appMeetingAt: '2026-11-16T15:00:00.000Z' }), true, true);
+    expect(result).toMatchObject({ ok: false, code: 'CLOSER_UNKNOWN' });
+  });
 
   it('ocupado só no Google: recusa sem a flag', async () => {
     const client = reserveSupabase();

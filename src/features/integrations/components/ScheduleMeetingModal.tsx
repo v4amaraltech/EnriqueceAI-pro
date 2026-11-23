@@ -10,6 +10,7 @@ import { Calendar } from '@/shared/components/ui/calendar';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -23,7 +24,13 @@ import { MEETING_DURATION_MIN } from '@/features/meetings/meeting-duration';
 import { DEFAULT_MEETING_INVITE_DESCRIPTION } from '../meeting-invite-description';
 
 import { getCalendarAuthUrl } from '../actions/manage-calendar';
-import { scheduleMeeting, updateMeeting, getLoggedUserEmail, getLeadFaturamento } from '../actions/schedule-meeting';
+import {
+  scheduleMeeting,
+  updateMeeting,
+  getLoggedUserEmail,
+  getLeadFaturamento,
+  type MeetingBookingOptions,
+} from '../actions/schedule-meeting';
 import { getMissingMeetingFields } from '@/features/leads/actions/get-missing-meeting-fields';
 import type { MissingRequiredField } from '@/features/leads/utils/required-field-validation';
 import { WhatsAppInviteModal } from './WhatsAppInviteModal';
@@ -152,6 +159,8 @@ export function ScheduleMeetingModal({
 
   // WhatsApp invite modal
   const [whatsAppInviteOpen, setWhatsAppInviteOpen] = useState(false);
+  /** Motivo do servidor quando o closer está ocupado; abre o "Marcar mesmo assim?". */
+  const [busyMessage, setBusyMessage] = useState<string | null>(null);
   const [hasWhatsApp, setHasWhatsApp] = useState(false);
   const [meetingForInvite, setMeetingForInvite] = useState<{
     title: string; date: string; time: string; duration: string; meetLink?: string | null;
@@ -239,7 +248,8 @@ export function ScheduleMeetingModal({
 
   const parsedFaturamento = parseFaturamentoInput(faturamentoStr);
 
-  function handleSubmit() {
+  /** Sem `overlap`, closer ocupado pede confirmação. Com ela, marca por cima. */
+  function handleSubmit(overlap?: MeetingBookingOptions) {
     if (!dateString || !selectedTime) {
       toast.error('Selecione a data e hora');
       return;
@@ -276,8 +286,8 @@ export function ScheduleMeetingModal({
       };
 
       const result = editData
-        ? await updateMeeting(editData.interactionId, leadId, eventInput)
-        : await scheduleMeeting(leadId, eventInput, parsedFaturamento!);
+        ? await updateMeeting(editData.interactionId, leadId, eventInput, overlap)
+        : await scheduleMeeting(leadId, eventInput, parsedFaturamento!, overlap);
 
       if (result.success) {
         const meetInfo = result.data?.meetLink ? ` | Meet: ${result.data.meetLink}` : '';
@@ -299,6 +309,8 @@ export function ScheduleMeetingModal({
           });
           setWhatsAppInviteOpen(true);
         }
+      } else if (result.code === 'CLOSER_BUSY' && !overlap) {
+        setBusyMessage(result.error);
       } else if (result.code === 'GCAL_TOKEN_EXPIRED') {
         toast.info('Reconectando ao Google Calendar...');
         const authResult = await getCalendarAuthUrl();
@@ -527,7 +539,7 @@ export function ScheduleMeetingModal({
         <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
       )}
       <Button
-        onClick={handleSubmit}
+        onClick={() => handleSubmit()}
         disabled={isPending || !dateString || !selectedTime || (!editData && (parsedFaturamento === null || missingFields.length > 0))}
         className="bg-primary hover:bg-primary-700 text-white"
       >
@@ -551,6 +563,37 @@ export function ScheduleMeetingModal({
     />
   ) : null;
 
+  const overlapConfirmElement = (
+    <Dialog open={busyMessage !== null} onOpenChange={(next) => { if (!next) setBusyMessage(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base font-semibold">Closer ocupado neste horário</DialogTitle>
+          <DialogDescription className="text-foreground text-sm">
+            {busyMessage} Marcar mesmo assim?
+          </DialogDescription>
+        </DialogHeader>
+        <p className="text-muted-foreground text-xs">
+          A reunião entra na agenda do closer por cima do outro compromisso. Combine com ele antes, se precisar.
+        </p>
+        <DialogFooter className="mt-2">
+          <Button variant="outline" onClick={() => setBusyMessage(null)} data-testid="overlap-cancel">
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => {
+              setBusyMessage(null);
+              handleSubmit({ allowOverlap: true, allowAppOverlap: true });
+            }}
+            disabled={isPending}
+            data-testid="overlap-confirm"
+          >
+            Marcar mesmo assim
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (inline) {
     return (
       <div>
@@ -558,6 +601,7 @@ export function ScheduleMeetingModal({
         {formFields}
         {footer}
         {whatsAppInviteElement}
+        {overlapConfirmElement}
       </div>
     );
   }
@@ -565,6 +609,7 @@ export function ScheduleMeetingModal({
   return (
     <>
     {whatsAppInviteElement}
+    {overlapConfirmElement}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -580,7 +625,7 @@ export function ScheduleMeetingModal({
         <DialogFooter className="mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={isPending || !dateString || !selectedTime || (!editData && (parsedFaturamento === null || missingFields.length > 0))}
             className="bg-primary hover:bg-primary-700 text-white"
           >

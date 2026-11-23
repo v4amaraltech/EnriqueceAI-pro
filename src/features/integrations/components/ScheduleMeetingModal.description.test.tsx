@@ -73,6 +73,7 @@ describe('ScheduleMeetingModal descrição do convite', () => {
         generateMeetLink: true,
       }),
       100_000,
+      undefined,
     );
   });
 });
