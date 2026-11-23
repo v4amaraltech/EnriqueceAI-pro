@@ -8,6 +8,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotification, createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 import { pushConfirmedMeetingToCrm } from '@/features/leads/services/crm-push.service';
 import { isUuid } from '@/shared/utils/uuid';
+import { releaseCloserHoldsForLead } from '@/features/meetings/closer-availability.service';
 import { resolveMeetingHeldAt } from '@/features/leads/utils/meeting-held-at';
 import { dispatchWebhookEvent } from '@/features/cadences/services/webhook-dispatch.service';
 
@@ -351,6 +352,11 @@ export async function POST(request: Request) {
         } as Record<string, unknown>)
         .eq('id', feedbackReq.lead_id)
         .eq('org_id', feedbackReq.org_id);
+
+      // No-show devolve o horário do closer para novas marcações.
+      if (result === 'no_show') {
+        await releaseCloserHoldsForLead(supabase, feedbackReq.org_id, feedbackReq.lead_id);
+      }
 
       // Cancela a tarefa de "feedback da reunião" (e qualquer retorno pendente)
       // criada no won-time: a reunião não aconteceu, então esse feedback perde o

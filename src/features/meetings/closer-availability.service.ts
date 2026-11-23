@@ -28,6 +28,7 @@ import {
   interpretHoldError,
   lookupFreeBusyEntry,
   meetingInstant,
+  meetingReleasedByNoShow,
   meetingWindow,
   type AvailabilitySource,
   type BusyInterval,
@@ -194,14 +195,19 @@ async function loadAppBusy(
   if (!start || !end) return { meetings: [], unreadable: true };
   const windowStart = new Date(start.getTime() - MEETING_DURATION_MIN * 60_000).toISOString();
   const { data, error } = (await from(supabase, 'leads')
-    .select('id, meeting_starts_at')
+    .select('id, meeting_starts_at, meeting_scheduled_at, meeting_no_show_at')
     .eq('org_id', orgId)
     .eq('closer_id', closerId)
     .not('meeting_scheduled_at', 'is', null)
     .not('meeting_starts_at', 'is', null)
     .gte('meeting_starts_at', windowStart)
     .lt('meeting_starts_at', end.toISOString())) as {
-    data: Array<{ id: string; meeting_starts_at: string }> | null;
+    data: Array<{
+      id: string;
+      meeting_starts_at: string;
+      meeting_scheduled_at: string | null;
+      meeting_no_show_at: string | null;
+    }> | null;
     error: { message: string } | null;
   };
   if (error) {
@@ -209,7 +215,13 @@ async function loadAppBusy(
     return { meetings: [], unreadable: true };
   }
   const meetings: BusyInterval[] = [];
+  // Reunião com no-show não ocupa o closer, nem pela linha do lead nem pela trava.
+  const noShowLeadIds = new Set<string>();
   for (const row of data ?? []) {
+    if (meetingReleasedByNoShow(row.meeting_scheduled_at, row.meeting_no_show_at)) {
+      noShowLeadIds.add(row.id);
+      continue;
+    }
     const meetingStart = meetingInstant(row.meeting_starts_at);
     if (!meetingStart) continue;
     meetings.push({
@@ -262,6 +274,7 @@ async function loadAppBusy(
     return { meetings, unreadable: true };
   }
   for (const hold of holds ?? []) {
+    if (hold.lead_id && noShowLeadIds.has(hold.lead_id)) continue;
     meetings.push({
       leadId: hold.lead_id ?? undefined,
       start: hold.slot_start,
@@ -598,6 +611,22 @@ export async function releaseCloserHold(supabase: Db, holdId: string, status: 'r
     .eq('status', 'held');
   if (error && interpretHoldError(error) !== 'table_missing') {
     console.error('[closer-availability] trava não liberada', error.message);
+  }
+}
+
+/**
+ * No-show: a reunião deste lead não acontece, então a vaga do closer volta a
+ * ficar livre. Sem isso, o EXCLUDE de `closer_booking_holds` recusa qualquer
+ * nova reunião por cima do horário.
+ */
+export async function releaseCloserHoldsForLead(supabase: Db, orgId: string, leadId: string): Promise<void> {
+  const { error } = await from(supabase, 'closer_booking_holds')
+    .update({ status: 'cancelled', released_at: new Date().toISOString() } as Record<string, unknown>)
+    .eq('org_id', orgId)
+    .eq('lead_id', leadId)
+    .eq('status', 'held');
+  if (error && interpretHoldError(error) !== 'table_missing') {
+    console.error('[closer-availability] trava do lead não liberada', error.message);
   }
 }
 
