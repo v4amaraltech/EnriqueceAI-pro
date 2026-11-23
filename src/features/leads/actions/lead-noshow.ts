@@ -10,6 +10,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createNotificationsForOrgMembers } from '@/features/notifications/services/notification.service';
 
 import { onMeetingNoShow } from '@/features/anti-no-show/engine';
+import { releaseCloserHoldsForLead } from '@/features/meetings/closer-availability.service';
 
 import { logLeadEvent } from './log-lead-event';
 
@@ -46,6 +47,7 @@ interface LeadNoShowRow {
  *  - Se o lead estava 'won' (SDR marcou Ganho e depois percebeu o no-show),
  *    reabre pra 'qualified' e limpa won_at/meeting_held_at; senão só garante
  *    meeting_held_at nulo.
+ *  - Libera a reserva do horário do closer (`closer_booking_holds`).
  *  - Garante um follow-up de telefone na fila do SDR (não empilha se já houver
  *    atividade pendente). A atividade pendente também faz o cron pular este lead.
  *  - Notifica os gestores (visibilidade), exceto quem disparou.
@@ -103,6 +105,9 @@ export async function markMeetingNoShow(leadId: string): Promise<ActionResult<vo
 
   const qErr = handleQueryError(leadError, 'Erro ao registrar no-show', 'lead-noshow');
   if (qErr) return qErr;
+
+  // A reunião não acontece: devolve o horário do closer para novas marcações.
+  await releaseCloserHoldsForLead(supabase, orgId, leadId);
 
   // 3. Com a flag ligada, a recuperação substitui a tarefa solta. Desligada, o retorno de sempre.
   const serviceClient = createServiceRoleClient();

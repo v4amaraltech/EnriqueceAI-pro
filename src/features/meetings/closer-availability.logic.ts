@@ -104,6 +104,24 @@ export function meetingWindow(startValue: string, endValue?: string | null, dura
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+/**
+ * No-show registrado depois do último agendamento: a reunião não acontece e
+ * não ocupa mais o closer. Se o lead for remarcado, `meeting_scheduled_at`
+ * fica mais novo que o no-show e a reunião volta a ocupar a agenda.
+ */
+export function meetingReleasedByNoShow(
+  scheduledAt: string | null | undefined,
+  noShowAt: string | null | undefined,
+): boolean {
+  if (!noShowAt) return false;
+  const noShow = new Date(noShowAt).getTime();
+  if (!Number.isFinite(noShow)) return false;
+  if (!scheduledAt) return true;
+  const scheduled = new Date(scheduledAt).getTime();
+  if (!Number.isFinite(scheduled)) return true;
+  return noShow >= scheduled;
+}
+
 export function intervalsOverlap(start: Date, end: Date, other: BusyInterval): boolean {
   const otherStart = meetingInstant(other.start);
   const otherEnd = meetingInstant(other.end);

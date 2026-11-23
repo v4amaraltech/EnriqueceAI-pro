@@ -14,6 +14,7 @@ import {
   interpretHoldError,
   lookupFreeBusyEntry,
   meetingInstant,
+  meetingReleasedByNoShow,
 } from './closer-availability.logic';
 
 const start = new Date('2026-11-16T14:00:00.000Z');
@@ -318,5 +319,23 @@ describe('ocupado no Google x reunião do Enriquece', () => {
     expect(slot?.title).toBeUndefined();
     expect(slot?.extraEventCount).toBeUndefined();
     expect(slot && slotSelectable(slot)).toBe(true);
+  });
+});
+
+describe('no-show libera a agenda do closer', () => {
+  it('sem no-show a reunião continua ocupando', () => {
+    expect(meetingReleasedByNoShow('2026-11-19T16:24:40Z', null)).toBe(false);
+  });
+
+  it('no-show depois do agendamento libera (Dr. Tânia, 23/11)', () => {
+    expect(meetingReleasedByNoShow('2026-11-19T16:24:40.579+00:00', '2026-11-23T14:37:04.758+00:00')).toBe(true);
+  });
+
+  it('lead remarcado depois do no-show volta a ocupar', () => {
+    expect(meetingReleasedByNoShow('2026-11-24T10:00:00Z', '2026-11-23T14:37:04Z')).toBe(false);
+  });
+
+  it('no-show com data inválida não libera', () => {
+    expect(meetingReleasedByNoShow('2026-11-19T16:24:40Z', 'lixo')).toBe(false);
   });
 });
