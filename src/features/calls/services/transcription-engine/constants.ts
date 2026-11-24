@@ -14,6 +14,15 @@ export const JEV_MODEL = 'jev-latest';
 /** Só ligações atendidas com pelo menos isso entram no motor. */
 export const ENGINE_MIN_DURATION_SECONDS = 30;
 
+/**
+ * Recuperação: o cron do motor também pega ligações atendidas desta janela que nunca
+ * ganharam linha em call_transcripts_v2 (disparo do webhook perdido, ligação anterior ao motor).
+ */
+export const ENGINE_BACKLOG_LOOKBACK_DAYS = 30;
+
+/** Ligação mais nova que isso fica para o disparo do hangup (gravação pode não ter chegado). */
+export const ENGINE_BACKLOG_MIN_AGE_MS = 30 * 60 * 1000;
+
 /** Tolerância entre calls.duration_seconds e a duração do áudio baixado: o maior entre 10 s e 25%. */
 export const DURATION_TOLERANCE_RATIO = 0.25;
 export const DURATION_TOLERANCE_MIN_SECONDS = 10;

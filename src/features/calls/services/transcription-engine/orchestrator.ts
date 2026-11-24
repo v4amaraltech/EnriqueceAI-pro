@@ -4,6 +4,7 @@ import { fetchPublicHttps } from '@/lib/security/safe-url';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { transcriptionMinDurationFor } from '../../ai-outcome';
 import { runCrmAutoUpdate } from '../crm-auto-update/shadow.service';
 import { CALL_RECORDINGS_BUCKET } from '../recording-storage.service';
 import { lookupRecordingFromApi4Com } from '../recover-recording.service';
@@ -16,10 +17,13 @@ import { type MonoAudio, assessAudioDuration, prepareMonoAudio } from './audio';
 import {
   DURATION_MISMATCH_PREFIX,
   DURATION_WARNING_PREFIX,
+  ENGINE_BACKLOG_LOOKBACK_DAYS,
+  ENGINE_BACKLOG_MIN_AGE_MS,
   ENGINE_MIN_DURATION_SECONDS,
   ENGINE_PROVIDER_QUALIFICATION,
   ENGINE_PROVIDER_TRANSCRIPT,
   MAX_ATTEMPTS,
+  TRANSCRIPTION_ENGINE_FLAG_KEY,
 } from './constants';
 import { formatEngineError } from './errors';
 import { isTranscriptionEngineEnabled } from './flag';
@@ -57,6 +61,11 @@ export interface EngineDeps {
    * (crm_auto_update_v1). Com a flag desligada não grava nada. Nunca muda o resultado do motor.
    */
   afterQualification?: (callId: string) => Promise<unknown>;
+  /**
+   * Copia o texto do motor para calls.transcription (só se estiver vazia), para a tela,
+   * a linha do tempo e o e-mail do closer mostrarem. Nunca muda o resultado do motor.
+   */
+  mirrorToCall?: (call: CallRow, text: string) => Promise<unknown>;
 }
 
 export interface CallRow {
@@ -67,6 +76,7 @@ export interface CallRow {
   recording_storage_path: string | null;
   duration_seconds: number | null;
   answered_at: string | null;
+  connected: boolean | null;
   started_at: string | null;
   created_at: string;
   destination: string;
@@ -87,7 +97,7 @@ interface EngineRow {
 }
 
 const CALL_COLUMNS =
-  'id, org_id, user_id, recording_url, recording_storage_path, duration_seconds, answered_at, started_at, created_at, destination, origin, type, metadata';
+  'id, org_id, user_id, recording_url, recording_storage_path, duration_seconds, answered_at, connected, started_at, created_at, destination, origin, type, metadata';
 
 async function defaultDownload(url: string): Promise<Buffer | null> {
   try {
@@ -129,7 +139,74 @@ export function defaultEngineDeps(db: SupabaseClient): EngineDeps {
     },
     now: () => Date.now(),
     afterQualification: (callId) => runCrmAutoUpdate(db, callId),
+    mirrorToCall: (call, text) => mirrorTranscriptToCall(db, call, text),
   };
+}
+
+interface CallTranscriptState {
+  transcription: string | null;
+  transcription_status: string | null;
+}
+
+/**
+ * Patch para calls quando o motor tem texto, ou null se não há nada a gravar.
+ * - Nunca sobrescreve texto existente (Whisper).
+ * - Se o Whisper ainda vai rodar a ligação (pending/null/processing e duração no piso dele),
+ *   grava só o texto: o status fica para o Whisper, que faz o BANT de 5 min+ e substitui o texto.
+ * - Senão (skipped, failed, abaixo do piso), marca completed.
+ */
+export function buildCallTranscriptMirror(
+  current: CallTranscriptState,
+  call: Pick<CallRow, 'duration_seconds' | 'metadata'>,
+  text: string,
+): Record<string, unknown> | null {
+  if (!text.trim()) return null;
+  if (current.transcription?.trim()) return null;
+  const status = current.transcription_status;
+  const whisperWillRun =
+    (status === null || status === 'pending' || status === 'processing') &&
+    (call.duration_seconds ?? 0) >= transcriptionMinDurationFor(call.metadata);
+  if (whisperWillRun) return { transcription: text };
+  return { transcription: text, transcription_status: 'completed', transcription_error: null };
+}
+
+/** Lê o estado atual de calls e grava o espelho com trava otimista (status e texto lidos). */
+async function mirrorTranscriptToCall(
+  db: SupabaseClient,
+  call: CallRow,
+  text: string,
+): Promise<void> {
+  const { data } = (await from(db, 'calls')
+    .select('transcription, transcription_status')
+    .eq('id', call.id)
+    .single()) as { data: CallTranscriptState | null };
+  if (!data) return;
+  const patch = buildCallTranscriptMirror(data, call, text);
+  if (!patch) return;
+  let q = from(db, 'calls')
+    .update({ ...patch, updated_at: new Date().toISOString() } as Record<string, unknown>)
+    .eq('id', call.id);
+  q =
+    data.transcription_status === null
+      ? q.is('transcription_status', null)
+      : q.eq('transcription_status', data.transcription_status);
+  q =
+    data.transcription === null
+      ? q.is('transcription', null)
+      : q.eq('transcription', data.transcription);
+  await q;
+}
+
+/** Falha no espelho nunca afeta o motor. */
+async function runMirror(deps: EngineDeps, call: CallRow, text: string): Promise<void> {
+  if (!deps.mirrorToCall || !text.trim()) return;
+  try {
+    await deps.mirrorToCall(call, text);
+  } catch (err) {
+    console.error(
+      `[transcription-engine] espelho em calls falhou para a ligação ${call.id}: ${err instanceof Error ? err.message : 'unknown'}`,
+    );
+  }
 }
 
 /** Falha no pós-processamento nunca afeta o motor. */
@@ -254,7 +331,7 @@ async function insertSkipped(deps: EngineDeps, call: CallRow, reason: string): P
 }
 
 /**
- * Resolve o áudio nesta ordem (calls é só leitura; nada é gravado em calls nem no Storage):
+ * Resolve o áudio nesta ordem (nada é gravado em calls nem no Storage aqui):
  *   1. Gravação já persistida no nosso Storage, se calls.recording_storage_path existir E
  *      metadata.recording_persist_status === 'ok' (durável e já validada na persistência).
  *   2. calls.recording_url (link do API4COM, pode ter expirado).
@@ -315,7 +392,8 @@ async function fetchAndPrepare(
 /**
  * Transcreve (AssemblyAI) e qualifica (JEV) uma ligação atendida. Idempotente e
  * reexecutável: cada etapa só roda se a linha ainda não estiver completed.
- * Escreve apenas em call_transcripts_v2 e call_qualifications; calls é só leitura.
+ * Escreve em call_transcripts_v2 e call_qualifications. Em calls, só o espelho do texto
+ * (mirrorToCall: calls.transcription quando vazia).
  */
 export async function processEngineCall(
   callId: string,
@@ -335,7 +413,8 @@ export async function processEngineCall(
   if (!call) return 'call_not_found';
   if (!(await deps.isEnabled(call.org_id))) return 'flag_off';
 
-  if (!call.answered_at) return 'not_eligible';
+  // Atendida: answered_at do webhook ou connected (ligação criada pela conferência da API4COM).
+  if (!call.answered_at && !call.connected) return 'not_eligible';
   const callSeconds = call.duration_seconds ?? 0;
   if (callSeconds < ENGINE_MIN_DURATION_SECONDS) {
     await insertSkipped(deps, call, 'duration_too_short');
@@ -398,6 +477,7 @@ export async function processEngineCall(
         cost_usd: computeAssemblyAiCostUsd(billedSeconds),
         latency_ms: deps.now() - started,
       });
+      await runMirror(deps, call, result.text ?? '');
       transcript = {
         id: rowId,
         text: result.text,
@@ -414,6 +494,7 @@ export async function processEngineCall(
   } else if (tClaim.blocked === 'completed' && tClaim.row) {
     const r = tClaim.row;
     if (r.status === 'skipped') return 'skipped';
+    await runMirror(deps, call, r.text ?? '');
     transcript = {
       id: r.id,
       text: r.text ?? '',
@@ -513,7 +594,72 @@ export async function processEngineCall(
   return 'completed';
 }
 
-/** Ids de ligações com trabalho pendente: transcrição/qualificação pending, failed ou processing parado. */
+/**
+ * Orgs em que o motor está ligado: 'all' (flag global) ou a lista allow_org_ids.
+ * Erro de leitura = nenhuma (a recuperação não roda; retentativas seguem normais).
+ */
+async function readEngineOrgScope(db: SupabaseClient): Promise<'all' | string[]> {
+  try {
+    const { data, error } = (await from(db, 'app_flags')
+      .select('enabled, allow_org_ids')
+      .eq('key', TRANSCRIPTION_ENGINE_FLAG_KEY)
+      .limit(1)) as {
+      data: Array<{ enabled: boolean | null; allow_org_ids: string[] | null }> | null;
+      error?: unknown;
+    };
+    const row = data?.[0];
+    if (error || !row) return [];
+    if (row.enabled) return 'all';
+    return (row.allow_org_ids ?? []).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Ligações atendidas (answered_at ou connected), com o mínimo de duração, da janela de
+ * recuperação, sem NENHUMA linha em call_transcripts_v2. Mais recentes primeiro.
+ * Duas consultas (answered_at / connected) em vez de .or(): o .or() do PostgREST já perdeu
+ * ramo em prod. A linha criada na 1ª tentativa tira a ligação daqui; daí em diante vale a
+ * retentativa normal (MAX_ATTEMPTS).
+ */
+export async function findBacklogCallIds(
+  db: SupabaseClient,
+  limit: number,
+  nowMs = Date.now(),
+): Promise<string[]> {
+  if (limit <= 0) return [];
+  const scope = await readEngineOrgScope(db);
+  if (scope !== 'all' && scope.length === 0) return [];
+  const since = new Date(nowMs - ENGINE_BACKLOG_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const before = new Date(nowMs - ENGINE_BACKLOG_MIN_AGE_MS).toISOString();
+  const base = () => {
+    let q = from(db, 'calls')
+      .select('id, started_at, call_transcripts_v2!left(id)')
+      .gte('started_at', since)
+      .lt('started_at', before)
+      .gte('duration_seconds', ENGINE_MIN_DURATION_SECONDS)
+      .is('call_transcripts_v2', null);
+    if (scope !== 'all') q = q.in('org_id', scope);
+    return q;
+  };
+  type BacklogRow = { id: string; started_at: string | null };
+  const [answered, connected] = (await Promise.all([
+    base().not('answered_at', 'is', null).order('started_at', { ascending: false }).limit(limit),
+    base().eq('connected', true).order('started_at', { ascending: false }).limit(limit),
+  ])) as Array<{ data: BacklogRow[] | null }>;
+  const seen = new Set<string>();
+  return [...(answered?.data ?? []), ...(connected?.data ?? [])]
+    .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
+    .filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)))
+    .slice(0, limit)
+    .map((r) => r.id);
+}
+
+/**
+ * Ids de ligações com trabalho pendente: transcrição/qualificação pending, failed ou processing
+ * parado; qualificação que faltou; e, nas vagas que sobrarem, a recuperação (findBacklogCallIds).
+ */
 export async function findDrainCandidates(
   db: SupabaseClient,
   limit: number,
@@ -551,6 +697,9 @@ export async function findDrainCandidates(
     };
     const have = new Set((quals.data ?? []).map((r) => r.call_id));
     for (const id of doneIds) if (!have.has(id)) ids.add(id);
+  }
+  if (ids.size < limit) {
+    for (const id of await findBacklogCallIds(db, limit - ids.size, nowMs)) ids.add(id);
   }
   return [...ids].slice(0, limit);
 }
