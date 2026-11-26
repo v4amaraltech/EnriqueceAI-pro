@@ -53,10 +53,11 @@ const dialSchema = z.object({
 });
 const callSchema = z.object({ callId: uuid });
 const noAnswerSchema = z.object({ callId: uuid, notConversation: z.boolean().optional() });
-const concludeSchema = z.object({ callId: uuid, kind: z.enum(['scheduled', 'lost', 'callback']) });
+const concludeSchema = z.object({ callId: uuid, kind: z.enum(['scheduled', 'lost', 'callback', 'referred']) });
 const confirmSchema = z.object({
   callId: uuid,
-  disposition: z.enum(DISPOSITION_OPTIONS.map((o) => o.value) as [string, ...string[]]),
+  // `referred_contact` é só do Cockpit: aceito aqui sem entrar em DISPOSITION_OPTIONS (seletores das outras telas).
+  disposition: z.enum(['referred_contact', ...DISPOSITION_OPTIONS.map((o) => o.value)] as [string, ...string[]]),
   notes: z.string().max(5000).optional(),
 });
 

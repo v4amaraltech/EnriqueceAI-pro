@@ -18,6 +18,7 @@ export const CONVERSATION_DISPOSITIONS: ReadonlySet<string> = new Set<CallDispos
   'relevant_conversation',
   'answered_no_progress',
   'callback_requested',
+  'referred_contact',
 ]);
 
 /** Desfechos que significam que NÃO houve conversa (o lead volta à fila). */

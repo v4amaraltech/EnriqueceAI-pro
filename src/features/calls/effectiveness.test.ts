@@ -83,3 +83,9 @@ describe('isRelevantConversationCall', () => {
     }
   });
 });
+
+describe('referred_contact', () => {
+  it('conta como atendida por pessoa, mesmo sem sinal da telefonia', () => {
+    expect(isAnsweredByPersonCall({ sdr_disposition: 'referred_contact' } as CallConnectionSignals)).toBe(true);
+  });
+});

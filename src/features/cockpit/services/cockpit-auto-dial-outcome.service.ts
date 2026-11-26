@@ -227,7 +227,7 @@ export async function confirmMotorOutcome(input: {
  * O SDR concluiu o lead pelo painel (Agendar reunião / Desqualificar) durante a ligação do motor. O painel já grava
  * o que é do lead; aqui só se dá à LIGAÇÃO um desfecho, para ela não ficar pendente (decisão do usuário: vale como
  * desfecho, sem pedir o Confirmar). Não avança cadência (nunca `completeDialerCall`). `pending` = a operadora ainda
- * não disse se atendeu; o chamador tenta de novo. O valor vem de `dispositionForExternalConclusion` (só desfechos existentes).
+ * não disse se atendeu; o chamador tenta de novo. O valor vem de `dispositionForExternalConclusion`.
  */
 export async function concludeMotorCallExternally(input: {
   supabase: SupabaseClient;

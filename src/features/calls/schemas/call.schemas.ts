@@ -16,6 +16,7 @@ export const callDispositionValues = [
   'relevant_conversation',
   'answered_no_progress',
   'callback_requested',
+  'referred_contact',
   'no_answer',
   'technical_failure',
   'voicemail',

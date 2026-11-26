@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { DISPOSITION_OPTIONS } from '@/features/calls/disposition';
 import { initiateApi4ComCall } from '@/features/calls/actions/initiate-api4com-call';
 import { applySdrCallResult } from '@/features/calls/services/apply-sdr-call-result';
 import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metadata';
@@ -361,6 +362,12 @@ describe('resolveAutoDialNoAnswerAction (FR-6/FR-7)', () => {
 });
 
 describe('confirmAutoDialOutcomeAction (FR-9)', () => {
+  it('aceita `referred_contact` (só do Cockpit), que fica FORA de DISPOSITION_OPTIONS', async () => {
+    setup({ calls: [callRow({ answered_at: ago(4) })] });
+    expect(await confirmAutoDialOutcomeAction({ callId: CALL, disposition: 'referred_contact' })).toEqual({ success: true, data: { confirmed: true } });
+    expect(DISPOSITION_OPTIONS.map((o) => o.value)).not.toContain('referred_contact');
+  });
+
   it('grava o desfecho confirmado, sem avançar cadência (sem completeDialerCall)', async () => {
     setup({ calls: [callRow({ answered_at: ago(4) })] });
     expect(await confirmAutoDialOutcomeAction({ callId: CALL, disposition: 'relevant_conversation', notes: 'ok' })).toEqual({ success: true, data: { confirmed: true } });

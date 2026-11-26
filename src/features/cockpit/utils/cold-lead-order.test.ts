@@ -29,7 +29,7 @@ describe('buildCandidatesRpcArgs', () => {
 
   it('só desfechos com ponto > 0 contam como interesse', () => {
     expect(buildCandidatesRpcArgs(viewer, NOW).p_interest_dispositions.sort()).toEqual(
-      ['answered_no_progress', 'callback_requested', 'relevant_conversation'].sort(),
+      ['answered_no_progress', 'callback_requested', 'referred_contact', 'relevant_conversation'].sort(),
     );
   });
 

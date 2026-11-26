@@ -40,6 +40,8 @@ export function mapDispositionToAction(disposition: CallDisposition): Dispositio
     // conversa e um horário combinado. `no_answer` cai no 'advance' acima junto
     // com os demais: a cadência segue com os próximos toques já programados.
     case 'callback_requested':
+    // Indicou outro contato: há uma ação pendente (falar com quem foi indicado), como no retorno.
+    case 'referred_contact':
       return 'reschedule';
     case 'technical_failure':
       return 'none';
@@ -72,6 +74,7 @@ export const DISPOSITION_REPORT_LABELS: Record<CallDisposition, string> = {
   relevant_conversation: 'Conversa relevante',
   answered_no_progress: 'Atendeu, sem avanço',
   callback_requested: 'Pediu para ligar depois',
+  referred_contact: 'Indicou outro contato',
   voicemail: 'Caixa postal',
   no_answer: 'Não atendeu',
   technical_failure: 'Falha técnica',
@@ -82,10 +85,11 @@ export const DISPOSITION_REPORT_LABELS: Record<CallDisposition, string> = {
 // "Pediu para ligar depois" só existe se o lead atendeu; `voicemail` entra
 // porque caixa postal/secretária só ocorre quando a linha atende (a máquina
 // "pega") — numa ligação que ninguém atende não há caixa postal.
-const OUTCOMES_REQUIRING_ANSWER: ReadonlySet<CallDisposition> = new Set<CallDisposition>([
+export const OUTCOMES_REQUIRING_ANSWER: ReadonlySet<CallDisposition> = new Set<CallDisposition>([
   'relevant_conversation',
   'answered_no_progress',
   'callback_requested',
+  'referred_contact',
   'voicemail',
 ]);
 

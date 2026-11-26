@@ -106,6 +106,7 @@ describe('calculateEffectiveness', () => {
       ['Conversa relevante', 1, 20],
       ['Atendeu, sem avanço', 0, 0],
       ['Pediu para ligar depois', 0, 0],
+      ['Indicou outro contato', 0, 0],
       ['Caixa postal', 2, 40],
       ['Não atendeu', 0, 0],
       ['Falha técnica', 0, 0],
