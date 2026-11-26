@@ -51,6 +51,7 @@ import {
   setWebphoneCallNotes,
 } from './webphone-call-context';
 import {
+  acknowledgeExtensionConflict,
   answerCall,
   getRemoteAudioTrack,
   hangupCall as hangupWebphoneLeg,
@@ -79,6 +80,7 @@ import {
   savePanelPosition,
 } from './webphone-panel-position';
 import {
+  SESSION_CONFLICT_ACTIONS,
   SESSION_CONFLICT_MESSAGES,
   type WebphoneCall,
   type WebphoneState,
@@ -194,6 +196,16 @@ export function WebphonePanel({ liveListen = false }: { liveListen?: boolean }) 
   useEffect(() => {
     rehydrateWebphonePendingNotes();
   }, []);
+  // A extensão atendeu no lugar desta aba: avisa na hora (o pill só aparece
+  // quando o painel volta ao repouso, depois da tela de ligação finalizada).
+  const extensionAnswered = webphone.sessionConflict === 'extension_answered';
+  useEffect(() => {
+    if (!extensionAnswered) return;
+    toast.warning(SESSION_CONFLICT_MESSAGES.extension_answered, {
+      id: 'webphone-extension-answered',
+      duration: 15_000,
+    });
+  }, [extensionAnswered]);
   const [stage, setStage] = useState<PanelStage>({
     kind: 'idle',
     doneCallId: null,
@@ -823,6 +835,10 @@ function IdlePill({ state }: { state: WebphoneState }) {
   }
 
   function resolveConflict() {
+    if (state.sessionConflict === 'extension_answered') {
+      acknowledgeExtensionConflict();
+      return;
+    }
     setSessionPending(true);
     const run = state.sessionConflict === 'lost_to_other' ? reconnectWebphone : takeOverWebphone;
     void run()
@@ -834,7 +850,11 @@ function IdlePill({ state }: { state: WebphoneState }) {
     <div className="space-y-2 text-xs text-[var(--muted-foreground)]">
       <span className="flex items-center gap-2" role="status" aria-live="polite">
         <span className={cn('inline-block h-2.5 w-2.5 rounded-full', reg.dot)} aria-hidden />
-        {state.sessionConflict === 'other_tab' ? 'Ramal em uso em outra aba' : reg.text}
+        {state.sessionConflict === 'other_tab'
+          ? 'Ramal em uso em outra aba'
+          : state.sessionConflict === 'extension_answered'
+            ? 'Extensão da API4COM atendeu no lugar'
+            : reg.text}
         {state.error && state.registration === 'error' && ` · ${state.error}`}
       </span>
       {state.sessionConflict && (
@@ -849,7 +869,7 @@ function IdlePill({ state }: { state: WebphoneState }) {
             onClick={resolveConflict}
             disabled={sessionPending}
           >
-            {state.sessionConflict === 'other_tab' ? 'Usar nesta aba' : 'Reconectar'}
+            {SESSION_CONFLICT_ACTIONS[state.sessionConflict]}
           </Button>
         </div>
       )}

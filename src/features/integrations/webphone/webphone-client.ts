@@ -28,6 +28,7 @@ import {
   type WebphoneEvent,
   type WebphoneState,
   initialWebphoneState,
+  isAnsweredElsewhere,
   isIntegratedCallHeader,
   reduceWebphone,
   remoteNumberFromUri,
@@ -70,6 +71,9 @@ let activePeerConnection: RTCPeerConnection | null = null;
 // Ligação em que o SDR já apertou alguma tecla do teclado (DTMF): a escuta
 // ao vivo não pode mais desligar a URA sozinha.
 let dtmfUsedCallId: string | null = null;
+// Ligação em que esta aba já mandou o atendimento (200 OK). Um CANCEL do
+// servidor depois disso = outro aparelho do ramal (a extensão) atendeu antes.
+let answerSentCallId: string | null = null;
 let statsTimer: number | null = null;
 let callSeq = 0;
 // Geração do start: um stop (ou um novo start) invalida um start ainda em
@@ -277,6 +281,7 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   activeSession = session;
   activeCallId = id;
   dtmfUsedCallId = null;
+  answerSentCallId = null;
 
   dispatch({
     type: 'call_new',
@@ -307,12 +312,22 @@ function handleNewSession(session: RTCSession, request: IncomingRequest | Outgoi
   });
   session.on('muted', () => dispatch({ type: 'call_muted', id, muted: true }));
   session.on('unmuted', () => dispatch({ type: 'call_muted', id, muted: false }));
-  const onEnd = (e: { cause?: string }) => {
+  const onEnd = (e: { cause?: string; originator?: string; message?: unknown }) => {
     stopStatsSampling();
     stopRemoteTapNow();
     publishRemoteTrack(null);
     if (dtmfUsedCallId === id) dtmfUsedCallId = null;
-    dispatch({ type: 'call_ended', id, at: Date.now(), cause: e?.cause ?? null });
+    const answeredElsewhere = isAnsweredElsewhere({
+      integrated,
+      originator: e?.originator,
+      cause: e?.cause,
+      reason: reasonHeaderOf(e?.message),
+      answerSent: answerSentCallId === id,
+    });
+    if (answerSentCallId === id) answerSentCallId = null;
+    if (answeredElsewhere)
+      console.warn('[webphone] chamada atendida em outro aparelho do ramal (extensão da API4COM?)');
+    dispatch({ type: 'call_ended', id, at: Date.now(), cause: e?.cause ?? null, answeredElsewhere });
     clearEndedCallLater(id);
   };
   session.on('ended', onEnd);
@@ -434,6 +449,27 @@ export function stopWebphone(): void {
   dispatch({ type: 'disabled' });
 }
 
+/** Cabeçalho `Reason` do CANCEL (RFC 3326), quando o JsSIP entrega a mensagem. */
+function reasonHeaderOf(message: unknown): string | null {
+  const getHeader = (message as { getHeader?: (name: string) => unknown } | null)?.getHeader;
+  if (typeof getHeader !== 'function') return null;
+  try {
+    const value = getHeader.call(message, 'Reason');
+    return typeof value === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "Já desativei": o SDR confirma que desligou a extensão da API4COM depois que
+ * ela atendeu uma ligação no lugar desta aba. Só limpa esse aviso.
+ */
+export function acknowledgeExtensionConflict(): void {
+  if (state.sessionConflict === 'extension_answered')
+    dispatch({ type: 'session_conflict', conflict: null });
+}
+
 /**
  * "Usar nesta aba": tira o ramal da outra aba (ela para o UA dela, sem
  * reload) e registra aqui. Derruba a ligação que estiver na outra aba.
@@ -464,6 +500,7 @@ export function answerCall(): void {
   if (!activeSession || state.call?.phase !== 'ringing') return;
   try {
     activeSession.answer({ mediaConstraints: { audio: true, video: false } });
+    answerSentCallId = activeCallId;
   } catch (err) {
     console.error('[webphone] answer failed:', err);
   }
