@@ -109,7 +109,17 @@ export function MotorLeadSidePanel({
   const content = (
     <>
           <header className="relative border-b px-4 py-3 pr-12">
-            <h2 className="truncate text-base font-semibold">{ctx.company.name}</h2>
+            <h2 className="truncate text-base font-semibold">
+              <a
+                href={`/leads/${ctx.leadId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir o lead em outra aba"
+                className="underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--ring)]"
+              >
+                {ctx.company.name}
+              </a>
+            </h2>
             <p className="text-muted-foreground truncate text-sm">
               {contact}
               {ctx.decisionMaker.phone ? ` · ${ctx.decisionMaker.phone}` : ''}

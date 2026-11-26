@@ -46,6 +46,15 @@ describe('MotorLeadSidePanel: só dados e Anotações', () => {
     expect(screen.queryByTestId('dialer-answered')).toBeNull();
   });
 
+  it('o nome da empresa no cabeçalho abre o lead em outra aba', () => {
+    renderPanel();
+    const link = screen.getByRole('link', { name: 'Acme Ltda' });
+    expect(link.getAttribute('href')).toBe('/leads/lead-1');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('title')).toBe('Abrir o lead em outra aba');
+  });
+
   it('mantém as Anotações com rascunho guardado', () => {
     renderPanel();
     fireEvent.change(screen.getByLabelText('Anotações'), { target: { value: 'pediu proposta' } });
