@@ -1,14 +1,11 @@
 import type { Utterance } from './assemblyai.client';
+import { JEV_DEFAULT_PROVIDER, JEV_PROVIDERS, JEV_USD_PER_INPUT_MTOK } from './constants';
 import {
-  JEV_MODEL,
-  JEV_URL,
-  JEV_USD_PER_INPUT_MTOK,
-} from './constants';
-import {
+  type NeedsReviewReason,
   evaluateNeedsReview,
+  hasDurationWarning,
   isTrustedNotConnected,
   stripIcpAnswers,
-  type NeedsReviewReason,
 } from './review';
 
 export const OUTCOME_OPTIONS = {
@@ -119,6 +116,26 @@ export interface JevClient {
 
 export class JevError extends Error {}
 
+/** Monta a entrada do Jev a partir da ligação e da transcrição gravadas. */
+export function toJevInput(
+  call: { duration_seconds: number | null; type: string | null },
+  transcript: {
+    text: string;
+    utterances: unknown;
+    error?: string | null;
+    speakersCount?: number | null;
+  },
+): JevInput {
+  return {
+    transcript: transcript.text,
+    utterances: Array.isArray(transcript.utterances) ? (transcript.utterances as Utterance[]) : [],
+    durationSeconds: call.duration_seconds ?? 0,
+    callType: call.type === 'inbound' ? 'inbound' : 'outbound',
+    durationWarning: hasDurationWarning(transcript.error),
+    speakersCount: transcript.speakersCount,
+  };
+}
+
 interface ChoiceAnswer {
   type: 'choice';
   choice: string;
@@ -135,10 +152,15 @@ interface NoulAnswer {
   type: 'noul';
   noul: number;
 }
+/** O modelo se recusou a responder a pergunta: vale como não respondida. */
+interface RefusalAnswer {
+  type: 'refusal';
+}
 export interface JevResponse {
   model?: string;
-  answers?: Record<string, ChoiceAnswer | ScoreAnswer | NoulAnswer | undefined>;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  answers?: Record<string, ChoiceAnswer | ScoreAnswer | NoulAnswer | RefusalAnswer | undefined>;
+  /** `cost` só vem da OpenRouter: créditos cobrados (moeda base: dólar). */
+  usage?: { input_tokens?: number; output_tokens?: number; cost?: number };
 }
 
 export function buildJevQuestions() {
@@ -331,6 +353,15 @@ export function computeJevCostUsd(inputTokens: number): number {
   return Number(((inputTokens / 1_000_000) * JEV_USD_PER_INPUT_MTOK).toFixed(8));
 }
 
+/** OpenRouter informa o que cobrou; sem valor válido (e na Typesafe), vale a conta por tokens. */
+function resolveJevCostUsd(resp: JevResponse, provider: JevProviderName): number {
+  const charged = resp.usage?.cost;
+  if (provider === 'openrouter' && typeof charged === 'number' && Number.isFinite(charged)) {
+    if (charged >= 0) return charged;
+  }
+  return computeJevCostUsd(resp.usage?.input_tokens ?? 0);
+}
+
 function optionalChoice(
   answers: NonNullable<JevResponse['answers']>,
   key: string,
@@ -356,7 +387,11 @@ function icpFromAnswers(a: NonNullable<JevResponse['answers']>): IcpAnswers {
 }
 
 /** Mapeia a resposta crua do Jev para o formato da tabela. Pura, sem rede. */
-export function mapJevResponse(resp: JevResponse, input: JevInput): JevQualification {
+export function mapJevResponse(
+  resp: JevResponse,
+  input: JevInput,
+  provider: JevProviderName = JEV_DEFAULT_PROVIDER,
+): JevQualification {
   const a = resp.answers ?? {};
   const outcome = a.outcome?.type === 'choice' ? a.outcome : null;
   const interest = a.interest?.type === 'score' ? a.interest : null;
@@ -406,35 +441,69 @@ export function mapJevResponse(resp: JevResponse, input: JevInput): JevQualifica
     confidence: review.confidence,
     needsReview: review.needsReview,
     needsReviewReasons: review.reasons,
-    model: resp.model ?? JEV_MODEL,
+    model: resp.model ?? JEV_PROVIDERS[JEV_DEFAULT_PROVIDER].model,
     inputTokens,
-    costUsd: computeJevCostUsd(inputTokens),
+    costUsd: resolveJevCostUsd(resp, provider),
   };
 }
 
-interface Options {
+export type JevProviderName = keyof typeof JEV_PROVIDERS;
+
+/** Tudo que a chamada precisa, sempre resolvido junto (URL, modelo e chave do mesmo provedor). */
+export interface JevProviderConfig {
+  name: JevProviderName;
+  url: string;
+  model: string;
   apiKey: string;
+}
+
+/** JEV_PROVIDER: typesafe (padrão, também se vazia) ou openrouter. */
+export function resolveJevProviderName(env: NodeJS.ProcessEnv = process.env): JevProviderName {
+  const raw = env.JEV_PROVIDER?.trim().toLowerCase();
+  if (!raw) return JEV_DEFAULT_PROVIDER;
+  if (raw === 'typesafe' || raw === 'openrouter') return raw;
+  // O valor não é impresso: pode ser uma chave colada na env errada.
+  const accepted = Object.keys(JEV_PROVIDERS)
+    .map((k) => `"${k}"`)
+    .join(', ');
+  console.warn(
+    `[jev] JEV_PROVIDER com valor desconhecido (aceitos: ${accepted}); usando ${JEV_DEFAULT_PROVIDER}.`,
+  );
+  return JEV_DEFAULT_PROVIDER;
+}
+
+/**
+ * Provedor + chave. Null se a chave do provedor escolhido não existir: sem fallback para o outro.
+ * Chave nunca logada.
+ */
+export function resolveJevProvider(
+  env: NodeJS.ProcessEnv = process.env,
+  name: JevProviderName = resolveJevProviderName(env),
+): JevProviderConfig | null {
+  const { url, model, keyEnvs } = JEV_PROVIDERS[name];
+  const apiKey = keyEnvs.map((k) => env[k]).find((v) => !!v);
+  return apiKey ? { name, url, model, apiKey } : null;
+}
+
+interface Options {
+  provider: JevProviderConfig;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }
 
-/** Chave: JEV_API_KEY, com TYPESAFE_API_KEY como apelido. Nunca logada. */
-export function resolveJevApiKey(env: NodeJS.ProcessEnv = process.env): string | null {
-  return env.JEV_API_KEY || env.TYPESAFE_API_KEY || null;
-}
-
 export function createJevClient(opts: Options): JevClient {
   const doFetch = opts.fetchImpl ?? fetch;
+  const { name, url, model, apiKey } = opts.provider;
   return {
     async qualify(input) {
-      const res = await doFetch(JEV_URL, {
+      const res = await doFetch(url, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${opts.apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: JEV_MODEL,
+          model,
           state: {
             transcript: input.transcript,
             utterances: input.utterances,
@@ -446,7 +515,7 @@ export function createJevClient(opts: Options): JevClient {
         signal: AbortSignal.timeout(opts.timeoutMs ?? 60_000),
       });
       if (!res.ok) throw new JevError(`jev_http_${res.status}`);
-      return mapJevResponse((await res.json()) as JevResponse, input);
+      return mapJevResponse((await res.json()) as JevResponse, input, name);
     },
   };
 }

@@ -23,8 +23,7 @@ import {
 } from './constants';
 import { formatEngineError } from './errors';
 import { isTranscriptionEngineEnabled } from './flag';
-import { type JevClient, createJevClient, resolveJevApiKey } from './jev.client';
-import { hasDurationWarning } from './review';
+import { type JevClient, createJevClient, resolveJevProvider, toJevInput } from './jev.client';
 import { isVoicemailTranscript } from './voicemail';
 
 /** `processing` parado há mais que isso é execução que morreu. */
@@ -124,8 +123,8 @@ export function defaultEngineDeps(db: SupabaseClient): EngineDeps {
       return apiKey ? createAssemblyAiClient({ apiKey }) : null;
     },
     jev: () => {
-      const apiKey = resolveJevApiKey();
-      return apiKey ? createJevClient({ apiKey }) : null;
+      const provider = resolveJevProvider();
+      return provider ? createJevClient({ provider }) : null;
     },
     now: () => Date.now(),
     afterQualification: (callId) => runCrmAutoUpdate(db, callId),
@@ -471,14 +470,7 @@ export async function processEngineCall(
     }
     let q: Awaited<ReturnType<JevClient['qualify']>>;
     try {
-      q = await jev.qualify({
-        transcript: transcript.text,
-        utterances: transcript.utterances as never,
-        durationSeconds: callSeconds,
-        callType: call.type === 'inbound' ? 'inbound' : 'outbound',
-        durationWarning: hasDurationWarning(transcript.error),
-        speakersCount: transcript.speakersCount,
-      });
+      q = await jev.qualify(toJevInput(call, transcript));
     } catch (err) {
       await finish(deps, 'call_qualifications', qId, {
         status: 'failed',
