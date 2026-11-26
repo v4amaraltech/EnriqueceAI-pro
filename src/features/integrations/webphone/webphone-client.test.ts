@@ -101,7 +101,7 @@ function fakeSession(integrated: boolean) {
     sendDTMF: vi.fn(),
   };
   const request = { getHeader: () => (integrated ? 'true' : null) };
-  return { session, request };
+  return { session, request, handlers };
 }
 
 beforeEach(async () => {
@@ -629,5 +629,33 @@ describe('dtmfTransport (puro)', () => {
     ['RFC2833', false, 'RFC2833'],
   ] as const)('override=%s canInsert=%s => %s', (override, canInsertDtmf, expected) => {
     expect(client.dtmfTransport({ override, canInsertDtmf })).toBe(expected);
+  });
+});
+
+describe('extensão da API4COM atendendo no lugar da página', () => {
+  async function answeredIntegratedCall() {
+    setMicPermission('granted');
+    await client.startWebphone(CONFIG);
+    const ua = lastUa();
+    ua.emit('registered');
+    await flush();
+    const fake = fakeSession(true);
+    ua.emit('newRTCSession', { session: fake.session, request: fake.request });
+    expect(fake.session.answer).toHaveBeenCalledTimes(1);
+    return fake;
+  }
+
+  it('CANCEL do servidor depois do atendimento marca extension_answered e "Já desativei" limpa', async () => {
+    const { handlers } = await answeredIntegratedCall();
+    handlers.get('failed')?.({ originator: 'remote', cause: 'Canceled', message: { getHeader: () => null } });
+    expect(client.getWebphoneState().sessionConflict).toBe('extension_answered');
+    client.acknowledgeExtensionConflict();
+    expect(client.getWebphoneState().sessionConflict).toBeNull();
+  });
+
+  it('desligamento normal não marca conflito', async () => {
+    const { handlers } = await answeredIntegratedCall();
+    handlers.get('ended')?.({ originator: 'remote', cause: 'Terminated' });
+    expect(client.getWebphoneState().sessionConflict).toBeNull();
   });
 });
