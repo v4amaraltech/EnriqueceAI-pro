@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ getAuthOrgIdResult: vi.fn() }));
 const leadEvents = vi.hoisted(() => ({ logLeadEvent: vi.fn() }));
@@ -47,6 +47,9 @@ function makeClient(respond: (call: Call) => unknown) {
 const has = (call: Call, op: string, ...args: unknown[]) =>
   call.ops.some(([o, a]) => o === op && JSON.stringify(a) === JSON.stringify(args));
 const updatePayload = (call: Call) => call.ops.find(([o]) => o === 'update')?.[1][0] as Record<string, unknown>;
+
+import { createCalendarEvent, getCalendarConnection } from '@/features/integrations/services/calendar.service';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { scheduleActivity } from './schedule-activity';
 
@@ -154,5 +157,55 @@ describe('scheduleActivity — pausa a cadência até o retorno', () => {
     const timeline = userClient.calls.find((c) => c.table === 'interactions')!;
     const row = timeline.ops.find(([o]) => o === 'insert')![1][0] as { message_content: string };
     expect(row.message_content).toBe('Atividade agendada: Ligação para 20/10/2026, 09:00');
+  });
+});
+
+describe('scheduleActivity — link do lead no evento do Google Calendar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.exemplo.test');
+    const client = makeClient((call) =>
+      call.table === 'scheduled_activities'
+        ? { data: { id: 'sa-1' }, error: null }
+        : call.table === 'leads'
+          ? { data: { id: LEAD, nome_fantasia: 'Empresa Teste' }, error: null }
+          : { data: null, error: null },
+    );
+    service.createServiceRoleClient.mockReturnValue(makeClient(() => ({ data: null, error: null })));
+    auth.getAuthOrgIdResult.mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u1', supabase: client },
+    });
+    vi.mocked(createServerSupabaseClient).mockResolvedValueOnce(client as never);
+    vi.mocked(getCalendarConnection).mockResolvedValueOnce({ id: 'conn-1' } as never);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const sentDescription = () => vi.mocked(createCalendarEvent).mock.calls[0]?.[1].description;
+
+  it('com notas, mantém o texto e acrescenta o link no final', async () => {
+    await scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT, notes: 'Falar com o sócio' });
+    expect(sentDescription()).toBe(
+      `Retorno agendado\n\nFalar com o sócio\n\nAbrir o lead: https://app.exemplo.test/leads/${LEAD}`,
+    );
+    expect(vi.mocked(createCalendarEvent).mock.calls[0]?.[1].title).toBe('Ligação: Empresa Teste');
+  });
+
+  it('sem notas, mantém o texto padrão e acrescenta o link no final', async () => {
+    await scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT });
+    expect(sentDescription()).toBe(
+      `Retorno agendado via EnriqueceAI\n\nAbrir o lead: https://app.exemplo.test/leads/${LEAD}`,
+    );
+  });
+
+  it('com a URL do app terminando em barra, o link não fica com barra dupla', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.exemplo.test/');
+    await scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT });
+    expect(sentDescription()).toBe(
+      `Retorno agendado via EnriqueceAI\n\nAbrir o lead: https://app.exemplo.test/leads/${LEAD}`,
+    );
   });
 });

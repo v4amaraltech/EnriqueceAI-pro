@@ -11,6 +11,7 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAppUrl } from '@/lib/utils/app-url';
 import { getCalendarConnection, createCalendarEvent } from '@/features/integrations/services/calendar.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
@@ -251,9 +252,13 @@ async function createCalendarEventForActivity(
   const startTime = new Date(scheduledAt);
   const endTime = new Date(startTime.getTime() + 15 * 60 * 1000); // 15 min duration
 
+  const summary = notes ? `Retorno agendado\n\n${notes}` : 'Retorno agendado via EnriqueceAI';
+
+  const leadUrl = new URL(`/leads/${leadId}`, getAppUrl()).toString();
+
   await createCalendarEvent(connection, {
     title: `${channelLabel}: ${leadName}`,
-    description: notes ? `Retorno agendado\n\n${notes}` : 'Retorno agendado via EnriqueceAI',
+    description: `${summary}\n\nAbrir o lead: ${leadUrl}`,
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString(),
   });
