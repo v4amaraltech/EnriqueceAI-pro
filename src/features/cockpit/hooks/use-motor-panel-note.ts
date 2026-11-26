@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { callNoteKey, readCallNote, writeCallNote } from '../utils/call-note-draft';
+import { appendNoteLine } from '../utils/referral';
 
 import type { MotorCallNoteSaver } from './use-motor-call-note-saver';
 
@@ -26,6 +27,8 @@ export interface MotorPanelNote {
   /** Grava agora (antes de uma ação final do lead). Não espera: dispara e segue. */
   flush: () => void;
   retry: () => void;
+  /** Acrescenta uma linha (sem repetir) e grava. Ignora lead que não é o do painel. Devolve o texto completo. */
+  append: (forLeadId: string, line: string) => string;
   /** Texto atual do campo (sempre o mais recente, mesmo em closure velha). Usado como observação do "Ligar depois". */
   getValue: () => string;
   status: MotorNoteStatus;
@@ -151,5 +154,20 @@ export function useMotorPanelNote({ live, leadId, leadName, engineCallId, dialin
   else if (live && callId && text.trim() && status.kind === 'idle' && saver.isSaved(callId, text)) status = { kind: 'saved' };
 
   const getValue = useCallback(() => latest.current.text, []);
-  return { value: text, onChange, onBlur: flush, flush, retry: flush, getValue, status };
+  const append = useCallback(
+    (forLeadId: string, line: string) => {
+      const snap = latest.current;
+      // O painel já é de outro lead: não escreve nele.
+      if (snap.leadId !== forLeadId) return line;
+      const next = appendNoteLine(snap.text, line);
+      latest.current = { ...snap, text: next };
+      setDraft({ leadId: forLeadId, value: next });
+      writeCallNote(callNoteKey('motor', forLeadId), next);
+      setStatusFor(forLeadId, { kind: 'idle' });
+      void persist(latest.current, false);
+      return next;
+    },
+    [persist, setStatusFor],
+  );
+  return { value: text, onChange, onBlur: flush, flush, retry: flush, getValue, append, status };
 }

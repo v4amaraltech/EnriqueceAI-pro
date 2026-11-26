@@ -3,6 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AutoDialAnsweredActions } from './AutoDialAnsweredActions';
 
+// jsdom não tem ResizeObserver (usado pelo Checkbox do diálogo).
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 const toastMessage = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast: { message: toastMessage, success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock('./CallMeetingDialogs', () => ({
@@ -97,5 +104,22 @@ describe('AutoDialAnsweredActions', () => {
     unmount();
     renderIt({ onNotConversation: undefined });
     expect(screen.queryByTestId('dialer-answered-not-conversation')).toBeNull();
+  });
+});
+
+describe('AutoDialAnsweredActions: Indicou outra pessoa', () => {
+  it('aparece junto das saídas e abre o diálogo', () => {
+    renderIt();
+    expect(screen.getByText('Cadastra o contato indicado e pausa a cadência até o retorno.')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('dialer-answered-refer'));
+    expect(screen.getByTestId('refer-dialog')).toBeInTheDocument();
+  });
+
+  it('some onde "Ligar depois" não vale (lead ganho/arquivado) e desabilita ao vivo', () => {
+    const { unmount } = renderIt({ status: 'won' });
+    expect(screen.queryByTestId('dialer-answered-refer')).toBeNull();
+    unmount();
+    renderIt({ disabled: true });
+    expect(screen.getByTestId('dialer-answered-refer')).toBeDisabled();
   });
 });
