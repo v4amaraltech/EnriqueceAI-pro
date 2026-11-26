@@ -24,7 +24,7 @@ import {
 import { AUTO_DIAL_RPC_OVERRIDES, SIGNAL_CHUNK_SIZE, chunk } from '../utils/cold-lead-order';
 import { pickCockpitLead, type CockpitTier } from '../utils/next-call-pick';
 import { RECOVERY_BLOCKED_REASON_NAMES, isNoResumeReason, type AutoDialQueue } from '../utils/recovery-queue';
-import { NO_ACTION_DISPOSITIONS, noActionCooldownCutoff } from '../utils/no-action-cooldown';
+import { ACTION_DISPOSITIONS, NO_ACTION_DISPOSITIONS, noActionCooldownCutoff } from '../utils/no-action-cooldown';
 import { isRealConversation } from '../utils/real-conversation';
 import { fetchCockpitCandidates } from './cockpit-candidates.service';
 import { POSTGREST_MAX_ROWS, fetchRecoveryCandidates, loadRecoveryHoldoutLeadIds } from './cockpit-recovery-candidates.service';
@@ -242,7 +242,7 @@ export async function loadUnavailableLeadIds(
  * conversa do lead nos últimos `NO_ACTION_COOLDOWN_DAYS` dias tem desfecho `answered_no_progress`/`relevant_conversation`
  * e o lead NÃO tem atividade pendente (retorno ou tarefa) agendada. Contado da ligação. Em blocos de `SIGNAL_CHUNK_SIZE`
  * ids (sem `.in()` gigante), em 3 passos pequenos: (1) ligações com esses desfechos na janela; (2) só uma ligação MAIS NOVA com
- * `callback_requested` (ação) tira o lead da lista; ligação nova sem conversa/desfecho NÃO tira (uma conversa nova sem ação vira a "última"); (3) atividade pendente tira o lead (já tem ação).
+ * `callback_requested` ou `referred_contact` (ação) tira o lead da lista; ligação nova sem conversa/desfecho NÃO tira (uma conversa nova sem ação vira a "última"); (3) atividade pendente tira o lead (já tem ação).
  * `null` = falha de leitura (falha fechada).
  */
 export async function loadNoActionLeadIds(client: SupabaseClient, orgId: string, leadIds: string[], now: Date): Promise<Set<string> | null> {
@@ -266,7 +266,7 @@ export async function loadNoActionLeadIds(client: SupabaseClient, orgId: string,
   }
   if (lastTalk.size === 0) return out;
 
-  // Só uma ligação mais nova COM AÇÃO (pediu para ligar depois) solta o lead. Ligação nova sem conversa e sem desfecho, ou com
+  // Só uma ligação mais nova COM AÇÃO (pediu para ligar depois ou indicou outro contato) solta o lead. Ligação nova sem conversa e sem desfecho, ou com
   // no_answer/voicemail/technical_failure, NÃO solta (caso Lippaus: a própria discagem ligou de novo, 0 s, sem desfecho).
   // Uma conversa nova sem ação já é a "última conversa" do passo 1 (os 7 dias contam dela).
   const earliest = new Date(Math.min(...lastTalk.values())).toISOString();
@@ -274,13 +274,13 @@ export async function loadNoActionLeadIds(client: SupabaseClient, orgId: string,
     const { data, error } = (await from(client, 'calls')
       .select('lead_id, created_at, sdr_disposition')
       .eq('org_id', orgId)
-      .eq('sdr_disposition', 'callback_requested') // filtrado NO BANCO: só as ligações que têm ação
+      .in('sdr_disposition', [...ACTION_DISPOSITIONS]) // filtrado NO BANCO: só as ligações que têm ação
       .in('lead_id', part)
       .gte('created_at', earliest)) as Rows<{ lead_id: string; created_at: string; sdr_disposition: string | null }>;
     if (error || !data || data.length >= POSTGREST_MAX_ROWS) return null;
     const acted = new Set<string>();
     for (const r of data) {
-      if (r.sdr_disposition === 'callback_requested' && Date.parse(r.created_at) > (lastTalk.get(r.lead_id) ?? Number.POSITIVE_INFINITY)) acted.add(r.lead_id);
+      if (r.sdr_disposition && ACTION_DISPOSITIONS.includes(r.sdr_disposition) && Date.parse(r.created_at) > (lastTalk.get(r.lead_id) ?? Number.POSITIVE_INFINITY)) acted.add(r.lead_id);
     }
     for (const id of part) if (!acted.has(id)) out.add(id);
   }

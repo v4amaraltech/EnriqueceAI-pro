@@ -12,7 +12,7 @@ export interface AutoDialDb {
   /** Tabelas cuja leitura deve falhar. */
   failReads: Set<string>;
   /** Filtros `eq` usados em cada leitura (prova de `org_id` em toda consulta). */
-  reads: Array<{ table: string; eq: Record<string, unknown> }>;
+  reads: Array<{ table: string; eq: Record<string, unknown>; inList?: Record<string, unknown[]> }>;
   writes: Array<{ table: string; op: string }>;
   rpc: Mock<(...args: unknown[]) => Promise<unknown>>;
 }
@@ -25,6 +25,7 @@ export function makeAutoDialClient(db: AutoDialDb) {
     from(table: string) {
       const filters: Array<(r: Row) => boolean> = [];
       const eq: Record<string, unknown> = {};
+      const inList: Record<string, unknown[]> = {};
       let head = false;
       let wantCount = false;
       const pick = (r: Row, col: string): unknown => {
@@ -34,7 +35,7 @@ export function makeAutoDialClient(db: AutoDialDb) {
         return key && v && typeof v === 'object' ? (v as Row)[key] : v;
       };
       const run = (): Result => {
-        db.reads.push({ table, eq: { ...eq } });
+        db.reads.push({ table, eq: { ...eq }, inList: { ...inList } });
         if (db.failReads.has(table)) return { data: null, error: { message: `falha de leitura em ${table}` }, count: null };
         const rows = (db.tables[table] ?? []).filter((r) => filters.every((f) => f(r)));
         return { data: head ? null : rows, error: null, count: wantCount ? rows.length : null };
@@ -51,6 +52,7 @@ export function makeAutoDialClient(db: AutoDialDb) {
         return b;
       };
       b.in = (col: string, vs: unknown[]) => {
+        inList[col] = vs;
         filters.push((r) => vs.includes(pick(r, col)));
         return b;
       };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
+import { DISPOSITION_REPORT_LABELS, OUTCOMES_REQUIRING_ANSWER,
   DISPOSITION_OPTIONS,
   dispositionOptionsForTelemetry,
   mapDispositionToAction,
@@ -71,5 +71,23 @@ describe('dispositionOptionsForTelemetry', () => {
   it('"Falha técnica" (technical_failure) fica disponível nos dois casos', () => {
     expect(dispositionOptionsForTelemetry(true).map((o) => o.value)).toContain('technical_failure');
     expect(dispositionOptionsForTelemetry(false).map((o) => o.value)).toContain('technical_failure');
+  });
+});
+
+describe('referred_contact ("Indicou outro contato")', () => {
+  it('reagenda, como o pedido de retorno', () => {
+    expect(mapDispositionToAction('referred_contact')).toBe('reschedule');
+  });
+
+  it('tem rótulo de relatório e exige ligação atendida', () => {
+    expect(DISPOSITION_REPORT_LABELS.referred_contact).toBe('Indicou outro contato');
+    expect(OUTCOMES_REQUIRING_ANSWER.has('referred_contact')).toBe(true);
+  });
+
+  it('não aparece em nenhum seletor (só o Cockpit usa)', () => {
+    expect(DISPOSITION_OPTIONS.map((o) => o.value)).not.toContain('referred_contact');
+    for (const connected of [true, false]) {
+      expect(dispositionOptionsForTelemetry(connected).map((o) => o.value)).not.toContain('referred_contact');
+    }
   });
 });
