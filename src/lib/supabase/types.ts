@@ -10455,7 +10455,8 @@ export type Database = {
         | 'callback_requested'
         | 'no_answer'
         | 'technical_failure'
-        | 'voicemail';
+        | 'voicemail'
+        | 'referred_contact';
       call_status: 'significant' | 'not_significant' | 'no_contact' | 'busy' | 'not_connected';
       call_type: 'inbound' | 'outbound' | 'manual';
       channel_type:
@@ -10644,6 +10645,7 @@ export const Constants = {
         'no_answer',
         'technical_failure',
         'voicemail',
+        'referred_contact',
       ],
       call_status: ['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'],
       call_type: ['inbound', 'outbound', 'manual'],
