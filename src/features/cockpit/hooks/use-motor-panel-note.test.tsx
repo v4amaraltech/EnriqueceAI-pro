@@ -211,3 +211,34 @@ describe('anotação do painel grava na ligação do lead', () => {
     expect(getValue()).toBe('recente');
   });
 });
+
+describe('append (linha de "Indicou outra pessoa")', () => {
+  it('junta ao que o SDR já escreveu, grava na hora e não repete a linha', async () => {
+    const { result } = setup({ leadId: 'A', engineCallId: CALL_A });
+    type(result, 'obs');
+    let text = '';
+    act(() => {
+      text = result.current.append('A', 'Indicou José');
+    });
+    await flush();
+    expect(text).toBe('obs\nIndicou José');
+    expect(result.current.value).toBe('obs\nIndicou José');
+    expect(classifyWebphoneCall).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_A, notes: 'obs\nIndicou José' }));
+    act(() => {
+      text = result.current.append('A', 'Indicou José');
+    });
+    await flush();
+    expect(text).toBe('obs\nIndicou José');
+    expect(classifyWebphoneCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('lead que já não é o do painel: não escreve nada nele', async () => {
+    const { result } = setup({ leadId: 'B', engineCallId: CALL_B });
+    act(() => {
+      result.current.append('A', 'Indicou José');
+    });
+    await flush();
+    expect(result.current.value).toBe('');
+    expect(classifyWebphoneCall).not.toHaveBeenCalled();
+  });
+});

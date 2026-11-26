@@ -34,8 +34,8 @@ interface AutoDialAnsweredActionsProps extends AnsweredBlockProps {
 }
 
 /**
- * O lead conversou: a discagem espera o SDR e só há três saídas (Agendar reunião, Ligar depois, Desqualificar lead).
- * Cada uma pede o que falta (agenda, data e hora, motivo). "Não foi conversa" é um link discreto, não um quarto botão.
+ * O lead conversou: a discagem espera o SDR e as saídas são Agendar reunião, Ligar depois, Indicou outra pessoa e Desqualificar lead.
+ * Cada uma pede o que falta (agenda, data e hora, motivo). "Não foi conversa" é um link discreto, não mais um botão.
  * Versão AUTÔNOMA: cria a própria instância do hook e seus diálogos. A tela da discagem usa `AutoDialAnsweredBlock`
  * sobre a instância ÚNICA que ela compartilha com o painel do lead.
  */
@@ -105,6 +105,21 @@ export function AutoDialAnsweredBlock({
           </Button>
           <p className="text-muted-foreground text-xs">Marca o próximo contato e pausa a cadência até o retorno.</p>
         </div>
+        {(!available || available.callback) && (
+          <div className="space-y-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full"
+              disabled={disabled || actions.callbackBusy}
+              data-testid="dialer-answered-refer"
+              onClick={actions.refer}
+            >
+              Indicou outra pessoa
+            </Button>
+            <p className="text-muted-foreground text-xs">Cadastra o contato indicado e pausa a cadência até o retorno.</p>
+          </div>
+        )}
         {showDisqualify && (
           <div className="space-y-1">
             <Button type="button" variant="outline" className="h-11 w-full" disabled={disabled} data-testid="dialer-answered-disqualify" onClick={actions.disqualify}>

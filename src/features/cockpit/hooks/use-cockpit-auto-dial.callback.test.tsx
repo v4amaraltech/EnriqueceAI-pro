@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
@@ -10,7 +11,7 @@ import {
 } from '../actions/auto-dial';
 import { useApi4ComWebphone } from '@/features/integrations/webphone/useApi4ComWebphone';
 import { useWebphoneLeadAnswer } from '@/features/integrations/webphone/useWebphoneLeadAnswer';
-import { getWebphoneState, prepareWebphoneMicForDial } from '@/features/integrations/webphone/webphone-client';
+import { getWebphoneState, hangupCall, prepareWebphoneMicForDial } from '@/features/integrations/webphone/webphone-client';
 import { dialingBlockReason } from '@/features/integrations/webphone/webphone-state';
 
 import { useCockpitAutoDial } from './use-cockpit-auto-dial';
@@ -229,3 +230,145 @@ describe('scheduleCallback (Ligar depois) — simulado', () => {
     expect(vi.mocked(getNextAutoDialCardAction).mock.calls.at(-1)?.[0]).toMatchObject({ excludeLeadIds: ['A'] });
   });
 });
+
+describe('scheduleCallback com "Indicou outra pessoa" (referred_contact)', () => {
+  beforeEach(() => {
+    vi.mocked(scheduleActivity).mockResolvedValue(scheduled);
+    vi.mocked(confirmAutoDialOutcomeAction).mockResolvedValue(confirmed);
+    vi.mocked(getNextAutoDialCardAction).mockResolvedValueOnce(ok('A')).mockResolvedValue(ok('B'));
+  });
+
+  const refer = async (result: Hook) => {
+    let out: unknown;
+    await act(async () => {
+      out = await result.current.scheduleCallback?.({ scheduledAt: AT, notes: 'Retorno com José', callNotes: 'Indicou José', disposition: 'referred_contact' });
+    });
+    return out;
+  };
+
+  it('pausa a cadência, grava referred_contact com a anotação da ligação e o lead NÃO sai da sessão', async () => {
+    const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await reachAwaitingLive(rerender, result);
+    expect(await refer(result)).toEqual({ ok: true });
+    expect(scheduleActivity).toHaveBeenCalledWith({ leadId: 'A', channel: 'phone', scheduledAt: AT.toISOString(), notes: 'Retorno com José', pauseCadenceUntilReturn: true });
+    expect(confirmAutoDialOutcomeAction).toHaveBeenCalledWith({ callId: 'call-1', disposition: 'referred_contact', notes: 'Indicou José' });
+    expect(result.current.state).toMatchObject({ phase: 'countdown' });
+    await advance(0);
+    expect(vi.mocked(getNextAutoDialCardAction).mock.calls.at(-1)?.[0]).toMatchObject({ excludeLeadIds: [] });
+  });
+
+  it('desfecho falhou: avisa que o retorno já está salvo; de novo reenvia só o desfecho', async () => {
+    vi.mocked(confirmAutoDialOutcomeAction).mockResolvedValueOnce({ success: false, error: 'falhou' }).mockResolvedValue(confirmed);
+    const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await reachAwaitingLive(rerender, result);
+    expect(await refer(result)).toMatchObject({ ok: false, retornoSaved: true });
+    expect(await refer(result)).toEqual({ ok: true });
+    expect(scheduleActivity).toHaveBeenCalledTimes(1);
+    expect(confirmAutoDialOutcomeAction).toHaveBeenCalledTimes(2);
+  });
+
+  it('reenvio depois que o horário já passou da folga: manda o desfecho assim mesmo (o retorno está salvo)', async () => {
+    vi.mocked(confirmAutoDialOutcomeAction).mockResolvedValueOnce({ success: false, error: 'falhou' }).mockResolvedValue(confirmed);
+    const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await reachAwaitingLive(rerender, result);
+    await refer(result);
+    vi.setSystemTime(new Date(AT.getTime() - 60_000));
+    expect(await refer(result)).toEqual({ ok: true });
+    expect(scheduleActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Ligar depois" que ficou pela metade não é reaproveitado: a indicação agenda o próprio retorno', async () => {
+    vi.mocked(confirmAutoDialOutcomeAction).mockResolvedValueOnce({ success: false, error: 'falhou' }).mockResolvedValue(confirmed);
+    const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await reachAwaitingLive(rerender, result);
+    await callbackNow(result, 'x');
+    expect(await refer(result)).toEqual({ ok: true });
+    expect(scheduleActivity).toHaveBeenCalledTimes(2);
+  });
+
+  it('com a ligação ainda no ar: conclui pelo painel com kind referred ao fim dela', async () => {
+    vi.mocked(dialAutoLeadAction).mockResolvedValue(dialed);
+    phone.call = liveCall('active');
+    const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await startIt(result);
+    await advance(5000);
+    expect(result.current.state.phase).toBe('in-call');
+    expect(await refer(result)).toEqual({ ok: true });
+    expect(confirmAutoDialOutcomeAction).not.toHaveBeenCalled();
+    phone.call = liveCall('ended');
+    rerender();
+    await advance(3000);
+    expect(concludeAutoDialCallAction).toHaveBeenCalledWith({ callId: 'call-1', kind: 'referred' });
+  });
+});
+
+describe('"abrir o lead" da indicação pausa a fila (mesmo caminho do botão Pausar)', () => {
+  const NOTICE = 'Fila pausada. Ligue para José e depois toque em Retomar.';
+  beforeEach(() => {
+    vi.mocked(scheduleActivity).mockResolvedValue(scheduled);
+    vi.mocked(confirmAutoDialOutcomeAction).mockResolvedValue(confirmed);
+    vi.mocked(getNextAutoDialCardAction).mockResolvedValueOnce(ok('A')).mockResolvedValue(ok('B'));
+  });
+
+  const refer = async (result: Hook, pauseQueueFor?: string) => {
+    let out: unknown;
+    await act(async () => {
+      out = await result.current.scheduleCallback?.({ scheduledAt: AT, disposition: 'referred_contact', ...(pauseQueueFor ? { pauseQueueFor } : {}) });
+    });
+    return out;
+  };
+  const awaiting = async () => {
+    const hook = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await reachAwaitingLive(hook.rerender, hook.result);
+    return hook.result;
+  };
+
+  it('grava e DEPOIS pausa: não disca o próximo até o SDR retomar', async () => {
+    const result = await awaiting();
+    expect(await refer(result, 'José')).toEqual({ ok: true });
+    expect(result.current.state).toMatchObject({ phase: 'paused', reason: 'user' });
+    expect(toast.info).toHaveBeenCalledWith(NOTICE);
+    await advance(30_000);
+    expect(dialAutoLeadAction).toHaveBeenCalledTimes(1);
+    act(() => result.current.resume());
+    expect(result.current.state.phase).toBe('countdown');
+  });
+
+  it('"seguir a fila" não pausa', async () => {
+    const result = await awaiting();
+    await refer(result);
+    expect(result.current.state.phase).toBe('countdown');
+    expect(toast.info).not.toHaveBeenCalledWith(NOTICE);
+  });
+
+  it('desfecho falhou: não pausa nem avisa; no reenvio que dá certo, pausa', async () => {
+    vi.mocked(confirmAutoDialOutcomeAction).mockResolvedValueOnce({ success: false, error: 'falhou' }).mockResolvedValue(confirmed);
+    const result = await awaiting();
+    expect(await refer(result, 'José')).toMatchObject({ ok: false });
+    expect(result.current.state.phase).toBe('awaiting-sdr');
+    expect(toast.info).not.toHaveBeenCalledWith(NOTICE);
+    await refer(result, 'José');
+    expect(result.current.state.phase).toBe('paused');
+  });
+
+  it('ligação ainda no ar: não corta; pausa quando ela termina, com o desfecho registrado', async () => {
+    vi.mocked(dialAutoLeadAction).mockResolvedValue(dialed);
+    phone.call = liveCall('active');
+    const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await startIt(result);
+    await advance(5000);
+    expect(await refer(result, 'José')).toEqual({ ok: true });
+    expect(result.current.state.phase).toBe('concluded-call');
+    expect(hangupCall).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalledWith(NOTICE);
+    phone.call = liveCall('ended');
+    rerender();
+    await advance(3000);
+    expect(concludeAutoDialCallAction).toHaveBeenCalledWith({ callId: 'call-1', kind: 'referred' });
+    expect(result.current.state).toMatchObject({ phase: 'paused', reason: 'user' });
+    expect(toast.info).toHaveBeenCalledWith(NOTICE);
+    await advance(30_000);
+    expect(dialAutoLeadAction).toHaveBeenCalledTimes(1);
+  });
+});
+

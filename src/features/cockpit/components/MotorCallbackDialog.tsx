@@ -1,21 +1,29 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
-import { Calendar as CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/shared/components/ui/button';
-import { Calendar } from '@/shared/components/ui/calendar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
-import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import { Textarea } from '@/shared/components/ui/textarea';
 
-import { callbackShortcuts, callbackWarnings, validateCallbackAt } from '../utils/callback-slots';
+import { callbackWarnings, validateCallbackAt } from '../utils/callback-slots';
 
-export type ScheduleCallbackFn = (input: { scheduledAt: Date; notes?: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
+import { CallbackWhenPicker, formatWhen, useCallbackWhen } from './CallbackWhenPicker';
+
+export type ScheduleCallbackFn = (input: {
+  scheduledAt: Date;
+  /** Observação do retorno (e da ligação, quando `callNotes` não vem). */
+  notes?: string;
+  /** Anotação da ligação, quando difere da observação do retorno. */
+  callNotes?: string;
+  /** Desfecho gravado na ligação. Padrão: `callback_requested`. */
+  disposition?: 'callback_requested' | 'referred_contact';
+  /** Depois de gravar, pausa a fila (botão "Pausar") e avisa o SDR para ligar para este nome. */
+  pauseQueueFor?: string;
+}) => Promise<{ ok: true } | { ok: false; error: string; retornoSaved?: boolean }>;
 
 interface MotorCallbackDialogProps {
   open: boolean;
@@ -30,32 +38,13 @@ interface MotorCallbackDialogProps {
   leadName?: string;
 }
 
-const BRT = 'America/Sao_Paulo';
-
-function formatWhen(at: Date): string {
-  const f = new Intl.DateTimeFormat('pt-BR', { timeZone: BRT, weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' });
-  return f.format(at);
-}
-
-/** Data (do calendário, dia local) + "HH:mm" lidos como horário de Brasília. Vazio ou inválido: null. */
-function brtFrom(date: Date | undefined, time: string): Date | null {
-  if (!date || !/^\d{2}:\d{2}$/.test(time)) return null;
-  const p = (n: number) => String(n).padStart(2, '0');
-  const at = new Date(`${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}T${time}:00-03:00`);
-  return Number.isNaN(at.getTime()) ? null : at;
-}
-
 function CallbackForm({ onOpenChange, scheduleCallback, attemptsToday, simulated, initialNotes = '', leadName }: Omit<MotorCallbackDialogProps, 'open'>) {
-  const [openedAt] = useState(() => new Date());
-  const shortcuts = useMemo(() => callbackShortcuts(openedAt), [openedAt]);
-  const [shortcutId, setShortcutId] = useState<string | null>(null);
-  const [customDate, setCustomDate] = useState<Date | undefined>(undefined);
-  const [customTime, setCustomTime] = useState('');
+  const when = useCallbackWhen();
+  const { openedAt, at } = when;
   const [notes, setNotes] = useState(initialNotes);
   const [sending, setSending] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const at = shortcutId ? (shortcuts.find((s) => s.id === shortcutId)?.at ?? null) : brtFrom(customDate, customTime);
   const validation = at ? validateCallbackAt(at, openedAt) : null;
   const warnings = at ? callbackWarnings(at, { now: openedAt, attemptsToday }) : [];
   const canConfirm = Boolean(at && validation?.ok) && !sending;
@@ -91,58 +80,7 @@ function CallbackForm({ onOpenChange, scheduleCallback, attemptsToday, simulated
       </DialogHeader>
 
       <div className="space-y-4">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Horários prontos">
-          {shortcuts.map((s) => (
-            <Button
-              key={s.id}
-              type="button"
-              size="sm"
-              variant={shortcutId === s.id ? 'default' : 'outline'}
-              aria-pressed={shortcutId === s.id}
-              data-testid={`motor-callback-shortcut-${s.id}`}
-              onClick={() => setShortcutId(s.id)}
-            >
-              {s.label}
-            </Button>
-          ))}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-muted-foreground text-xs">Escolher data e hora</Label>
-          <div className="flex flex-wrap items-center gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button type="button" variant="outline" size="sm" className="justify-start font-normal" data-testid="motor-callback-date">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {customDate ? customDate.toLocaleDateString('pt-BR') : 'Selecionar data'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={customDate}
-                  onSelect={(d) => {
-                    setCustomDate(d);
-                    setShortcutId(null);
-                  }}
-                  disabled={(d) => d < new Date(openedAt.getFullYear(), openedAt.getMonth(), openedAt.getDate())}
-                />
-              </PopoverContent>
-            </Popover>
-            <Input
-              type="time"
-              aria-label="Hora do retorno (Brasília)"
-              className="h-8 w-28"
-              value={customTime}
-              data-testid="motor-callback-time"
-              onChange={(e) => {
-                setCustomTime(e.target.value);
-                setShortcutId(null);
-              }}
-            />
-            <span className="text-muted-foreground text-xs">horário de Brasília</span>
-          </div>
-        </div>
+        <CallbackWhenPicker when={when} testIdPrefix="motor-callback" />
 
         {at && (
           <p className="text-sm font-medium" data-testid="motor-callback-when">
