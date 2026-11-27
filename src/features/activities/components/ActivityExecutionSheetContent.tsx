@@ -13,6 +13,7 @@ import { prepareActivityEmail, prepareActivityWhatsApp } from '../actions/prepar
 import { fetchWhatsAppTemplates, type WhatsAppTemplateOption } from '../actions/fetch-whatsapp-templates';
 import { fetchEmailTemplates, type EmailTemplateOption } from '../actions/fetch-email-templates';
 import { checkWhatsAppConnected } from '../actions/check-whatsapp-status';
+import { returnTaskPhones, useReturnContact } from '../hooks/useReturnContact';
 import { resolveWhatsAppPhone, buildContactPhones } from '../utils/resolve-whatsapp-phone';
 import { isLimboFollowup, type PendingActivity } from '../types';
 
@@ -29,6 +30,7 @@ import { ActivityResearchPanel } from './ActivityResearchPanel';
 import { LimboFollowupPanel } from './LimboFollowupPanel';
 import { ActivitySocialPointPanel } from './ActivitySocialPointPanel';
 import { ActivityWhatsAppCompose } from './ActivityWhatsAppCompose';
+import { ReturnContactLoading, ReturnContactNotice } from './ReturnContactNotice';
 
 interface ActivityExecutionSheetContentProps {
   activity: PendingActivity;
@@ -87,6 +89,9 @@ export function ActivityExecutionSheetContent({
       window.removeEventListener('lead:updated', onUpdated);
     };
   }, [activity.lead.id, activity.channel]);
+
+  // Tarefa de retorno com contato indicado: o número dele entra pré-selecionado (os painéis de ligação só montam depois).
+  const returnContact = useReturnContact(activity);
 
   // Phone resolution for WhatsApp and Phone channels
   const phones = (activity.channel === 'whatsapp' || activity.channel === 'phone')
@@ -293,6 +298,8 @@ export function ActivityExecutionSheetContent({
     );
   }
 
+  if (activity.channel === 'phone' && !returnContact.ready) return <ReturnContactLoading />;
+
   // Phone
   // Ligação via WhatsApp (passo phone + call_provider='whatsapp', Epic 7) usa o
   // discador WebRTC nativo, não o painel de telefonia (API4COM). EXCEÇÃO: no
@@ -301,45 +308,51 @@ export function ActivityExecutionSheetContent({
   // abaixo — assim o SDR nunca fica travado se o WhatsApp dele não estiver pareado.
   if (activity.channel === 'phone' && activity.callProvider === 'whatsapp' && !quickMode) {
     return (
-      <ActivityWhatsAppCallPanel
-        enrollmentId={activity.enrollmentId}
-        stepId={activity.stepId}
-        cadenceId={activity.cadenceId}
-        leadId={activity.lead.id}
-        leadName={leadName}
-        leadEmail={resolvedEmail || activity.lead.email}
-        leadFirstName={activity.lead.primeiro_nome ?? (activity.lead.socios ?? [])[0]?.nome?.split(' ')[0] ?? null}
-        phones={phones}
-        activityName={activity.activityName}
-        callScript={activity.callScript}
-        onResolved={() => onCallResolved?.()}
-        onLeadLost={onLeadLost}
-      />
+      <>
+        <ReturnContactNotice contact={returnContact.contact} failed={returnContact.failed} />
+        <ActivityWhatsAppCallPanel
+          enrollmentId={activity.enrollmentId}
+          stepId={activity.stepId}
+          cadenceId={activity.cadenceId}
+          leadId={activity.lead.id}
+          leadName={leadName}
+          leadEmail={resolvedEmail || activity.lead.email}
+          leadFirstName={activity.lead.primeiro_nome ?? (activity.lead.socios ?? [])[0]?.nome?.split(' ')[0] ?? null}
+          phones={returnTaskPhones(activity, phones, returnContact.contact)}
+          activityName={activity.activityName}
+          callScript={activity.callScript}
+          onResolved={() => onCallResolved?.()}
+          onLeadLost={onLeadLost}
+        />
+      </>
     );
   }
 
   if (activity.channel === 'phone') {
     return (
-      <ActivityPhonePanel
-        leadName={leadName}
-        leadId={activity.lead.id}
-        leadEmail={resolvedEmail || activity.lead.email}
-        leadFirstName={activity.lead.primeiro_nome ?? (activity.lead.socios ?? [])[0]?.nome?.split(' ')[0] ?? null}
-        phoneNumber={activity.lead.telefone}
-        phones={phones}
-        isSending={isSending}
-        onMarkDone={onMarkDone}
-        onLeadLost={onLeadLost}
-        canMarkNoShow={!!activity.lead.meeting_scheduled_at}
-        activityName={activity.activityName}
-        callScript={activity.callScript}
-        dialerProvider={dialerProvider}
-        cadenceStep={
-          activity.enrollmentId.startsWith('scheduled:')
-            ? undefined
-            : { enrollmentId: activity.enrollmentId, stepId: activity.stepId }
-        }
-      />
+      <>
+        <ReturnContactNotice contact={returnContact.contact} failed={returnContact.failed} />
+        <ActivityPhonePanel
+          leadName={leadName}
+          leadId={activity.lead.id}
+          leadEmail={resolvedEmail || activity.lead.email}
+          leadFirstName={activity.lead.primeiro_nome ?? (activity.lead.socios ?? [])[0]?.nome?.split(' ')[0] ?? null}
+          phoneNumber={activity.lead.telefone}
+          phones={returnTaskPhones(activity, phones, returnContact.contact)}
+          isSending={isSending}
+          onMarkDone={onMarkDone}
+          onLeadLost={onLeadLost}
+          canMarkNoShow={!!activity.lead.meeting_scheduled_at}
+          activityName={activity.activityName}
+          callScript={activity.callScript}
+          dialerProvider={dialerProvider}
+          cadenceStep={
+            activity.enrollmentId.startsWith('scheduled:')
+              ? undefined
+              : { enrollmentId: activity.enrollmentId, stepId: activity.stepId }
+          }
+        />
+      </>
     );
   }
 

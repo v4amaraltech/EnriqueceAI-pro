@@ -260,3 +260,39 @@ describe('indicado atendeu: volta ao principal', () => {
     expect(await target(client)).toBeNull();
   });
 });
+
+describe('tarefa específica (Atividades, returnId)', () => {
+  const task = (client: never, returnId = 'r-1') => loadCallbackTarget({ orgId: ORG, leadId: 'A', now: NOW, returnId, client });
+  const future = new Date(NOW.getTime() + 3_600_000).toISOString();
+
+  it('vale o retorno da tarefa, mesmo aberta antes do horário', async () => {
+    const client = setup({ scheduled_activities: [ret({ id: 'r-1', scheduled_at: future })] });
+    expect(await task(client)).toMatchObject({ contactId: 'c-1', phone: INDICATED });
+    expect(await target(client)).toBeNull(); // a discagem continua esperando vencer
+  });
+
+  it('tarefa de outro retorno, concluída ou sem contato: principal', async () => {
+    for (const over of [{ id: 'r-2' }, { id: 'r-1', status: 'completed' }, { id: 'r-1', contact_id: null }]) {
+      expect(await task(setup({ scheduled_activities: [ret(over)] }))).toBeNull();
+    }
+  });
+});
+
+describe('onError separa falha de motivo normal', () => {
+  const run = async (tables: Record<string, Row[]>, fail?: string) => {
+    const client = setup(tables);
+    if (fail) db.failReads.add(fail);
+    const onError = vi.fn();
+    await loadCallbackTarget({ orgId: ORG, leadId: 'A', now: NOW, client, onError });
+    return onError.mock.calls.length;
+  };
+
+  it('falha de leitura chama; sem contato, apagado ou já atendeu não chama', async () => {
+    for (const table of ['scheduled_activities', 'calls', 'lead_contacts']) expect(await run({}, table)).toBe(1);
+    expect(await run({ scheduled_activities: [ret({ contact_id: null })] })).toBe(0);
+    expect(await run({ lead_contacts: [] })).toBe(0);
+    expect(
+      await run({ calls: [{ org_id: ORG, lead_id: 'A', contact_id: 'c-1', created_at: ago(1), sdr_disposition: 'relevant_conversation' }] }),
+    ).toBe(0);
+  });
+});

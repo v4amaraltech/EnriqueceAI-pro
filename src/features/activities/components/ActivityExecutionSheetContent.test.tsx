@@ -65,9 +65,22 @@ vi.mock('@/features/leads/actions/lead-contacts', () => ({
 // Stub the WhatsApp call panel — its server-action imports would run at import
 // time in jsdom. We only assert WHICH panel gets chosen, not its internals.
 vi.mock('@/features/whatsapp-calls/components/ActivityWhatsAppCallPanel', () => ({
-  ActivityWhatsAppCallPanel: () => <div>WHATSAPP_CALL_PANEL</div>,
+  ActivityWhatsAppCallPanel: ({ phones }: { phones: Array<{ raw: string; contactId?: string }> }) => (
+    <div>
+      WHATSAPP_CALL_PANEL
+      <span data-testid="wa-first-phone">{`${phones[0]?.raw ?? ''}|${phones[0]?.contactId ?? ''}`}</span>
+    </div>
+  ),
 }));
 
+vi.mock('../actions/fetch-return-contact', () => ({
+  fetchReturnContact: vi.fn().mockResolvedValue({
+    success: true,
+    data: { contactId: 'c-1', name: 'José Lima', jobTitle: null, phone: '11988887777' },
+  }),
+}));
+
+import { fetchReturnContact } from '../actions/fetch-return-contact';
 import { ActivityExecutionSheetContent } from './ActivityExecutionSheetContent';
 
 const baseLead = {
@@ -239,6 +252,36 @@ describe('ActivityExecutionSheetContent', () => {
     );
 
     expect(screen.getByText('WHATSAPP_CALL_PANEL')).toBeInTheDocument();
+  });
+
+  it('retorno com contato indicado: a Ligação via WhatsApp abre com o número e o contactId dele', async () => {
+    render(
+      <ActivityExecutionSheetContent
+        activity={makeActivity('phone', { callProvider: 'whatsapp', returnContactId: 'c-1', scheduledKind: 'return' })}
+        isSending={false}
+        onSend={noop}
+        onMarkDone={noop}
+      />,
+    );
+
+    expect(screen.queryByText('WHATSAPP_CALL_PANEL')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('wa-first-phone')).toHaveTextContent('11988887777|c-1');
+    expect(screen.getByTestId('callback-contact')).toHaveTextContent('Retorno com José Lima');
+  });
+
+  it('retorno com contato que não carrega: avisa também na gaveta', async () => {
+    vi.mocked(fetchReturnContact).mockResolvedValueOnce({ success: false, error: 'x' });
+    render(
+      <ActivityExecutionSheetContent
+        activity={makeActivity('phone', { callProvider: 'whatsapp', returnContactId: 'c-1', scheduledKind: 'return' })}
+        isSending={false}
+        onSend={noop}
+        onMarkDone={noop}
+      />,
+    );
+
+    expect(await screen.findByTestId('return-contact-failed')).toBeInTheDocument();
+    expect(screen.getByTestId('wa-first-phone')).not.toHaveTextContent('c-1');
   });
 
   it('should route a WhatsApp-call activity to the API4COM phone panel in quick mode', () => {

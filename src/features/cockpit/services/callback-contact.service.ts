@@ -43,23 +43,28 @@ export async function loadCallbackTarget(input: {
   orgId: string;
   leadId: string;
   now: Date;
+  /** Tarefa específica (Atividades): usa ESTE retorno pendente, mesmo que ainda não tenha vencido. */
+  returnId?: string;
+  /** Chamado quando o `null` veio de FALHA de leitura (e não de um motivo normal), para a tela poder avisar. */
+  onError?: () => void;
   client?: SupabaseClient;
 }): Promise<CallbackTarget | null> {
   const { orgId, leadId, now } = input;
   try {
     const client = input.client ?? createServiceRoleClient();
-    const returns = (await from(client, 'scheduled_activities')
+    const base = from(client, 'scheduled_activities')
       .select('contact_id, scheduled_at')
       .eq('org_id', orgId)
       .eq('lead_id', leadId)
       .eq('status', 'pending')
       .eq('channel', 'phone')
-      .eq('kind', 'return')
-      .lte('scheduled_at', now.toISOString())) as Rows<{
+      .eq('kind', 'return');
+    const returns = (await (input.returnId ? base.eq('id', input.returnId) : base.lte('scheduled_at', now.toISOString()))) as Rows<{
       contact_id: string | null;
       scheduled_at: string;
     }>;
     if (returns.error || !returns.data) {
+      input.onError?.();
       console.error(
         '[callback-contact] retorno:',
         returns.error?.message ?? 'sem dados',
@@ -82,6 +87,7 @@ export async function loadCallbackTarget(input: {
       .eq('contact_id', contactId)
       .gte('created_at', due.scheduled_at)) as Rows<RealConversationCall>;
     if (talks.error || !talks.data) {
+      input.onError?.();
       console.error(
         '[callback-contact] ligações:',
         talks.error?.message ?? 'sem dados',
@@ -104,8 +110,10 @@ export async function loadCallbackTarget(input: {
       job_title: string | null;
       phones: unknown;
     }>;
-    if (contact.error)
+    if (contact.error) {
+      input.onError?.();
       console.error('[callback-contact] contato:', contact.error.message, 'leadId=', leadId);
+    }
     const c = contact.data;
     if (!c) return null;
     return {
@@ -115,6 +123,7 @@ export async function loadCallbackTarget(input: {
       phone: pickContactPhone(c.phones),
     };
   } catch (err) {
+    input.onError?.();
     console.error(
       '[callback-contact]:',
       err instanceof Error ? err.message : 'erro',

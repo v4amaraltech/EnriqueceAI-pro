@@ -11,6 +11,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Textarea } from '@/shared/components/ui/textarea';
 
 import { ActivityPhonePanel, type CallState } from '@/features/activities/components/ActivityPhonePanel';
+import { ReturnContactLoading, ReturnContactNotice } from '@/features/activities/components/ReturnContactNotice';
+import { returnTaskPhones, useReturnContact } from '@/features/activities/hooks/useReturnContact';
 import type { PendingActivity } from '@/features/activities/types';
 import { getAllLeadPhones } from '@/features/activities/utils/resolve-whatsapp-phone';
 import type { DialerProvider } from '@/features/calls/types/dialer-provider';
@@ -93,6 +95,8 @@ export function CallSidePanel({
   const [choice, setChoice] = useState<MeetingChoice | null>(null);
   const script = usefulCallScript(activity.callScript);
   const timeline = useLeadHistory(lead.id, history);
+  const returnContact = useReturnContact(activity);
+  const indicated = returnContact.contact?.phone ? returnContact.contact : null;
   const inCall = callState === 'calling' || callState === 'connected';
 
   useEffect(() => {
@@ -146,7 +150,7 @@ export function CallSidePanel({
       <SheetHeader className="border-b pr-16 text-left">
         <SheetTitle className="truncate text-base">{company}</SheetTitle>
         <SheetDescription className="truncate">
-          {contact}{lead.telefone ? ` · ${lead.telefone}` : ''}
+          {indicated ? `${indicated.name} · ${indicated.phone}` : `${contact}${lead.telefone ? ` · ${lead.telefone}` : ''}`}
         </SheetDescription>
         <Button type="button" size="icon" variant="ghost" className="absolute top-3 right-12 h-7 w-7" aria-label="Minimizar painel" onClick={onMinimize}>
           <Minus className="h-4 w-4" />
@@ -155,24 +159,29 @@ export function CallSidePanel({
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="border-b px-4 py-3">
-          <ActivityPhonePanel
-            layout="dock"
-            leadName={company}
-            leadId={lead.id}
-            leadEmail={resolvedEmail}
-            leadFirstName={lead.primeiro_nome ?? lead.first_name}
-            phoneNumber={lead.telefone}
-            phones={getAllLeadPhones(lead)}
-            isSending={false}
-            onMarkDone={onMarkDone}
-            onLeadLost={onLeadLost}
-            canMarkNoShow={Boolean(lead.meeting_scheduled_at)}
-            dialerProvider={dialerProvider}
-            companionNotes={notes}
-            onCallStateChange={handleState}
-            callsDisabled={previewOnly}
-            cadenceStep={activity.enrollmentId.startsWith('scheduled:') ? undefined : { enrollmentId: activity.enrollmentId, stepId: activity.stepId }}
-          />
+          <ReturnContactNotice contact={returnContact.contact} failed={returnContact.failed} />
+          {returnContact.ready ? (
+            <ActivityPhonePanel
+              layout="dock"
+              leadName={company}
+              leadId={lead.id}
+              leadEmail={resolvedEmail}
+              leadFirstName={lead.primeiro_nome ?? lead.first_name}
+              phoneNumber={lead.telefone}
+              phones={returnTaskPhones(activity, getAllLeadPhones(lead), returnContact.contact)}
+              isSending={false}
+              onMarkDone={onMarkDone}
+              onLeadLost={onLeadLost}
+              canMarkNoShow={Boolean(lead.meeting_scheduled_at)}
+              dialerProvider={dialerProvider}
+              companionNotes={notes}
+              onCallStateChange={handleState}
+              callsDisabled={previewOnly}
+              cadenceStep={activity.enrollmentId.startsWith('scheduled:') ? undefined : { enrollmentId: activity.enrollmentId, stepId: activity.stepId }}
+            />
+          ) : (
+            <ReturnContactLoading />
+          )}
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
