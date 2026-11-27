@@ -9,7 +9,7 @@ vi.mock('./cockpit-auto-dial.service', () => ({
   loadLeadCallStats: vi.fn(async () => ({ callsToday: stats.callsToday, lastCallAt: null, conversationToday: false })),
 }));
 
-import { classifyMotorAnsweredCall, readMotorCarrierHangup, resolveMotorNoAnswer } from './cockpit-auto-dial-outcome.service';
+import { classifyMotorAnsweredCall, concludeMotorCallExternally, readMotorCarrierHangup, resolveMotorNoAnswer } from './cockpit-auto-dial-outcome.service';
 
 const NOW = new Date('2026-11-17T15:00:00Z');
 type CallRow = Record<string, unknown>;
@@ -211,5 +211,16 @@ describe('readMotorCarrierHangup: só a marca live_amd.auto_hangup decide', () =
     expect(await read(withAmd({ auto_hangup: hang() }), 'outro')).toEqual({ status: 'refused' });
     expect(await read(null)).toEqual({ status: 'refused' });
     expect(await read({ ...withAmd({ auto_hangup: hang() }), lead_id: null })).toEqual({ status: 'refused' });
+  });
+});
+
+describe('religação ("Ligar de novo") sem atendimento nunca recebe desfecho', () => {
+  const row = () => callRow({ answered_at: null, metadata: { cockpit_auto_dial: { attempt_no: 4, redial_of: 'prev' } } });
+
+  it('nem no_answer automático na última tentativa, nem pela conclusão do painel', async () => {
+    stats.callsToday = 4;
+    expect(await resolveMotorNoAnswer({ ...base, supabase: client(row()) })).toEqual({ status: 'refused' });
+    expect(await concludeMotorCallExternally({ ...base, supabase: client(row()), kind: 'scheduled' })).toEqual({ status: 'refused' });
+    expect(apply.applySdrCallResult).not.toHaveBeenCalled();
   });
 });

@@ -224,6 +224,14 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
               status={panelCard.context.company.status}
               actions={leadActions}
               onNotConversation={(engine as EngineWithNotConversation).notConversation}
+              redialMessage={engine.redialMessage}
+              onRedial={
+                engine.redial &&
+                (() => {
+                  panelNote.flush(); // a anotação digitada fica na ligação que caiu
+                  engine.redial?.();
+                })
+              }
             />
           )}
         </div>

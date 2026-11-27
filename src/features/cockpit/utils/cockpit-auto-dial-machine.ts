@@ -23,17 +23,33 @@ import { AUTO_DIAL_RULES, isLastAttemptOfDay } from './auto-dial-rules';
 
 export type AutoDialBlockedReason = 'outside_hours' | 'holiday' | 'daily_cap' | 'empty';
 
-export type CockpitAutoDialState =
+/** Como a religação terminou. Só `conversed` leva o desfecho para a ligação nova. */
+export type RedialResult = 'conversed' | 'not_answered' | 'unknown' | 'failed';
+type AwaitingReason = 'answered' | 'timeout';
+
+interface RedialMarks {
+  /** Religação em curso: de qual tela de desfecho ela saiu (é para ela que se volta). */
+  redialFrom?: AwaitingReason;
+  /** Só em `awaiting-sdr` depois de uma religação. */
+  redial?: RedialResult;
+  redialError?: string | null;
+}
+
+export type CockpitAutoDialState = (
   | AutoDialState
   | { phase: 'blocked'; reason: AutoDialBlockedReason }
   /** O SDR concluiu o lead pelo painel (agendou/desqualificou) com a ligação ainda no ar: o motor só segue quando ela terminar. */
-  | { phase: 'concluded-call' };
+  | { phase: 'concluded-call' }
+) &
+  RedialMarks;
 
 export type CockpitAutoDialEvent =
   | AutoDialEvent
   | { type: 'blocked'; reason: AutoDialBlockedReason }
   /** O SDR concluiu o lead pelo painel (Agendar reunião / Desqualificar): vale como desfecho, sem pedir o Confirmar. */
   | { type: 'concluded_externally' }
+  /** "Ligar de novo" para o mesmo lead, a partir da tela de desfecho. */
+  | { type: 'redial' }
   /** O SDR disse que a ligação atendida NÃO foi conversa: segue o caminho da não atendida (1ª/2ª sem gravar, 3ª grava). */
   | { type: 'not_conversation'; attemptNo: number };
 
@@ -48,6 +64,42 @@ const CALL_ON_AIR: ReadonlySet<string> = new Set(['awaiting-session', 'in-call']
 /** Ligação já terminou; o motor espera o desfecho. */
 const CALL_ENDED: ReadonlySet<string> = new Set(['resolving', 'awaiting-sdr', 'auto-completing']);
 
+/**
+ * Religação: um desvio que SEMPRE volta para o desfecho do mesmo lead. Nunca passa por `auto-completing`, `advancing`,
+ * `releasing` ou `blocked`: nada é gravado sozinho e o motor nunca vai ao próximo lead por causa dela.
+ */
+function reduceRedial(state: CockpitAutoDialState, from: AwaitingReason, event: CockpitAutoDialEvent): CockpitAutoDialState {
+  const back = (redial: RedialResult, redialError: string | null = null): CockpitAutoDialState => ({
+    phase: 'awaiting-sdr',
+    reason: from,
+    redial,
+    redialError,
+  });
+  if (event.type === 'stop') return initialCockpitAutoDialState;
+  if (event.type === 'pause') return { phase: 'paused', reason: event.reason, message: event.message ?? null };
+  switch (state.phase) {
+    case 'dialing':
+      if (event.type === 'dial_started') return { phase: 'in-call', redialFrom: from };
+      if (event.type === 'awaiting_session') return { phase: 'awaiting-session', redialFrom: from };
+      if (event.type === 'dial_failed') return back('failed', event.message);
+      return state;
+    case 'awaiting-session':
+      if (event.type === 'session_confirmed' || event.type === 'dial_started') return { phase: 'in-call', redialFrom: from };
+      if (event.type === 'session_missing') return back('failed', event.message);
+      return state;
+    case 'in-call':
+      return event.type === 'call_ended' ? { phase: 'resolving', redialFrom: from } : state;
+    case 'resolving':
+      if (event.type === 'lead_answer') {
+        return event.answer === 'answered' ? { phase: 'awaiting-sdr', reason: 'answered', redial: 'conversed' } : back('not_answered');
+      }
+      if (event.type === 'answer_timeout') return back('unknown');
+      return state;
+    default:
+      return state;
+  }
+}
+
 export function reduceCockpitAutoDial(state: CockpitAutoDialState, event: CockpitAutoDialEvent): CockpitAutoDialState {
   // Conclusão pelo painel (Desqualificar / Agendar): o clique do SDR já é o desfecho (decisão do usuário).
   // Em ligação → espera ela terminar (sem derrubar); depois do fim → segue já. Fora disso é ignorada.
@@ -56,6 +108,9 @@ export function reduceCockpitAutoDial(state: CockpitAutoDialState, event: Cockpi
     if (CALL_ENDED.has(state.phase)) return reduceAutoDial(initialAutoDialState, { type: 'start' });
     return state;
   }
+  if (event.type === 'redial') return state.phase === 'awaiting-sdr' ? { phase: 'dialing', redialFrom: state.reason } : state;
+  if (state.redialFrom) return reduceRedial(state, state.redialFrom, event);
+
   if (state.phase === 'concluded-call') {
     if (event.type === 'call_ended') return reduceAutoDial(initialAutoDialState, { type: 'start' });
     if (event.type === 'stop') return initialCockpitAutoDialState;

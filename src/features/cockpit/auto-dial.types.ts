@@ -16,6 +16,8 @@ export type AutoDialGateCode =
   | 'card_changed'
   /** Há retorno marcado para depois: não liga antes da hora. */
   | 'return_scheduled'
+  /** "Ligar de novo": o servidor não achou ligação recente deste usuário (com conversa possível) para este lead. */
+  | 'redial_unavailable'
   | 'error';
 
 /** Recusas que levam o motor a Bloqueado (FR-11/FR-12). */

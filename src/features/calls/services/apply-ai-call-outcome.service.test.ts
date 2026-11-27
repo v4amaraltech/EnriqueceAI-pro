@@ -8,9 +8,12 @@ vi.mock('./schedule-callback.service', () => ({
   pauseCadencesUntilReturn: vi.fn(),
 }));
 
+vi.mock('./redial-supersedes-call.service', () => ({ wasSupersededByRedial: vi.fn() }));
+
 import { applyMergeCallsMetadataRpc, type MergeCallsMetadataArgs } from '@tests/mocks/merge-calls-metadata';
 
 import { applySdrCallResult } from './apply-sdr-call-result';
+import { wasSupersededByRedial } from './redial-supersedes-call.service';
 import { applyAiCallOutcome, composeAiNotes } from './apply-ai-call-outcome.service';
 import type { CallOutcomeClassification } from './call-outcome-classifier';
 import { loadPendingReturns, pauseCadencesUntilReturn, scheduleCallbackActivity } from './schedule-callback.service';
@@ -83,6 +86,7 @@ describe('applyAiCallOutcome', () => {
     vi.mocked(scheduleCallbackActivity).mockReset().mockResolvedValue({ id: 'sched-1' });
     vi.mocked(loadPendingReturns).mockReset().mockResolvedValue([]);
     vi.mocked(pauseCadencesUntilReturn).mockReset().mockResolvedValue(undefined);
+    vi.mocked(wasSupersededByRedial).mockReset().mockResolvedValue(false);
   });
 
   it('sem ai_outcome pendente → não faz nada', async () => {
@@ -364,6 +368,46 @@ describe('applyAiCallOutcome', () => {
       expect(classify).toHaveBeenCalledTimes(1);
       expect(applySdrCallResult).toHaveBeenCalledTimes(1);
       expect(scheduleCallbackActivity).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('ligação que caiu e foi religada', () => {
+    const callbackResult = () =>
+      vi.fn().mockResolvedValue(
+        classification({ disposition: 'callback_requested', callback_at: '2026-11-06T12:00:00.000Z', callback_time_from_lead: true }),
+      );
+    const run = async () => {
+      const { client } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+      return applyAiCallOutcome(client, CALL, 'texto', { classify: callbackResult(), now: NOW });
+    };
+
+    it('religação assumiu: não cria, não cancela, não pausa; desfecho e resumo seguem', async () => {
+      vi.mocked(wasSupersededByRedial).mockResolvedValue(true);
+      const outcome = await run();
+      expect(scheduleCallbackActivity).not.toHaveBeenCalled();
+      expect(pauseCadencesUntilReturn).not.toHaveBeenCalled();
+      expect(loadPendingReturns).not.toHaveBeenCalled();
+      expect(applySdrCallResult).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ sdrOutcome: 'callback_requested' }));
+      expect(outcome).toMatchObject({ status: 'done', callback_at: null, scheduled_activity_id: null, needs_review: false });
+    });
+
+    it('falha ao conferir: nada é criado nem cancelado e fica para revisar', async () => {
+      vi.mocked(wasSupersededByRedial).mockResolvedValue(null);
+      const outcome = await run();
+      expect(scheduleCallbackActivity).not.toHaveBeenCalled();
+      expect(pauseCadencesUntilReturn).not.toHaveBeenCalled();
+      expect(outcome).toMatchObject({ needs_review: true, error: 'callback_redial_check_failed' });
+    });
+
+    it('sem religação que assumiu: agenda como antes', async () => {
+      const outcome = await run();
+      expect(wasSupersededByRedial).toHaveBeenCalledWith(
+        expect.anything(),
+        { id: CALL.id, org_id: CALL.org_id, lead_id: 'lead-1', created_at: CALL.created_at },
+        NOW(),
+      );
+      expect(scheduleCallbackActivity).toHaveBeenCalledTimes(1);
+      expect(outcome).toMatchObject({ scheduled_activity_id: 'sched-1' });
     });
   });
 });

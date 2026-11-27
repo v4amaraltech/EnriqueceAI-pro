@@ -80,6 +80,8 @@ export async function loadRecoveryHoldoutLeadIds(
   orgId: string,
   leads: RecoveryHoldoutInput[],
   now: Date,
+  /** "Ligar de novo": só a quarentena de "Sem interesse"; o retorno futuro não segura a religação. */
+  options: { ignoreFutureReturn?: boolean } = {},
 ): Promise<Set<string> | null> {
   const out = new Set<string>();
   const subject = leads.filter((l) => !l.returnDue);
@@ -107,6 +109,7 @@ export async function loadRecoveryHoldoutLeadIds(
   }
 
   // 2) Retorno futuro pendente.
+  if (options.ignoreFutureReturn) return out;
   const future = await loadFutureReturnLeadIds(client, orgId, subject.map((l) => l.leadId), now);
   if (!future) return null;
   for (const id of future) out.add(id);

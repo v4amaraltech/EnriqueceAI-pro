@@ -5,6 +5,7 @@ import { from } from '@/lib/supabase/from';
 import { AI_OUTCOME_REVIEW_CONFIDENCE, readAiOutcome, type AiOutcome } from '../ai-outcome';
 import { applySdrCallResult } from './apply-sdr-call-result';
 import { mergeCallsMetadata } from './merge-calls-metadata';
+import { wasSupersededByRedial } from './redial-supersedes-call.service';
 import { classifyCallOutcome, type CallOutcomeClassification, type CallOutcomeInput } from './call-outcome-classifier';
 import { loadPendingReturns, pauseCadencesUntilReturn, scheduleCallbackActivity, type PendingReturn } from './schedule-callback.service';
 
@@ -81,7 +82,8 @@ export function returnToKeep(
  * classifica a transcrição e aplica:
  *  - `sdr_disposition` (só se o SDR ainda não marcou nada);
  *  - `notes` = resumo da IA + anotação do SDR;
- *  - `callback_requested` → retorno por telefone agendado, salvo se já houver um que vale mais (`returnToKeep`);
+ *  - `callback_requested` → retorno por telefone agendado, salvo se já houver um que vale mais (`returnToKeep`) ou se
+ *    uma religação desta ligação assumiu a conversa (`wasSupersededByRedial`);
  *  - `metadata.ai_outcome = { status: 'done', ... }` (ou `failed` + Revisar).
  *
  * Trava contra rodar 2x (webhook + cron): só segue quem conseguir mudar o
@@ -183,7 +185,14 @@ export async function applyAiCallOutcome(
   } else if (result.disposition === 'callback_requested' && result.callback_at) {
     if (call.lead_id && call.user_id) {
       try {
-        const pending = await loadPendingReturns(supabase, call.org_id, call.lead_id);
+        // Ligação que caiu e foi religada: quem decide o próximo passo é a ligação nova.
+        const superseded = await wasSupersededByRedial(
+          supabase,
+          { id: call.id, org_id: call.org_id, lead_id: call.lead_id, created_at: call.created_at },
+          now(),
+        );
+        if (superseded === null) throw new Error('callback_redial_check_failed');
+        const pending = superseded ? [] : await loadPendingReturns(supabase, call.org_id, call.lead_id);
         // Sem saber o que já está marcado, não cria nem cancela: fica para o SDR revisar.
         if (!pending) throw new Error('callback_existing_check_failed');
         const keep = returnToKeep(pending, {
@@ -191,7 +200,11 @@ export async function applyAiCallOutcome(
           callStartedAt: call.started_at ?? call.created_at,
           now: now(),
         });
-        if (keep) {
+        if (superseded) {
+          // Sem retorno, sem cancelar tarefa e sem pausar cadência; o horário sugerido também não fica registrado.
+          console.warn(`[ai-outcome] ligação ${call.id}: religada; retorno da IA não agendado`);
+          callbackAt = null;
+        } else if (keep) {
           scheduledActivityId = keep.id;
           callbackAt = keep.scheduled_at;
           console.warn(`[ai-outcome] ligação ${call.id}: mantido o retorno já marcado; a IA não reagendou`);
