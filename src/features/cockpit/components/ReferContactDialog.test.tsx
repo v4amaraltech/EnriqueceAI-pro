@@ -100,6 +100,7 @@ describe('ReferContactDialog: salvar e próximo passo', () => {
     expect(scheduleCallback).toHaveBeenCalledWith({
       scheduledAt: new Date(NEXT_9H),
       notes: 'Retorno com José Lima (Sócio) – tel 11988887777',
+      contactId: 'c-1',
       callNotes: `obs do SDR\n${LINE}`,
       disposition: 'referred_contact',
     });
@@ -191,6 +192,8 @@ describe('ReferContactDialog: falhas e duplo clique', () => {
     expect(upsertLeadContact).toHaveBeenCalledTimes(1);
     expect(scheduleCallback).toHaveBeenCalledTimes(2);
     expect(scheduleCallback.mock.calls[1]?.[0].scheduledAt).toEqual(new Date('2026-11-27T16:00:00.000Z'));
+    // O contato já cadastrado é reaproveitado no reenvio.
+    expect(scheduleCallback.mock.calls[1]?.[0]).toMatchObject({ contactId: 'c-1' });
   });
 
   it('duplo clique em salvar e nas saídas grava uma vez só; enquanto grava os botões ficam desabilitados', async () => {
@@ -221,5 +224,6 @@ describe('ReferContactDialog: falhas e duplo clique', () => {
     expect(upsertLeadContact).not.toHaveBeenCalled();
     expect(appendCallNote).not.toHaveBeenCalled();
     expect(scheduleCallback).toHaveBeenCalledTimes(1);
+    expect(scheduleCallback.mock.calls[0]?.[0]).not.toHaveProperty('contactId');
   });
 });

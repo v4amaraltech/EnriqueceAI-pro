@@ -933,6 +933,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
         channel: 'phone',
         scheduledAt: input.scheduledAt.toISOString(),
         ...(input.notes ? { notes: input.notes } : {}),
+        ...(input.contactId ? { contactId: input.contactId } : {}),
         pauseCadenceUntilReturn: true,
       }).catch(() => null);
       if (!r?.success) return { ok: false, error: r && !r.success ? r.error : 'Falha ao agendar o retorno' };
