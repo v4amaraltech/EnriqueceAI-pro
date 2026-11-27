@@ -248,6 +248,7 @@ export function ReferContactDialog({ open, onOpenChange, leadId, scheduleCallbac
       const result = await scheduleCallback({
         scheduledAt: at,
         notes: referralReturnNote(r),
+        ...(saved.contactId ? { contactId: saved.contactId } : {}),
         callNotes,
         disposition: 'referred_contact',
         // Quem vai ligar para o indicado agora não quer o motor discando o próximo lead.

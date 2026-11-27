@@ -17,6 +17,8 @@ export type ScheduleCallbackFn = (input: {
   scheduledAt: Date;
   /** Observação do retorno (e da ligação, quando `callNotes` não vem). */
   notes?: string;
+  /** Contato (lead_contacts) para quem ligar no retorno ("Indicou outra pessoa"). */
+  contactId?: string;
   /** Anotação da ligação, quando difere da observação do retorno. */
   callNotes?: string;
   /** Desfecho gravado na ligação. Padrão: `callback_requested`. */

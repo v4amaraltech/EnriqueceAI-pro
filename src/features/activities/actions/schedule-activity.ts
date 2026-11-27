@@ -12,6 +12,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAppUrl } from '@/lib/utils/app-url';
+import { isUuid } from '@/lib/utils/uuid';
 import { getCalendarConnection, createCalendarEvent } from '@/features/integrations/services/calendar.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
@@ -23,6 +24,9 @@ const scheduleActivitySchema = z.object({
   // 'whatsapp' quando o retorno é uma Ligação via WhatsApp (channel='phone').
   callProvider: z.enum(['whatsapp']).nullish(),
   scheduledAt: z.string().min(1),
+  // Contato (lead_contacts) para quem ligar. Sem `.uuid()` de propósito: id inválido
+  // não pode derrubar o agendamento — o retorno é gravado sem contato.
+  contactId: z.string().optional(),
   notes: z.string().optional(),
   // default false: agendar um retorno NÃO encerra a cadência (isso jogava o
   // lead no limbo). Encerrar é explícito. Só true em opt-in deliberado.
@@ -48,7 +52,7 @@ export async function scheduleActivity(
   const { orgId, userId, supabase } = auth.data;
 
   const {
-    leadId, channel, callProvider, scheduledAt, notes, completeEnrollments, pauseCadenceUntilReturn, executedStep,
+    leadId, channel, callProvider, scheduledAt, notes, completeEnrollments, pauseCadenceUntilReturn, executedStep, contactId,
   } = parsed.data;
 
   // Pista 11: o lead precisa ser da org da sessão antes de qualquer escrita.
@@ -58,6 +62,8 @@ export async function scheduleActivity(
     .eq('org_id', orgId)
     .maybeSingle()) as { data: { id: string } | null };
   if (!ownLead) return { success: false, error: 'Lead não encontrado' };
+
+  const returnContactId = contactId ? await resolveReturnContactId(supabase, orgId, leadId, contactId) : null;
 
   // Create scheduled activity
   const { data, error } = (await from(supabase, 'scheduled_activities' as never)
@@ -69,6 +75,8 @@ export async function scheduleActivity(
       call_provider: callProvider ?? null,
       scheduled_at: scheduledAt,
       notes: notes || null,
+      // Só entra no insert quando há contato: os demais retornos não dependem da coluna.
+      ...(returnContactId ? { contact_id: returnContactId } : {}),
     } as Record<string, unknown>)
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
@@ -142,6 +150,27 @@ export async function scheduleActivity(
   revalidatePath(`/leads/${leadId}`);
 
   return { success: true, data: { id: data.id, calendarFailed, cadencePausedUntil } };
+}
+
+/** O contato só vale se for deste lead e desta org; senão o retorno segue sem ele. */
+async function resolveReturnContactId(
+  supabase: SupabaseClient,
+  orgId: string,
+  leadId: string,
+  contactId: string,
+): Promise<string | null> {
+  if (isUuid(contactId)) {
+    const { data, error } = (await from(supabase, 'lead_contacts')
+      .select('id')
+      .eq('id', contactId)
+      .eq('lead_id', leadId)
+      .eq('org_id', orgId)
+      .maybeSingle()) as { data: { id: string } | null; error: { message: string } | null };
+    if (data) return data.id;
+    if (error) console.warn('[schedule-activity] contact check failed:', error.message, 'leadId=', leadId);
+  }
+  console.warn('[schedule-activity] return saved without contact (not found for this lead). leadId=', leadId);
+  return null;
 }
 
 /**

@@ -257,6 +257,15 @@ describe('scheduleCallback com "Indicou outra pessoa" (referred_contact)', () =>
     expect(vi.mocked(getNextAutoDialCardAction).mock.calls.at(-1)?.[0]).toMatchObject({ excludeLeadIds: [] });
   });
 
+  it('contato indicado chega ao scheduleActivity', async () => {
+    const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await reachAwaitingLive(rerender, result);
+    await act(async () => {
+      await result.current.scheduleCallback?.({ scheduledAt: AT, disposition: 'referred_contact', contactId: 'c-1' });
+    });
+    expect(scheduleActivity).toHaveBeenCalledWith(expect.objectContaining({ leadId: 'A', contactId: 'c-1' }));
+  });
+
   it('desfecho falhou: avisa que o retorno já está salvo; de novo reenvia só o desfecho', async () => {
     vi.mocked(confirmAutoDialOutcomeAction).mockResolvedValueOnce({ success: false, error: 'falhou' }).mockResolvedValue(confirmed);
     const { result, rerender } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));

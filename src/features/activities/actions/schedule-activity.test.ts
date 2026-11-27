@@ -209,3 +209,69 @@ describe('scheduleActivity — link do lead no evento do Google Calendar', () =>
     );
   });
 });
+
+describe('scheduleActivity — contato do retorno', () => {
+  const CONTACT = '44444444-4444-4444-4444-444444444444';
+  let client: ReturnType<typeof makeClient>;
+  let contactRow: { id: string } | null;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    contactRow = { id: CONTACT };
+    client = makeClient((call) => {
+      if (call.table === 'scheduled_activities') return { data: { id: 'sa-1' }, error: null };
+      if (call.table === 'leads') return { data: { id: LEAD }, error: null };
+      if (call.table === 'lead_contacts') return { data: contactRow, error: null };
+      return { data: null, error: null };
+    });
+    service.createServiceRoleClient.mockReturnValue(makeClient(() => ({ data: null, error: null })));
+    auth.getAuthOrgIdResult.mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u1', supabase: client },
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const schedule = (contactId?: string) =>
+    scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT, ...(contactId ? { contactId } : {}) });
+  const inserted = () =>
+    client.calls.find((c) => c.table === 'scheduled_activities')!.ops.find(([o]) => o === 'insert')![1][0];
+  const contactCalls = () => client.calls.filter((c) => c.table === 'lead_contacts');
+
+  it('com contato do lead, grava contact_id (conferindo lead e org)', async () => {
+    const r = await schedule(CONTACT);
+    expect(r.success).toBe(true);
+    expect(inserted()).toMatchObject({ contact_id: CONTACT });
+    const check = contactCalls()[0]!;
+    expect(has(check, 'eq', 'id', CONTACT)).toBe(true);
+    expect(has(check, 'eq', 'lead_id', LEAD)).toBe(true);
+    expect(has(check, 'eq', 'org_id', 'org-1')).toBe(true);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('sem contato, o insert não leva contact_id nem consulta contatos', async () => {
+    await schedule();
+    expect(inserted()).not.toHaveProperty('contact_id');
+    expect(contactCalls()).toHaveLength(0);
+  });
+
+  it('contato de outro lead/org: agenda o retorno sem contato e avisa', async () => {
+    contactRow = null;
+    const r = await schedule(CONTACT);
+    expect(r.success).toBe(true);
+    expect(inserted()).not.toHaveProperty('contact_id');
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('id que não é uuid: não vai ao banco e o retorno não se perde', async () => {
+    const r = await schedule('undefined');
+    expect(r.success).toBe(true);
+    expect(contactCalls()).toHaveLength(0);
+    expect(inserted()).not.toHaveProperty('contact_id');
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+});
