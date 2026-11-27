@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 import type { CallDisposition } from '@/features/calls/types';
+import { normalizePhone } from '@/lib/utils/phone';
 import { AUTO_DIAL_ANSWER_TIMEOUT_MS, AUTO_DIAL_COUNTDOWN_SECONDS } from '@/features/activities/utils/auto-dialer';
 import {
   RAMAL_BUSY_PAUSE_MESSAGE,
@@ -40,6 +41,7 @@ import {
 } from '../utils/cockpit-auto-dial-machine';
 import { validateCallbackAt } from '../utils/callback-slots';
 import type { ExternalConclusionKind } from '../utils/external-conclusion';
+import type { ScheduleCallbackFn } from '../components/MotorCallbackDialog';
 import {
   TAB_LOCK_HEARTBEAT_MS,
   TAB_LOCK_MESSAGE,
@@ -150,8 +152,9 @@ export interface UseCockpitAutoDialResult {
    * na fase `awaiting-sdr`. Ao contrário dos outros desfechos, o lead NÃO sai da sessão: o servidor o segura até o
    * retorno vencer. Real: `scheduleActivity` e DEPOIS o desfecho; se o retorno falhar nada é confirmado; se só o desfecho
    * falhar, tentar de novo reenvia só o desfecho (o retorno não é regravado). Simulado: nada é gravado.
+   * Com `disposition: 'referred_contact'` ("Indicou outra pessoa") o caminho é o mesmo, só muda o desfecho gravado.
    */
-  scheduleCallback?: (input: { scheduledAt: Date; notes?: string }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  scheduleCallback?: ScheduleCallbackFn;
   /**
    * Link "Não foi conversa" (PR-C): em `awaiting-sdr`, trata a ligação como NÃO atendida (1ª/2ª sem gravar, 3ª grava
    * caixa postal/não atendeu). O lead NÃO sai da sessão: segue a regra normal da fila. Simulado: só segue.
@@ -200,6 +203,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   const webphone = useApi4ComWebphone();
 
   const excluded = useRef(new Set<string>());
+  // Leads cujo número do indicado foi recusado nesta sessão: seguem na fila, ligando para o principal.
+  const ignoreContact = useRef(new Set<string>());
   const simulatedAttempts = useRef<Record<string, string[]>>({});
   const current = useRef<CurrentLead | null>(null);
   const loading = useRef<Promise<CurrentLead | null> | null>(null);
@@ -238,6 +243,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   };
   // Fase mais recente: o painel conclui o lead depois de diálogos/awaits e a ligação pode ter mudado de fase nesse meio tempo.
   const phaseRef = useRef<CockpitAutoDialState['phase']>('off');
+  const pauseWhenFree = useRef<string | null>(null);
   useEffect(() => {
     phaseRef.current = state.phase;
   }, [state.phase]);
@@ -252,6 +258,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     const result = await getNextAutoDialCardAction({
       ...(queue === 'recovery' ? { queue } : {}),
       excludeLeadIds: [...excluded.current],
+      ...(ignoreContact.current.size ? { ignoreContactLeadIds: [...ignoreContact.current] } : {}),
       ...(live ? {} : { simulatedAttempts: simulatedAttempts.current }),
     }).catch(() => null);
     if (!result || !result.success) {
@@ -351,10 +358,17 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   });
 
   /** 422: pula o lead (fica excluído da sessão com o motivo) e segue; conta no limite de recusas seguidas. */
-  const skipForInvalidNumber = useEffectEvent((leadId: string, reason: string) => {
-    excluded.current.add(leadId);
-    setSkippedLeads((prev) => [...prev, { leadId, reason }]);
-    toast.info('Número inválido: lead pulado nesta sessão.');
+  const skipForInvalidNumber = useEffectEvent((leadId: string, reason: string, contactRefused?: boolean) => {
+    // Número do INDICADO recusado: o lead fica; a próxima tentativa liga para o principal. Só acontece uma vez por lead
+    // (com `ignoreContact` o servidor não devolve mais `contactRefused`), então não há laço.
+    if (contactRefused && !ignoreContact.current.has(leadId)) {
+      ignoreContact.current.add(leadId);
+      toast.info('Número do indicado recusado, ligando para o principal na próxima tentativa.');
+    } else {
+      excluded.current.add(leadId);
+      setSkippedLeads((prev) => [...prev, { leadId, reason }]);
+      toast.info('Número inválido: lead pulado nesta sessão.');
+    }
     refusalsRef.current += 1;
     if (refusalsRef.current >= MAX_CONSECUTIVE_REFUSALS) {
       dispatch({ type: 'dial_failed', message: 'Vários números inválidos seguidos. A discagem parou para conferência.' });
@@ -382,7 +396,14 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     }
     confirmedRef.current = false;
 
-    const result = await dialAutoLeadAction({ leadId: lead.leadId, expectLive: live, ...(queue === 'recovery' ? { queue } : {}) }).catch(() => null);
+    const result = await dialAutoLeadAction({
+      leadId: lead.leadId,
+      expectLive: live,
+      expectContactId: lead.card.callbackContact?.contactId ?? null,
+      ...(lead.card.callbackContact?.contactId && lead.phone ? { expectContactPhone: normalizePhone(lead.phone) } : {}),
+      ...(ignoreContact.current.has(lead.leadId) ? { ignoreContact: true } : {}),
+      ...(queue === 'recovery' ? { queue } : {}),
+    }).catch(() => null);
     if (!result || !result.success) {
       if (reserved) cancelWebphoneDial(reserved.token);
       // Não se sabe se a operadora criou a chamada: não repetir sozinho.
@@ -399,7 +420,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     if (r.status === 'invalid_number') {
       // A-D12 (422): número inválido. O lead sai da sessão, com o motivo, e o motor segue para o próximo.
       if (reserved) cancelWebphoneDial(reserved.token);
-      skipForInvalidNumber(lead.leadId, r.error);
+      skipForInvalidNumber(lead.leadId, r.error, r.contactRefused);
       return;
     }
     refusalsRef.current = 0;
@@ -741,6 +762,22 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   // Conclusão pelo painel (Agendar reunião / Desqualificar)
   // ---------------------------------------------------------------------------
 
+  /** O caminho do botão "Pausar" (barra do motor). */
+  const pause = () => dispatch({ type: 'pause', reason: 'user' });
+  const pauseAndTellToCall = useEffectEvent((name: string) => pauseAndTell(name));
+
+  // Pausa pedida com a ligação ainda em curso: vale quando o motor ficar livre (antes de discar o próximo). Não corta a ligação.
+  useEffect(() => {
+    const name = pauseWhenFree.current;
+    if (!name) return;
+    if (state.phase === 'countdown' || state.phase === 'advancing' || state.phase === 'waiting') {
+      pauseWhenFree.current = null;
+      pauseAndTellToCall(name);
+    } else if (state.phase === 'off' || state.phase === 'paused' || state.phase === 'blocked') {
+      pauseWhenFree.current = null; // o motor já parou por outro motivo
+    }
+  }, [state.phase]);
+
   // A ligação terminou (o motor saiu de `concluded-call`): grava o desfecho pendente.
   useEffect(() => {
     const was = prevPhase.current;
@@ -824,10 +861,12 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     setStartError(null);
     tooSoonRef.current = 0;
     excluded.current = new Set();
+    ignoreContact.current = new Set();
     concluded.current = new Set();
     concludedCalls.current = new Set();
     callbackScheduledCalls.current = new Set();
     pendingConclusion.current = null;
+    pauseWhenFree.current = null;
     refusalsRef.current = 0;
     ramalBusyFirstAtRef.current = null;
     clearSessionLost();
@@ -864,11 +903,21 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     return true;
   }
 
-  async function scheduleCallback(input: { scheduledAt: Date; notes?: string }): Promise<{ ok: true } | { ok: false; error: string }> {
+  function pauseAndTell(name: string) {
+    pause();
+    toast.info(`Fila pausada. Ligue para ${name} e depois toque em Retomar.`);
+  }
+
+  async function scheduleCallback(input: Parameters<ScheduleCallbackFn>[0]): ReturnType<ScheduleCallbackFn> {
     const lead = current.current;
     if (!lead) return { ok: false, error: 'Nenhum lead em ligação.' };
+    const disposition = input.disposition ?? 'callback_requested';
+    const referred = disposition === 'referred_contact';
+    const externalKind: ExternalConclusionKind = referred ? 'referred' : 'callback';
+    // Reenvio só do desfecho de uma indicação: o retorno já está salvo, o horário (travado na tela) não é revalidado.
+    const onlyOutcome = referred && callbackScheduledCalls.current.has(`${callId ?? `lead:${lead.leadId}`}:referred`);
     const valid = validateCallbackAt(input.scheduledAt, new Date());
-    if (!valid.ok) return valid;
+    if (!valid.ok && !onlyOutcome) return valid;
     const inAwaitingSdr = state.phase === 'awaiting-sdr';
     // Discando: o POST ainda não devolveu a ligação e o `callId` do estado é o da ligação ANTERIOR (não usar).
     const lostPause = state.phase === 'paused' && lostLeadRef.current === lead.leadId;
@@ -887,12 +936,15 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       if (inAwaitingSdr) {
         setCallPhase('idle');
         dispatch({ type: 'sdr_concluded' });
+        if (input.pauseQueueFor) pauseAndTell(input.pauseQueueFor);
       } else {
-        concludeExternally(lead.leadId, 'callback'); // ligação em curso: o motor deixa o lead e segue ao fim dela
+        concludeExternally(lead.leadId, externalKind); // ligação em curso: o motor deixa o lead e segue ao fim dela
+        pauseWhenFree.current = input.pauseQueueFor ?? null;
       }
       return { ok: true };
     }
-    const scheduledKey = thisCallId ?? `lead:${lead.leadId}`;
+    // O retorno de uma indicação leva outra observação: não reaproveita o de um "Ligar depois" que ficou pela metade.
+    const scheduledKey = `${thisCallId ?? `lead:${lead.leadId}`}${referred ? ':referred' : ''}`;
     if (!callbackScheduledCalls.current.has(scheduledKey)) {
       // Sem `executedStep`: o motor não avança a cadência (D6). O retorno pausa a cadência até o dia útil seguinte.
       const r = await scheduleActivity({
@@ -900,6 +952,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
         channel: 'phone',
         scheduledAt: input.scheduledAt.toISOString(),
         ...(input.notes ? { notes: input.notes } : {}),
+        ...(input.contactId ? { contactId: input.contactId } : {}),
         pauseCadenceUntilReturn: true,
       }).catch(() => null);
       if (!r?.success) return { ok: false, error: r && !r.success ? r.error : 'Falha ao agendar o retorno' };
@@ -908,14 +961,20 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     if (!inAwaitingSdr) {
       // Ligar depois com a ligação tocando, no ar ou terminando: o retorno já está agendado. O motor deixa o lead (sem nova
       // tentativa, sem `no_answer`) e só segue quando a ligação acabar; o desfecho mínimo é gravado ao fim dela.
-      concludeExternally(lead.leadId, 'callback');
+      concludeExternally(lead.leadId, externalKind);
+      pauseWhenFree.current = input.pauseQueueFor ?? null;
       return { ok: true };
     }
-    const confirmed = await confirmWith({ disposition: 'callback_requested', notes: input.notes }, false);
+    const confirmed = await confirmWith({ disposition, notes: input.callNotes ?? input.notes }, false);
     if (!confirmed) {
-      return { ok: false, error: 'O retorno foi agendado, mas o desfecho da ligação não foi registrado. Tente de novo: só o desfecho será reenviado.' };
+      return {
+        ok: false,
+        error: 'O retorno foi agendado, mas o desfecho da ligação não foi registrado. Tente de novo: só o desfecho será reenviado.',
+        ...(referred ? { retornoSaved: true } : {}),
+      };
     }
     if (thisCallId) concludedCalls.current.add(thisCallId); // clique atrasado não regrava; o lead NÃO entra em `concluded` (ele volta no retorno)
+    if (input.pauseQueueFor) pauseAndTell(input.pauseQueueFor); // só depois do retorno e do desfecho gravados
     return { ok: true };
   }
 
@@ -936,8 +995,9 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     attemptNo,
     start,
     stop,
-    pause: () => dispatch({ type: 'pause', reason: 'user' }),
+    pause,
     resume: () => {
+      pauseWhenFree.current = null;
       clearSessionLost();
       dispatch({ type: 'resume' });
     },

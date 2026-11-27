@@ -124,6 +124,12 @@ describe('conversa SEM ação final: fora da fila normal por 7 dias', () => {
     expect(await gate(setup([], tables))).toMatchObject({ ok: true });
   });
 
+  it('(c-ref) ligação mais nova com referred_contact libera igual ao callback', async () => {
+    const tables = { leads: [lead('A')], calls: [call('A', 3, 'answered_no_progress'), call('A', 2, 'referred_contact')] };
+    expect((await loadNoActionLeadIds(setup([], tables), ORG, ['A'], NOW))?.has('A')).toBe(false);
+    expect(await gate(setup([], tables))).toMatchObject({ ok: true });
+  });
+
   it('(c2) callback_requested ANTERIOR à conversa não libera (a conversa sem ação é a última)', async () => {
     const tables = { leads: [lead('A')], calls: [call('A', 3, 'callback_requested'), call('A', 2, 'answered_no_progress')] };
     expect((await loadNoActionLeadIds(setup([], tables), ORG, ['A'], NOW))?.has('A')).toBe(true);
@@ -163,10 +169,10 @@ describe('conversa SEM ação final: fora da fila normal por 7 dias', () => {
     expect([...(await loadNoActionLeadIds(many, ORG, ids, NOW))!].sort()).toEqual(['L249', 'L7']);
   });
 
-  it('passo 2 filtra callback_requested NO BANCO; respostas com 1000 linhas (qualquer passo) = falha fechada', async () => {
+  it('passo 2 filtra os desfechos com ação NO BANCO; respostas com 1000 linhas (qualquer passo) = falha fechada', async () => {
     const tables = { calls: [call('A', 3, 'answered_no_progress')] };
     await loadNoActionLeadIds(setup([], tables), ORG, ['A'], NOW);
-    expect(db.reads.some((r) => r.table === 'calls' && r.eq.sdr_disposition === 'callback_requested')).toBe(true);
+    expect(db.reads.map((r) => r.inList?.sdr_disposition)).toContainEqual(['callback_requested', 'referred_contact']);
     const rows = (disposition: string) => Array.from({ length: 1000 }, (_, i) => ({ ...call('A', 1, disposition), id: `r${i}` }));
     // passo 1 lotado
     expect(await loadNoActionLeadIds(setup([], { calls: rows('answered_no_progress') }), ORG, ['A'], NOW)).toBeNull();

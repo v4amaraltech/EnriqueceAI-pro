@@ -15,11 +15,17 @@ export type WebphoneCallPhase = 'ringing' | 'in-call' | 'ended';
  * - `other_tab`: outra aba deste navegador segura o ramal; esta não registrou.
  * - `lost_to_other`: estava registrado e o registro caiu sem ter sido pedido
  *   aqui (outro navegador ou a extensão da API4COM pode ter assumido).
+ * - `extension_answered`: o ramal segue registrado aqui, mas OUTRO aparelho do
+ *   mesmo ramal (na prática a extensão da API4COM no Chrome) atendeu a chamada
+ *   do `POST /calls` antes da página. A API4COM aceita os dois registros ao
+ *   mesmo tempo e manda o INVITE para ambos, então não há `unregistered`: o
+ *   único sinal é o CANCEL que esta aba recebe. Bloqueia a discagem até o SDR
+ *   confirmar que desativou a extensão.
  *
  * NÃO é representado por `registration: 'disabled'`: `disabled` libera a
  * discagem pelo fluxo da extensão e o `POST /calls` desta aba tomaria 424.
  */
-export type WebphoneSessionConflict = 'other_tab' | 'lost_to_other';
+export type WebphoneSessionConflict = 'other_tab' | 'lost_to_other' | 'extension_answered';
 
 export interface WebphoneCall {
   id: string;
@@ -58,7 +64,7 @@ export type WebphoneEvent =
   | { type: 'session_conflict'; conflict: WebphoneSessionConflict | null }
   | { type: 'call_new'; id: string; remoteNumber: string; direction: 'incoming' | 'outgoing'; integrated: boolean; at: number; dialToken?: string | null }
   | { type: 'call_accepted'; id: string; at: number }
-  | { type: 'call_ended'; id: string; at: number; cause: string | null }
+  | { type: 'call_ended'; id: string; at: number; cause: string | null; answeredElsewhere?: boolean }
   | { type: 'call_muted'; id: string; muted: boolean }
   | { type: 'call_stats'; id: string; stats: WebphoneAudioStats }
   | { type: 'call_cleared'; id: string };
@@ -83,7 +89,14 @@ export function reduceWebphone(state: WebphoneState, event: WebphoneEvent): Webp
       return { ...state, registration: 'connecting', error: null };
     case 'registered':
       // Registrou de novo sozinho (ou pelo Reconectar): o ramal é desta aba.
-      return { ...state, registration: 'registered', error: null, sessionConflict: null };
+      // A extensão atendendo no lugar NÃO se resolve registrando de novo (os
+      // dois registros convivem): esse aviso só sai pelo "Já desativei".
+      return {
+        ...state,
+        registration: 'registered',
+        error: null,
+        sessionConflict: state.sessionConflict === 'extension_answered' ? 'extension_answered' : null,
+      };
     case 'unregistered':
       // Queda de WebSocket chega como `disconnected` ANTES do `unregistered`,
       // então só um `unregistered` vindo direto de `registered` é perda do
@@ -135,7 +148,13 @@ export function reduceWebphone(state: WebphoneState, event: WebphoneEvent): Webp
       return { ...state, call: { ...state.call, phase: 'in-call', answeredAt: event.at } };
     case 'call_ended':
       if (!state.call || state.call.id !== event.id) return state;
-      return { ...state, call: { ...state.call, phase: 'ended', endedAt: event.at, endCause: event.cause } };
+      return {
+        ...state,
+        sessionConflict: event.answeredElsewhere
+          ? (state.sessionConflict ?? 'extension_answered')
+          : state.sessionConflict,
+        call: { ...state.call, phase: 'ended', endedAt: event.at, endCause: event.cause },
+      };
     case 'call_muted':
       if (!state.call || state.call.id !== event.id) return state;
       return { ...state, call: { ...state.call, muted: event.muted } };
@@ -182,7 +201,37 @@ export const SESSION_CONFLICT_MESSAGES: Record<WebphoneSessionConflict, string> 
   other_tab: 'O ramal está em uso em outra aba. Clique em Usar nesta aba para assumir.',
   lost_to_other:
     'O ramal foi desconectado. Outra aba, outro navegador ou a extensão da API4COM pode estar usando este ramal. Clique em Reconectar para usar aqui.',
+  extension_answered:
+    'A extensão da API4COM atendeu a ligação no lugar do EnriqueceAI. Desative a extensão em chrome://extensions (fechar a janelinha não basta) e clique em Já desativei.',
 };
+
+/** Rótulo do botão que resolve cada conflito no pill do webphone. */
+export const SESSION_CONFLICT_ACTIONS: Record<WebphoneSessionConflict, string> = {
+  other_tab: 'Usar nesta aba',
+  lost_to_other: 'Reconectar',
+  extension_answered: 'Já desativei',
+};
+
+/**
+ * A chamada integrada (`POST /calls`) foi atendida por OUTRO aparelho do mesmo
+ * ramal? O sinal é um CANCEL do servidor (`originator: 'remote'`, causa
+ * `Canceled` do JsSIP) na perna do ramal:
+ * - com `Reason` "completed elsewhere" / `cause=200` (RFC 3326), ou
+ * - depois que esta aba já mandou o atendimento — com um só aparelho no ramal
+ *   a API4COM aceitaria o 200 OK em vez de cancelar.
+ * Inbound comum (não integrado) tocando em vários aparelhos não conta.
+ */
+export function isAnsweredElsewhere(args: {
+  integrated: boolean;
+  originator: string | null | undefined;
+  cause: string | null | undefined;
+  reason: string | null | undefined;
+  answerSent: boolean;
+}): boolean {
+  if (!args.integrated || args.originator !== 'remote' || args.cause !== 'Canceled') return false;
+  if (args.answerSent) return true;
+  return /elsewhere|cause\s*=\s*200\b/i.test(String(args.reason ?? ''));
+}
 
 /**
  * Webphone ligado nesta aba e pronto para ligar, contando o microfone ainda

@@ -89,6 +89,8 @@ export interface PendingActivity {
    * passos de cadência.
    */
   scheduledKind?: ScheduledActivityKind;
+  /** Retorno de ligação com contato indicado (`scheduled_activities.contact_id`). Ausente nos demais. */
+  returnContactId?: string;
 }
 
 export type ScheduledActivityKind = 'return' | 'limbo_followup' | 'anti_no_show';

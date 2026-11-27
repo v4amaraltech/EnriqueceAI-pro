@@ -21,6 +21,7 @@ import { COLD_LEAD_LABEL, SIGNAL_CHUNK_SIZE, chunk } from '../utils/cold-lead-or
 import { pickNextLead, type NextLeadCandidate } from '../utils/next-lead';
 import { pickCockpitLead, type CockpitTier } from '../utils/next-call-pick';
 import { fetchCallContext, isCallCockpitEnabled } from './call-context.service';
+import { loadCallbackTarget } from './callback-contact.service';
 import { fetchCockpitCandidates } from './cockpit-candidates.service';
 import { isCockpitColdOrderEnabled } from './cockpit-cold-order-flag';
 
@@ -156,20 +157,33 @@ export async function buildNextCallCardForLead(input: {
   /** Resultado do score v2 do lead; ausente = cartão sem prioridade (v0). */
   ranked?: PriorityResult;
   tier?: CockpitTier;
+  /** Número do indicado recusado: cartão com o principal, avisando o motivo. */
+  ignoreContact?: boolean;
 }): Promise<NextCallCardResult> {
-  const { viewer, leadId, now, ranked, tier } = input;
+  const { viewer, leadId, now, ranked, tier, ignoreContact } = input;
   const context = await fetchCallContext({ viewer, leadId, now });
   if (context.status === 'error') return { status: 'error', error: context.error };
   if (context.status !== 'ok') return { status: context.status === 'disabled' ? 'disabled' : 'empty' };
+
+  // Retorno com contato indicado: nome, cargo e telefone passam a ser os dele (o e-mail do convite segue o do lead).
+  // Depois de `fetchCallContext`, que já conferiu a permissão do viewer sobre o lead.
+  const target = await loadCallbackTarget({ orgId: viewer.orgId, leadId, now });
+  const phone = ignoreContact ? null : target?.phone;
+  const data = target && phone
+    ? { ...context.data, decisionMaker: { ...context.data.decisionMaker, name: target.name, jobTitle: target.jobTitle, phone } }
+    : context.data;
+  const callbackContact = target
+    ? { callbackContact: { name: target.name, contactId: phone ? target.contactId : null, ...(ignoreContact && target.phone ? { refused: true } : {}) } }
+    : {};
 
   if (ranked) {
     const priority = toPriorityView(ranked, tier);
     return {
       status: 'ok',
-      data: { context: context.data, approach: suggestApproachV2(context.data, priority), generatedAt: now.toISOString(), priority },
+      data: { context: data, approach: suggestApproachV2(data, priority), generatedAt: now.toISOString(), priority, ...callbackContact },
     };
   }
-  return { status: 'ok', data: { context: context.data, approach: suggestApproach(context.data), generatedAt: now.toISOString() } };
+  return { status: 'ok', data: { context: data, approach: suggestApproach(data), generatedAt: now.toISOString(), ...callbackContact } };
 }
 
 function toPriorityView(result: PriorityResult, tier?: CockpitTier): CallPriorityView {

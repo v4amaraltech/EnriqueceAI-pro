@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ getAuthOrgIdResult: vi.fn() }));
 const leadEvents = vi.hoisted(() => ({ logLeadEvent: vi.fn() }));
@@ -29,7 +29,7 @@ function makeClient(respond: (call: Call) => unknown) {
       const call: Call = { table, ops: [] };
       calls.push(call);
       const chain: Record<string, unknown> = {};
-      for (const m of ['insert', 'update', 'select', 'eq', 'neq', 'in', 'lt']) {
+      for (const m of ['insert', 'update', 'select', 'eq', 'neq', 'in', 'lt', 'not', 'order', 'limit']) {
         chain[m] = (...args: unknown[]) => {
           call.ops.push([m, args]);
           return chain;
@@ -47,6 +47,9 @@ function makeClient(respond: (call: Call) => unknown) {
 const has = (call: Call, op: string, ...args: unknown[]) =>
   call.ops.some(([o, a]) => o === op && JSON.stringify(a) === JSON.stringify(args));
 const updatePayload = (call: Call) => call.ops.find(([o]) => o === 'update')?.[1][0] as Record<string, unknown>;
+
+import { createCalendarEvent, getCalendarConnection } from '@/features/integrations/services/calendar.service';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 import { scheduleActivity } from './schedule-activity';
 
@@ -154,5 +157,202 @@ describe('scheduleActivity — pausa a cadência até o retorno', () => {
     const timeline = userClient.calls.find((c) => c.table === 'interactions')!;
     const row = timeline.ops.find(([o]) => o === 'insert')![1][0] as { message_content: string };
     expect(row.message_content).toBe('Atividade agendada: Ligação para 20/10/2026, 09:00');
+  });
+});
+
+describe('scheduleActivity — link do lead no evento do Google Calendar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.exemplo.test');
+    const client = makeClient((call) =>
+      call.table === 'scheduled_activities'
+        ? { data: { id: 'sa-1' }, error: null }
+        : call.table === 'leads'
+          ? { data: { id: LEAD, nome_fantasia: 'Empresa Teste' }, error: null }
+          : { data: null, error: null },
+    );
+    service.createServiceRoleClient.mockReturnValue(makeClient(() => ({ data: null, error: null })));
+    auth.getAuthOrgIdResult.mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u1', supabase: client },
+    });
+    vi.mocked(createServerSupabaseClient).mockResolvedValueOnce(client as never);
+    vi.mocked(getCalendarConnection).mockResolvedValueOnce({ id: 'conn-1' } as never);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const sentDescription = () => vi.mocked(createCalendarEvent).mock.calls[0]?.[1].description;
+
+  it('com notas, mantém o texto e acrescenta o link no final', async () => {
+    await scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT, notes: 'Falar com o sócio' });
+    expect(sentDescription()).toBe(
+      `Retorno agendado\n\nFalar com o sócio\n\nAbrir o lead: https://app.exemplo.test/leads/${LEAD}`,
+    );
+    expect(vi.mocked(createCalendarEvent).mock.calls[0]?.[1].title).toBe('Ligação: Empresa Teste');
+  });
+
+  it('sem notas, mantém o texto padrão e acrescenta o link no final', async () => {
+    await scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT });
+    expect(sentDescription()).toBe(
+      `Retorno agendado via EnriqueceAI\n\nAbrir o lead: https://app.exemplo.test/leads/${LEAD}`,
+    );
+  });
+
+  it('com a URL do app terminando em barra, o link não fica com barra dupla', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.exemplo.test/');
+    await scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT });
+    expect(sentDescription()).toBe(
+      `Retorno agendado via EnriqueceAI\n\nAbrir o lead: https://app.exemplo.test/leads/${LEAD}`,
+    );
+  });
+});
+
+describe('scheduleActivity — contato do retorno', () => {
+  const CONTACT = '44444444-4444-4444-4444-444444444444';
+  let client: ReturnType<typeof makeClient>;
+  let contactRow: { id: string } | null;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    contactRow = { id: CONTACT };
+    client = makeClient((call) => {
+      if (call.table === 'scheduled_activities') return { data: { id: 'sa-1' }, error: null };
+      if (call.table === 'leads') return { data: { id: LEAD }, error: null };
+      if (call.table === 'lead_contacts') return { data: contactRow, error: null };
+      return { data: null, error: null };
+    });
+    service.createServiceRoleClient.mockReturnValue(makeClient(() => ({ data: null, error: null })));
+    auth.getAuthOrgIdResult.mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u1', supabase: client },
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const schedule = (contactId?: string) =>
+    scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT, ...(contactId ? { contactId } : {}) });
+  const inserted = () =>
+    client.calls.flatMap((c) => (c.table === 'scheduled_activities' ? c.ops : [])).find(([o]) => o === 'insert')![1][0];
+  const contactCalls = () => client.calls.filter((c) => c.table === 'lead_contacts');
+
+  it('com contato do lead, grava contact_id (conferindo lead e org)', async () => {
+    const r = await schedule(CONTACT);
+    expect(r.success).toBe(true);
+    expect(inserted()).toMatchObject({ contact_id: CONTACT });
+    const check = contactCalls()[0]!;
+    expect(has(check, 'eq', 'id', CONTACT)).toBe(true);
+    expect(has(check, 'eq', 'lead_id', LEAD)).toBe(true);
+    expect(has(check, 'eq', 'org_id', 'org-1')).toBe(true);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('sem contato, o insert não leva contact_id nem consulta contatos', async () => {
+    await schedule();
+    expect(inserted()).not.toHaveProperty('contact_id');
+    expect(contactCalls()).toHaveLength(0);
+  });
+
+  it('contato de outro lead/org: agenda o retorno sem contato e avisa', async () => {
+    contactRow = null;
+    const r = await schedule(CONTACT);
+    expect(r.success).toBe(true);
+    expect(inserted()).not.toHaveProperty('contact_id');
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('id que não é uuid: não vai ao banco e o retorno não se perde', async () => {
+    const r = await schedule('undefined');
+    expect(r.success).toBe(true);
+    expect(contactCalls()).toHaveLength(0);
+    expect(inserted()).not.toHaveProperty('contact_id');
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('scheduleActivity — herança do contato do retorno substituído', () => {
+  const CONTACT = '44444444-4444-4444-4444-444444444444';
+  let client: ReturnType<typeof makeClient>;
+  let previous: { contact_id: string } | null;
+  let previousFails: boolean;
+  let contactRow: { id: string } | null;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    previous = { contact_id: CONTACT };
+    previousFails = false;
+    contactRow = { id: CONTACT };
+    client = makeClient((call) => {
+      if (call.table === 'scheduled_activities') {
+        if (call.ops.some(([o]) => o === 'insert')) return { data: { id: 'sa-1' }, error: null };
+        if (previousFails) throw new Error('boom');
+        return { data: previous, error: null };
+      }
+      if (call.table === 'leads') return { data: { id: LEAD }, error: null };
+      if (call.table === 'lead_contacts') return { data: contactRow, error: null };
+      return { data: null, error: null };
+    });
+    service.createServiceRoleClient.mockReturnValue(makeClient(() => ({ data: null, error: null })));
+    auth.getAuthOrgIdResult.mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u1', supabase: client },
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const run = (channel: 'phone' | 'email' = 'phone', contactId?: string) =>
+    scheduleActivity({ leadId: LEAD, channel, scheduledAt: RETURN_AT, ...(contactId ? { contactId } : {}) });
+  const activityCalls = () => client.calls.filter((c) => c.table === 'scheduled_activities');
+  const inserted = () => activityCalls().flatMap((c) => c.ops).find(([o]) => o === 'insert')![1][0];
+
+  it('herda o contato do retorno de ligação pendente, lendo antes do insert', async () => {
+    await run();
+    expect(inserted()).toMatchObject({ contact_id: CONTACT });
+    const read = activityCalls()[0]!;
+    for (const [col, value] of [['org_id', 'org-1'], ['lead_id', LEAD], ['status', 'pending'], ['channel', 'phone'], ['kind', 'return']]) {
+      expect(has(read, 'eq', col, value)).toBe(true);
+    }
+    expect(read.ops.some(([o]) => o === 'insert')).toBe(false);
+  });
+
+  it('sem retorno anterior com contato, o insert é o de sempre', async () => {
+    previous = null;
+    await run();
+    expect(inserted()).not.toHaveProperty('contact_id');
+  });
+
+  it('retorno que não é de ligação não herda nem consulta', async () => {
+    await run('email');
+    expect(inserted()).not.toHaveProperty('contact_id');
+    expect(activityCalls()).toHaveLength(1);
+  });
+
+  it('contato herdado que não é mais do lead: grava sem contato', async () => {
+    contactRow = null;
+    const r = await run();
+    expect(r.success).toBe(true);
+    expect(inserted()).not.toHaveProperty('contact_id');
+  });
+
+  it('falha na leitura da herança não perde o retorno', async () => {
+    previousFails = true;
+    const r = await run();
+    expect(r.success).toBe(true);
+    expect(inserted()).not.toHaveProperty('contact_id');
+  });
+
+  it('contato novo vale mais que o herdado: nem lê o anterior', async () => {
+    await run('phone', CONTACT);
+    expect(activityCalls()).toHaveLength(1);
   });
 });

@@ -7377,6 +7377,7 @@ export type Database = {
           call_provider: string | null;
           channel: Database['public']['Enums']['channel_type'];
           completed_at: string | null;
+          contact_id: string | null;
           created_at: string;
           id: string;
           kind: string;
@@ -7394,6 +7395,7 @@ export type Database = {
           call_provider?: string | null;
           channel: Database['public']['Enums']['channel_type'];
           completed_at?: string | null;
+          contact_id?: string | null;
           created_at?: string;
           id?: string;
           kind?: string;
@@ -7411,6 +7413,7 @@ export type Database = {
           call_provider?: string | null;
           channel?: Database['public']['Enums']['channel_type'];
           completed_at?: string | null;
+          contact_id?: string | null;
           created_at?: string;
           id?: string;
           kind?: string;
@@ -7425,6 +7428,13 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'scheduled_activities_contact_id_fkey';
+            columns: ['contact_id'];
+            isOneToOne: false;
+            referencedRelation: 'lead_contacts';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'scheduled_activities_lead_id_fkey';
             columns: ['lead_id'];
@@ -10455,7 +10465,8 @@ export type Database = {
         | 'callback_requested'
         | 'no_answer'
         | 'technical_failure'
-        | 'voicemail';
+        | 'voicemail'
+        | 'referred_contact';
       call_status: 'significant' | 'not_significant' | 'no_contact' | 'busy' | 'not_connected';
       call_type: 'inbound' | 'outbound' | 'manual';
       channel_type:
@@ -10644,6 +10655,7 @@ export const Constants = {
         'no_answer',
         'technical_failure',
         'voicemail',
+        'referred_contact',
       ],
       call_status: ['significant', 'not_significant', 'no_contact', 'busy', 'not_connected'],
       call_type: ['inbound', 'outbound', 'manual'],

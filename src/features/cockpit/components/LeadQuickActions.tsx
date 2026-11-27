@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarPlus, PhoneForwarded, UserX } from 'lucide-react';
+import { CalendarPlus, PhoneForwarded, UserPlus, UserX } from 'lucide-react';
 
 import { Button } from '@/shared/components/ui/button';
 
@@ -17,7 +17,7 @@ interface LeadQuickActionsProps {
 }
 
 /**
- * Faixa fixa do painel do lead com as três ações, em qualquer fase da ligação (discando, tocando, caixa postal,
+ * Faixa fixa do painel do lead com as ações do lead, em qualquer fase da ligação (discando, tocando, caixa postal,
  * conversa). Mesmos botões e diálogos do bloco "O lead conversou" (uma instância só). Sem nenhum botão quando o lead
  * é `won`/`archived`. No modo simulado o clique só avisa que nada é gravado.
  */
@@ -28,7 +28,7 @@ export function LeadQuickActions({ status, actions, simulated }: LeadQuickAction
     <div className="space-y-1.5" data-testid="motor-lead-actions" role="group" aria-label="Ações do lead">
       <div className="flex flex-wrap gap-2">
         {available.schedule && (
-          <Button type="button" size="sm" className="h-8 min-w-0 flex-1 px-2 text-xs" data-testid="motor-action-schedule" onClick={actions.schedule}>
+          <Button type="button" size="sm" className="h-8 min-w-0 flex-1 basis-[45%] px-2 text-xs" data-testid="motor-action-schedule" onClick={actions.schedule}>
             <CalendarPlus className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">Agendar reunião</span>
           </Button>
@@ -38,7 +38,7 @@ export function LeadQuickActions({ status, actions, simulated }: LeadQuickAction
             type="button"
             size="sm"
             variant="outline"
-            className="h-8 min-w-0 flex-1 px-2 text-xs"
+            className="h-8 min-w-0 flex-1 basis-[45%] px-2 text-xs"
             disabled={actions.callbackBusy}
             data-testid="motor-action-callback"
             onClick={actions.callback}
@@ -47,8 +47,22 @@ export function LeadQuickActions({ status, actions, simulated }: LeadQuickAction
             <span className="truncate">{actions.callbackBusy ? 'Agendando…' : 'Ligar depois'}</span>
           </Button>
         )}
+        {available.callback && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 min-w-0 flex-1 basis-[45%] px-2 text-xs"
+            disabled={actions.callbackBusy}
+            data-testid="motor-action-refer"
+            onClick={actions.refer}
+          >
+            <UserPlus className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Indicou outra pessoa</span>
+          </Button>
+        )}
         {available.disqualify && (
-          <Button type="button" size="sm" variant="outline" className="h-8 min-w-0 flex-1 px-2 text-xs" data-testid="motor-action-disqualify" onClick={actions.disqualify}>
+          <Button type="button" size="sm" variant="outline" className="h-8 min-w-0 flex-1 basis-[45%] px-2 text-xs" data-testid="motor-action-disqualify" onClick={actions.disqualify}>
             <UserX className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{available.disqualifyLabel}</span>
           </Button>

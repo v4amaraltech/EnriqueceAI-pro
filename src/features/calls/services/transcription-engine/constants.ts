@@ -8,8 +8,24 @@ export const ASSEMBLYAI_BASE_URL = 'https://api.assemblyai.com/v2';
 export const ASSEMBLYAI_SPEECH_MODEL = 'universal-3-5-pro';
 export const ASSEMBLYAI_LANGUAGE = 'pt';
 
-export const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
-export const JEV_MODEL = 'jev-latest';
+/**
+ * Provedores do JEV (escolha pela env JEV_PROVIDER). URL, modelo e nomes das envs de chave
+ * ficam juntos aqui: a chave de um provedor nunca vai para a URL do outro.
+ * A OpenRouter aceita o mesmo corpo da Typesafe e resolve jev-latest para ~typesafe/jev-latest.
+ */
+export const JEV_PROVIDERS = {
+  typesafe: {
+    url: 'https://api.typesafe.ai/v1/systemone',
+    model: 'jev-latest',
+    keyEnvs: ['JEV_API_KEY', 'TYPESAFE_API_KEY'],
+  },
+  openrouter: {
+    url: 'https://openrouter.ai/api/v1/systemone',
+    model: 'jev-latest',
+    keyEnvs: ['OPENROUTER_API_KEY'],
+  },
+} as const;
+export const JEV_DEFAULT_PROVIDER = 'typesafe';
 
 /** Só ligações atendidas com pelo menos isso entram no motor. */
 export const ENGINE_MIN_DURATION_SECONDS = 30;

@@ -224,3 +224,21 @@ describe('NextCallCard e resultado pós-ligação (call_cockpit_outcomes)', () =
     vi.useRealTimers();
   });
 });
+
+describe('NextCallCard: retorno com contato indicado', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('avisa "Retorno com {nome}" e o "Ligar agora" disca o número do cartão com contactId', async () => {
+    vi.mocked(initiateApi4ComCall).mockResolvedValue({ success: false, error: 'x' });
+    const decisionMaker = { ...context.decisionMaker, name: 'José', phone: '11988887777' };
+    render(
+      <NextCallCard
+        card={{ ...card, context: { ...context, decisionMaker }, callbackContact: { name: 'José', contactId: 'c-1' } }}
+        dialerProvider="api4com"
+      />,
+    );
+    expect(screen.getByTestId('callback-contact').textContent).toBe('Retorno com José');
+    fireEvent.click(screen.getByRole('button', { name: /Ligar agora/ }));
+    await waitFor(() => expect(initiateApi4ComCall).toHaveBeenCalledWith({ phone: '11988887777', leadId: 'lead-1', contactId: 'c-1' }));
+  });
+});

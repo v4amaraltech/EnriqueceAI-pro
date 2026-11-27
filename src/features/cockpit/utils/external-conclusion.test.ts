@@ -12,6 +12,8 @@ describe('dispositionForExternalConclusion', () => {
     ['lost', false, 'no_answer'],
     ['callback', true, 'callback_requested'],
     ['callback', false, 'no_answer'],
+    ['referred', true, 'referred_contact'],
+    ['referred', false, 'no_answer'],
   ] as const)('%s, atendida=%s → %s', (kind, answered, expected) => {
     expect(dispositionForExternalConclusion(kind, answered)).toBe(expected);
   });

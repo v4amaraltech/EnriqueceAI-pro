@@ -9,6 +9,13 @@ import type { CockpitAutoDialState } from '../utils/cockpit-auto-dial-machine';
 
 import { DialerTab } from './DialerTab';
 
+// jsdom não tem ResizeObserver (usado pelo Checkbox do diálogo).
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 const hook = vi.hoisted(() => ({ result: null as unknown }));
 vi.mock('../hooks/use-cockpit-auto-dial', () => ({ useCockpitAutoDial: vi.fn(() => hook.result) }));
 const dayStats = vi.hoisted(() => ({ value: null as unknown }));
@@ -444,6 +451,14 @@ describe('aba Discador: ações do lead sempre visíveis no painel', () => {
     render(<DialerTab autoDial={AUTO} />);
     expect(screen.queryByTestId('dialer-answered-disqualify')).toBeNull();
     expect(screen.queryByTestId('motor-action-disqualify')).toBeNull();
+  });
+
+  it('Indicou outra pessoa: botão no painel e no bloco, com UM só diálogo; qualificado também tem', () => {
+    setEngine({ phase: 'awaiting-sdr', reason: 'answered' }, { card: withStatus('qualified'), simulated: false });
+    render(<DialerTab autoDial={{ enabled: true, live: true }} />);
+    expect(screen.getByTestId('dialer-answered-refer')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('motor-action-refer'));
+    expect(screen.getAllByTestId('refer-dialog')).toHaveLength(1);
   });
 
   it('trocar de lead fecha diálogos do lead anterior', () => {

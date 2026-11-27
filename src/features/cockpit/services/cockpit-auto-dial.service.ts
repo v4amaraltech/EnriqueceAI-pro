@@ -24,12 +24,13 @@ import {
 import { AUTO_DIAL_RPC_OVERRIDES, SIGNAL_CHUNK_SIZE, chunk } from '../utils/cold-lead-order';
 import { pickCockpitLead, type CockpitTier } from '../utils/next-call-pick';
 import { RECOVERY_BLOCKED_REASON_NAMES, isNoResumeReason, type AutoDialQueue } from '../utils/recovery-queue';
-import { NO_ACTION_DISPOSITIONS, noActionCooldownCutoff } from '../utils/no-action-cooldown';
+import { ACTION_DISPOSITIONS, NO_ACTION_DISPOSITIONS, noActionCooldownCutoff } from '../utils/no-action-cooldown';
 import { isRealConversation } from '../utils/real-conversation';
 import { fetchCockpitCandidates } from './cockpit-candidates.service';
 import { POSTGREST_MAX_ROWS, fetchRecoveryCandidates, loadRecoveryHoldoutLeadIds } from './cockpit-recovery-candidates.service';
 import { isCockpitAutoDialEnabled, isCockpitAutoDialLive } from './cockpit-auto-dial-flag';
 import { loadSignalsInChunks } from './next-call-card.service';
+import { loadCallbackTarget } from './callback-contact.service';
 
 /**
  * Servidor do motor automático (plano §3.2). TODA trava mora aqui (NFR-3) e FALHA FECHADA (NFR-4):
@@ -242,7 +243,7 @@ export async function loadUnavailableLeadIds(
  * conversa do lead nos últimos `NO_ACTION_COOLDOWN_DAYS` dias tem desfecho `answered_no_progress`/`relevant_conversation`
  * e o lead NÃO tem atividade pendente (retorno ou tarefa) agendada. Contado da ligação. Em blocos de `SIGNAL_CHUNK_SIZE`
  * ids (sem `.in()` gigante), em 3 passos pequenos: (1) ligações com esses desfechos na janela; (2) só uma ligação MAIS NOVA com
- * `callback_requested` (ação) tira o lead da lista; ligação nova sem conversa/desfecho NÃO tira (uma conversa nova sem ação vira a "última"); (3) atividade pendente tira o lead (já tem ação).
+ * `callback_requested` ou `referred_contact` (ação) tira o lead da lista; ligação nova sem conversa/desfecho NÃO tira (uma conversa nova sem ação vira a "última"); (3) atividade pendente tira o lead (já tem ação).
  * `null` = falha de leitura (falha fechada).
  */
 export async function loadNoActionLeadIds(client: SupabaseClient, orgId: string, leadIds: string[], now: Date): Promise<Set<string> | null> {
@@ -266,7 +267,7 @@ export async function loadNoActionLeadIds(client: SupabaseClient, orgId: string,
   }
   if (lastTalk.size === 0) return out;
 
-  // Só uma ligação mais nova COM AÇÃO (pediu para ligar depois) solta o lead. Ligação nova sem conversa e sem desfecho, ou com
+  // Só uma ligação mais nova COM AÇÃO (pediu para ligar depois ou indicou outro contato) solta o lead. Ligação nova sem conversa e sem desfecho, ou com
   // no_answer/voicemail/technical_failure, NÃO solta (caso Lippaus: a própria discagem ligou de novo, 0 s, sem desfecho).
   // Uma conversa nova sem ação já é a "última conversa" do passo 1 (os 7 dias contam dela).
   const earliest = new Date(Math.min(...lastTalk.values())).toISOString();
@@ -274,13 +275,13 @@ export async function loadNoActionLeadIds(client: SupabaseClient, orgId: string,
     const { data, error } = (await from(client, 'calls')
       .select('lead_id, created_at, sdr_disposition')
       .eq('org_id', orgId)
-      .eq('sdr_disposition', 'callback_requested') // filtrado NO BANCO: só as ligações que têm ação
+      .in('sdr_disposition', [...ACTION_DISPOSITIONS]) // filtrado NO BANCO: só as ligações que têm ação
       .in('lead_id', part)
       .gte('created_at', earliest)) as Rows<{ lead_id: string; created_at: string; sdr_disposition: string | null }>;
     if (error || !data || data.length >= POSTGREST_MAX_ROWS) return null;
     const acted = new Set<string>();
     for (const r of data) {
-      if (r.sdr_disposition === 'callback_requested' && Date.parse(r.created_at) > (lastTalk.get(r.lead_id) ?? Number.POSITIVE_INFINITY)) acted.add(r.lead_id);
+      if (r.sdr_disposition && ACTION_DISPOSITIONS.includes(r.sdr_disposition) && Date.parse(r.created_at) > (lastTalk.get(r.lead_id) ?? Number.POSITIVE_INFINITY)) acted.add(r.lead_id);
     }
     for (const id of part) if (!acted.has(id)) out.add(id);
   }
@@ -459,7 +460,7 @@ export async function pickAutoDialLead(input: {
 // ---------------------------------------------------------------------------
 
 export type DialGateResult =
-  | { ok: true; live: boolean; phone: string; attemptNo: number; leadId: string }
+  | { ok: true; live: boolean; phone: string; attemptNo: number; leadId: string; contactId?: string }
   | { ok: false; code: AutoDialGateCode };
 
 /**
@@ -475,6 +476,8 @@ export async function checkDialGate(input: {
   now: Date;
   /** Fila do pedido. Na 'recovery' o lead PRECISA ser perdido (`unqualified` com `lost_at`); na 'normal', nunca. */
   queue?: AutoDialQueue;
+  /** Ligar para o telefone do lead mesmo com contato no retorno (número do indicado recusado). */
+  ignoreContact?: boolean;
   holidays?: ReadonlySet<string> | readonly string[];
   rules?: AutoDialRules;
   client?: SupabaseClient;
@@ -489,7 +492,7 @@ export async function checkDialGate(input: {
 
     const client = input.client ?? createServiceRoleClient();
     // Leituras independentes em paralelo (antes eram uma atrás da outra); as recusas continuam avaliadas na MESMA ordem abaixo.
-    const [holidays, motorCalls, recent, leadRes, holds, callStats, callbacks] = await Promise.all([
+    const [holidays, motorCalls, recent, leadRes, holds, callStats, callbacks, target] = await Promise.all([
       input.holidays ?? loadMotorHolidays(client),
       countMotorCallsToday(client, orgId, userId, now),
       // Trava suave contra disparo duplo (duas abas, cliques rápidos): ligação recente ou do motor ainda sem término.
@@ -517,6 +520,8 @@ export async function checkDialGate(input: {
         .in('tipo', [...rules.blockedHoldTypes]) as PromiseLike<Rows<{ lead_id: string; tipo: string }>>,
       loadLeadCallStats(client, orgId, leadId, now),
       loadDueCallbacks(client, orgId, [leadId], now),
+      // Contato do retorno vencido; nunca recusa (falha = principal).
+      input.ignoreContact ? null : loadCallbackTarget({ orgId, leadId, now, client }),
     ]);
 
     const window = isWithinDialWindow(now, holidays, rules);
@@ -539,7 +544,9 @@ export async function checkDialGate(input: {
     if (recovery ? lead.status !== 'unqualified' || !lead.lost_at : EXCLUDED_LEAD_STATUSES.includes(lead.status)) {
       return refuse('lead_unavailable');
     }
-    const phone = lead.telefone?.trim();
+    // `contactId` só quando o número discado é o do contato do retorno.
+    const contactPhone = target?.phone ?? null;
+    const phone = contactPhone ?? lead.telefone?.trim();
     if (!phone) return refuse('no_phone');
 
     if (holds.error || !holds.data) return refuse('error');
@@ -604,7 +611,14 @@ export async function checkDialGate(input: {
       if (noAction.has(leadId)) return refuse('lead_unavailable');
     }
 
-    return { ok: true, live, phone, attemptNo: callStats.callsToday + 1, leadId };
+    return {
+      ok: true,
+      live,
+      phone,
+      attemptNo: callStats.callsToday + 1,
+      leadId,
+      ...(contactPhone && target ? { contactId: target.contactId } : {}),
+    };
   } catch (err) {
     console.error('[cockpit-auto-dial] gate:', err instanceof Error ? err.message : 'erro');
     return refuse('error');

@@ -10,6 +10,7 @@ export type CallDisposition =
   | 'relevant_conversation' // Conversa relevante
   | 'answered_no_progress' // Atendeu, sem avanço
   | 'callback_requested' // Pediu para ligar depois
+  | 'referred_contact' // Indicou outro contato (só o Cockpit oferece)
   | 'no_answer' // Não atendeu
   | 'technical_failure' // Falha técnica
   | 'voicemail'; // Caixa postal / secretária eletrônica (linha atendeu, sem humano)

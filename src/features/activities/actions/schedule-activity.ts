@@ -11,10 +11,12 @@ import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAppUrl } from '@/lib/utils/app-url';
 import { getCalendarConnection, createCalendarEvent } from '@/features/integrations/services/calendar.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { cadenceResumeAfterReturn } from '../utils/callback-resume';
+import { inheritReturnContactId, resolveReturnContactId } from '../utils/return-contact';
 
 const scheduleActivitySchema = z.object({
   leadId: z.string().uuid(),
@@ -22,6 +24,9 @@ const scheduleActivitySchema = z.object({
   // 'whatsapp' quando o retorno é uma Ligação via WhatsApp (channel='phone').
   callProvider: z.enum(['whatsapp']).nullish(),
   scheduledAt: z.string().min(1),
+  // Contato (lead_contacts) para quem ligar. Sem `.uuid()` de propósito: id inválido
+  // não pode derrubar o agendamento — o retorno é gravado sem contato.
+  contactId: z.string().optional(),
   notes: z.string().optional(),
   // default false: agendar um retorno NÃO encerra a cadência (isso jogava o
   // lead no limbo). Encerrar é explícito. Só true em opt-in deliberado.
@@ -47,7 +52,7 @@ export async function scheduleActivity(
   const { orgId, userId, supabase } = auth.data;
 
   const {
-    leadId, channel, callProvider, scheduledAt, notes, completeEnrollments, pauseCadenceUntilReturn, executedStep,
+    leadId, channel, callProvider, scheduledAt, notes, completeEnrollments, pauseCadenceUntilReturn, executedStep, contactId,
   } = parsed.data;
 
   // Pista 11: o lead precisa ser da org da sessão antes de qualquer escrita.
@@ -57,6 +62,13 @@ export async function scheduleActivity(
     .eq('org_id', orgId)
     .maybeSingle()) as { data: { id: string } | null };
   if (!ownLead) return { success: false, error: 'Lead não encontrado' };
+
+  // Sem contato novo, um retorno de LIGAÇÃO herda o do pendente que ele substitui (lido antes do insert/cancelamento).
+  const returnContactId = contactId
+    ? await resolveReturnContactId(supabase, orgId, leadId, contactId)
+    : channel === 'phone'
+      ? await inheritReturnContactId(supabase, orgId, leadId)
+      : null;
 
   // Create scheduled activity
   const { data, error } = (await from(supabase, 'scheduled_activities' as never)
@@ -68,6 +80,8 @@ export async function scheduleActivity(
       call_provider: callProvider ?? null,
       scheduled_at: scheduledAt,
       notes: notes || null,
+      // Só entra no insert quando há contato: os demais retornos não dependem da coluna.
+      ...(returnContactId ? { contact_id: returnContactId } : {}),
     } as Record<string, unknown>)
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };
@@ -251,9 +265,13 @@ async function createCalendarEventForActivity(
   const startTime = new Date(scheduledAt);
   const endTime = new Date(startTime.getTime() + 15 * 60 * 1000); // 15 min duration
 
+  const summary = notes ? `Retorno agendado\n\n${notes}` : 'Retorno agendado via EnriqueceAI';
+
+  const leadUrl = new URL(`/leads/${leadId}`, getAppUrl()).toString();
+
   await createCalendarEvent(connection, {
     title: `${channelLabel}: ${leadName}`,
-    description: notes ? `Retorno agendado\n\n${notes}` : 'Retorno agendado via EnriqueceAI',
+    description: `${summary}\n\nAbrir o lead: ${leadUrl}`,
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString(),
   });

@@ -70,6 +70,7 @@ export const PRIORITY_SOURCE_LABELS: Record<PrioritySource, string> = {
 const CALL_DISPOSITION_POINTS: Record<string, number> = {
   relevant_conversation: 30,
   callback_requested: 35,
+  referred_contact: 35,
   answered_no_progress: 8,
   voicemail: 0,
   no_answer: 0,
@@ -82,6 +83,7 @@ export const INTEREST_DISPOSITIONS: string[] = Object.keys(CALL_DISPOSITION_POIN
 const CALL_DISPOSITION_LABELS: Record<string, string> = {
   relevant_conversation: 'conversa relevante',
   callback_requested: 'pediu para ligar depois',
+  referred_contact: 'indicou outro contato',
   answered_no_progress: 'atendeu, sem avanço',
   voicemail: 'caixa postal',
   no_answer: 'não atendeu',

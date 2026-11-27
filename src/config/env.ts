@@ -35,6 +35,9 @@ const envSchema = z.object({
   EVOLUTION_API_URL: z.string().url().optional(),
   EVOLUTION_API_KEY: z.string().min(1).optional(),
   OPENROUTER_API_KEY: z.string().min(1).optional(),
+  // Provedor do JEV: typesafe (padrão) ou openrouter. String livre de propósito: valor
+  // desconhecido ou vazio cai em typesafe (resolveJevProviderName), sem derrubar getEnv().
+  JEV_PROVIDER: z.string().optional(),
   // Piloto de escuta ao vivo. Só o servidor lê a chave. Nunca usar NEXT_PUBLIC_.
   ASSEMBLYAI_API_KEY: z.string().min(1).optional(),
   ASSEMBLYAI_STREAMING_REGION: z.preprocess(

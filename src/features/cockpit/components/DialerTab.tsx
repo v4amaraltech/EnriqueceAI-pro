@@ -127,6 +127,7 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
     attemptsToday: engine.attemptNo ?? 0,
     alreadyLost: panelCard?.context.company.status === 'unqualified',
     getNotes: panelNote.getValue,
+    appendNote: panelNote.append,
   });
 
   // A anotação digitada NUNCA se perde: antes de qualquer ação final ela já foi mandada gravar.
@@ -139,6 +140,10 @@ export function DialerTabView({ engine, queue, onQueueChange, leadCardEnabled = 
     callback: () => {
       panelNote.flush();
       rawLeadActions.callback();
+    },
+    refer: () => {
+      panelNote.flush();
+      rawLeadActions.refer();
     },
     disqualify: () => {
       panelNote.flush();

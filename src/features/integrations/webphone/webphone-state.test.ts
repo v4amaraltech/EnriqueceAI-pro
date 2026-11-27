@@ -5,6 +5,7 @@ import {
   canReceiveCalls,
   dialingBlockReason,
   initialWebphoneState,
+  isAnsweredElsewhere,
   isIntegratedCallHeader,
   reduceWebphone,
   remoteNumberFromUri,
@@ -310,5 +311,49 @@ describe('microfone no clique de discagem', () => {
     expect(request).not.toHaveBeenCalled();
     // O bloqueio do já negado continua vindo de dialingBlockReason.
     expect(dialingBlockReason(run([{ type: 'registered' }, { type: 'mic', permission: 'denied' }]))).toMatch(/Tentar de novo/);
+  });
+});
+
+describe('extensão da API4COM atendendo no lugar da página', () => {
+  const ringing: WebphoneEvent[] = [
+    { type: 'registered' },
+    { type: 'mic', permission: 'granted' },
+    { type: 'call_new', id: 'c1', remoteNumber: '5511999990000', direction: 'incoming', integrated: true, at: 1 },
+  ];
+
+  it('marca o conflito e bloqueia a discagem', () => {
+    const s = run([...ringing, { type: 'call_ended', id: 'c1', at: 2, cause: 'Canceled', answeredElsewhere: true }]);
+    expect(s.sessionConflict).toBe('extension_answered');
+    expect(s.registration).toBe('registered');
+    expect(canReceiveCalls(s)).toBe(false);
+    expect(dialingBlockReason(s)).toMatch(/chrome:\/\/extensions/);
+    expect(webphoneIdleNeedsAction(s)).toBe(true);
+  });
+
+  it('um novo registro não apaga o aviso; só o "Já desativei"', () => {
+    const s = run([
+      ...ringing,
+      { type: 'call_ended', id: 'c1', at: 2, cause: 'Canceled', answeredElsewhere: true },
+      { type: 'registered' },
+    ]);
+    expect(s.sessionConflict).toBe('extension_answered');
+    expect(reduceWebphone(s, { type: 'session_conflict', conflict: null }).sessionConflict).toBeNull();
+  });
+
+  it('fim comum de ligação não marca conflito', () => {
+    const s = run([...ringing, { type: 'call_ended', id: 'c1', at: 2, cause: 'Terminated' }]);
+    expect(s.sessionConflict).toBeNull();
+  });
+
+  it('isAnsweredElsewhere', () => {
+    const base = { integrated: true, originator: 'remote', cause: 'Canceled', reason: null, answerSent: false };
+    expect(isAnsweredElsewhere({ ...base, answerSent: true })).toBe(true);
+    expect(isAnsweredElsewhere({ ...base, reason: 'SIP;cause=200;text="Call completed elsewhere"' })).toBe(true);
+    // Cancelado antes de a página atender e sem Reason: não dá para afirmar.
+    expect(isAnsweredElsewhere(base)).toBe(false);
+    // Desligado por esta aba, chamada não integrada ou outra causa: não conta.
+    expect(isAnsweredElsewhere({ ...base, answerSent: true, originator: 'local' })).toBe(false);
+    expect(isAnsweredElsewhere({ ...base, answerSent: true, integrated: false })).toBe(false);
+    expect(isAnsweredElsewhere({ ...base, answerSent: true, cause: 'Busy' })).toBe(false);
   });
 });

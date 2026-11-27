@@ -99,13 +99,13 @@ describe('live_mismatch: a página e o servidor discordam do modo (item 2)', () 
     const sim = renderHook(() => useCockpitAutoDial({ enabled: true, live: false, script: 'no_answer' }));
     await startIt(sim.result);
     await advance(5000);
-    expect(dialAutoLeadAction).toHaveBeenLastCalledWith({ leadId: 'A', expectLive: false });
+    expect(dialAutoLeadAction).toHaveBeenLastCalledWith({ leadId: 'A', expectLive: false, expectContactId: null });
     sim.unmount();
     phone.call = null;
     const real = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
     await startIt(real.result);
     await advance(5000);
-    expect(dialAutoLeadAction).toHaveBeenLastCalledWith({ leadId: 'A', expectLive: true });
+    expect(dialAutoLeadAction).toHaveBeenLastCalledWith({ leadId: 'A', expectLive: true, expectContactId: null });
   });
 
   it('o servidor recusa com live_mismatch: PAUSA com a mensagem, NÃO disca e zera as tentativas simuladas', async () => {

@@ -19,6 +19,7 @@ const HUMAN_ANSWER_DISPOSITIONS: ReadonlySet<CallDisposition> = new Set<CallDisp
   'relevant_conversation',
   'answered_no_progress',
   'callback_requested',
+  'referred_contact',
 ]);
 
 /**

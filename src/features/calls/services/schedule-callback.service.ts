@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { from } from '@/lib/supabase/from';
 
 import { cadenceResumeAfterReturn } from '@/features/activities/utils/callback-resume';
+import { inheritReturnContactId } from '@/features/activities/utils/return-contact';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 /**
@@ -36,6 +37,9 @@ export async function scheduleCallbackActivity(
 ): Promise<{ id: string; cadencePausedUntil?: string }> {
   const { orgId, leadId, userId, scheduledAt, notes } = input;
 
+  // Herda o contato do retorno pendente que este substitui (lido antes do insert/cancelamento).
+  const contactId = await inheritReturnContactId(supabase, orgId, leadId);
+
   const { data, error } = (await from(supabase, 'scheduled_activities' as never)
     .insert({
       org_id: orgId,
@@ -45,6 +49,7 @@ export async function scheduleCallbackActivity(
       call_provider: null,
       scheduled_at: scheduledAt,
       notes: notes || null,
+      ...(contactId ? { contact_id: contactId } : {}),
     } as Record<string, unknown>)
     .select('id')
     .single()) as { data: { id: string } | null; error: { message: string } | null };

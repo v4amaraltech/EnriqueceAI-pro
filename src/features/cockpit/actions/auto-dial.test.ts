@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
+import { DISPOSITION_OPTIONS } from '@/features/calls/disposition';
 import { initiateApi4ComCall } from '@/features/calls/actions/initiate-api4com-call';
 import { applySdrCallResult } from '@/features/calls/services/apply-sdr-call-result';
 import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metadata';
@@ -361,6 +362,12 @@ describe('resolveAutoDialNoAnswerAction (FR-6/FR-7)', () => {
 });
 
 describe('confirmAutoDialOutcomeAction (FR-9)', () => {
+  it('aceita `referred_contact` (só do Cockpit), que fica FORA de DISPOSITION_OPTIONS', async () => {
+    setup({ calls: [callRow({ answered_at: ago(4) })] });
+    expect(await confirmAutoDialOutcomeAction({ callId: CALL, disposition: 'referred_contact' })).toEqual({ success: true, data: { confirmed: true } });
+    expect(DISPOSITION_OPTIONS.map((o) => o.value)).not.toContain('referred_contact');
+  });
+
   it('grava o desfecho confirmado, sem avançar cadência (sem completeDialerCall)', async () => {
     setup({ calls: [callRow({ answered_at: ago(4) })] });
     expect(await confirmAutoDialOutcomeAction({ callId: CALL, disposition: 'relevant_conversation', notes: 'ok' })).toEqual({ success: true, data: { confirmed: true } });
@@ -395,5 +402,60 @@ describe('confirmAutoDialOutcomeAction (FR-9)', () => {
   it('motor desligado: recusa', async () => {
     vi.mocked(isCockpitAutoDialEnabled).mockResolvedValue(false);
     expect(await confirmAutoDialOutcomeAction({ callId: CALL, disposition: 'no_answer' })).toMatchObject({ success: false });
+  });
+});
+
+describe('retorno com contato indicado', () => {
+  const CONTACT = '55555555-5555-4555-8555-555555555555';
+  const INDICATED = '11988887777';
+
+  const withReturn = () => {
+    db.tables.scheduled_activities = [{ org_id: ORG, lead_id: LEAD, channel: 'phone', kind: 'return', status: 'pending', scheduled_at: ago(30), contact_id: CONTACT }];
+    db.tables.lead_contacts = [{ id: CONTACT, org_id: ORG, lead_id: LEAD, first_name: 'José', last_name: null, job_title: null, phones: [{ numero: INDICATED }] }];
+  };
+
+  beforeEach(() => {
+    vi.mocked(isCockpitAutoDialLive).mockResolvedValue(true);
+    vi.mocked(initiateApi4ComCall).mockResolvedValue({ success: true, data: { callId: CALL, api4comId: 'p' } });
+    vi.mocked(mergeCallsMetadata).mockResolvedValue({ error: null } as never);
+    vi.mocked(armCockpitCallOutcome).mockResolvedValue(undefined as never);
+  });
+
+  it('disca o número do contato e passa contactId', async () => {
+    withReturn();
+    expect(await dial({ leadId: LEAD, expectContactId: CONTACT })).toMatchObject({ data: { status: 'dialed' } });
+    expect(initiateApi4ComCall).toHaveBeenCalledWith({ phone: INDICATED, leadId: LEAD, contactId: CONTACT });
+  });
+
+  it('telefone do indicado editado depois do cartão: não disca; com os mesmos dígitos (formatados) disca', async () => {
+    withReturn();
+    expect(await dial({ leadId: LEAD, expectContactId: CONTACT, expectContactPhone: '11911112222' })).toEqual({ success: true, data: { status: 'refused', code: 'card_changed' } });
+    expect(initiateApi4ComCall).not.toHaveBeenCalled();
+    expect(await dial({ leadId: LEAD, expectContactId: CONTACT, expectContactPhone: '(11) 98888-7777' })).toMatchObject({ data: { status: 'dialed' } });
+  });
+
+  it('422 no número do indicado marca contactRefused; no principal, não', async () => {
+    withReturn();
+    vi.mocked(initiateApi4ComCall).mockResolvedValue({ success: false, error: 'API4COM POST /calls failed (422)' });
+    expect(await dial({ leadId: LEAD })).toMatchObject({ data: { status: 'invalid_number', contactRefused: true } });
+    const again = await dial({ leadId: LEAD, ignoreContact: true, expectContactId: null });
+    expect(again).toMatchObject({ data: { status: 'invalid_number' } });
+    expect(again).not.toHaveProperty('data.contactRefused');
+    expect(initiateApi4ComCall).toHaveBeenLastCalledWith({ phone: '11999990000', leadId: LEAD });
+  });
+
+  it('card recebe ignoreContact só para o lead listado', async () => {
+    await getNextAutoDialCardAction({ ignoreContactLeadIds: [LEAD] });
+    expect(buildNextCallCardForLead).toHaveBeenLastCalledWith(expect.objectContaining({ ignoreContact: true }));
+    await getNextAutoDialCardAction({ ignoreContactLeadIds: [LEAD_B] });
+    expect(vi.mocked(buildNextCallCardForLead).mock.calls.at(-1)?.[0]).not.toHaveProperty('ignoreContact');
+  });
+
+  it('cartão mostrando o principal quando o servidor discaria o contato (ou o contrário): não disca', async () => {
+    withReturn();
+    expect(await dial({ leadId: LEAD, expectContactId: null })).toEqual({ success: true, data: { status: 'refused', code: 'card_changed' } });
+    db.tables.scheduled_activities = [];
+    expect(await dial({ leadId: LEAD, expectContactId: CONTACT })).toEqual({ success: true, data: { status: 'refused', code: 'card_changed' } });
+    expect(initiateApi4ComCall).not.toHaveBeenCalled();
   });
 });

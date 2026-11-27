@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 
 import { MarkLeadLostDialog } from '@/features/leads/components/MarkLeadLostDialog';
 
-import { callNoteKey, readCallNote } from '../utils/call-note-draft';
+import { callNoteKey, readCallNote, writeCallNote } from '../utils/call-note-draft';
+import { appendNoteLine } from '../utils/referral';
 
 import {
   CallMeetingConfirmDialog,
@@ -15,6 +16,7 @@ import {
   type SchedulingPreview,
 } from './CallMeetingDialogs';
 import { MotorCallbackDialog, type ScheduleCallbackFn } from './MotorCallbackDialog';
+import { ReferContactDialog } from './ReferContactDialog';
 
 const SIMULATED_NOTICE = 'Simulado: nada é registrado.';
 const LOST_TITLE = 'Mudar motivo de perda';
@@ -39,10 +41,12 @@ interface UseMotorLeadActionsInput {
   alreadyLost?: boolean;
   /** Texto atual da anotação do painel (observação inicial do "Ligar depois"). Ausente: lê o rascunho guardado do lead. */
   getNotes?: () => string;
+  /** Acrescenta uma linha na anotação do painel e grava; devolve o texto completo. Ausente: só o rascunho do lead. */
+  appendNote?: (leadId: string, line: string) => string;
 }
 
 /**
- * As três ações do lead que conversou (Agendar reunião, Ligar depois, Desqualificar) e os diálogos delas.
+ * As ações do lead que conversou (Agendar reunião, Ligar depois, Indicou outra pessoa, Desqualificar) e os diálogos delas.
  * Mesma lógica que ficava no painel do lead: `dialogs` precisa ser renderizado junto dos botões.
  */
 export type MotorLeadActions = ReturnType<typeof useMotorLeadActions>;
@@ -59,6 +63,7 @@ export function useMotorLeadActions({
   attemptsToday = 0,
   alreadyLost = false,
   getNotes,
+  appendNote,
 }: UseMotorLeadActionsInput) {
   const [weekOpen, setWeekOpen] = useState(false);
   const [weekSession, setWeekSession] = useState(0);
@@ -67,6 +72,7 @@ export function useMotorLeadActions({
   const [callbackOpen, setCallbackOpen] = useState(false);
   const [callbackNotes, setCallbackNotes] = useState('');
   const [callbackBusy, setCallbackBusy] = useState(false);
+  const [referOpen, setReferOpen] = useState(false);
 
   // Trocou de lead: diálogos abertos do lead anterior não podem agir sobre o novo (a instância vive na tela da discagem).
   const [trackedLeadId, setTrackedLeadId] = useState(leadId);
@@ -76,6 +82,7 @@ export function useMotorLeadActions({
     setChoice(null);
     setLostOpen(false);
     setCallbackOpen(false);
+    setReferOpen(false);
   }
 
   function schedule() {
@@ -92,6 +99,18 @@ export function useMotorLeadActions({
     // A anotação do painel do lead (rascunho) entra como observação inicial.
     setCallbackNotes(getNotes ? getNotes() : readCallNote(callNoteKey('motor', leadId)));
     setCallbackOpen(true);
+  }
+
+  function refer() {
+    setReferOpen(true);
+  }
+
+  function appendCallNote(forLeadId: string, line: string): string {
+    if (appendNote) return appendNote(forLeadId, line);
+    const key = callNoteKey('motor', forLeadId);
+    const text = appendNoteLine(readCallNote(key), line);
+    writeCallNote(key, text);
+    return text;
   }
 
   function disqualify() {
@@ -150,6 +169,16 @@ export function useMotorLeadActions({
         initialNotes={callbackNotes}
         leadName={leadName}
       />
+      <ReferContactDialog
+        key={leadId}
+        open={referOpen}
+        onOpenChange={setReferOpen}
+        leadId={leadId}
+        scheduleCallback={trackedCallback}
+        simulated={simulated}
+        previewOnly={previewOnly}
+        appendCallNote={appendCallNote}
+      />
       <MarkLeadLostDialog
         leadId={leadId}
         open={lostOpen}
@@ -163,5 +192,5 @@ export function useMotorLeadActions({
     </>
   );
 
-  return { schedule, callback, disqualify, callbackBusy, dialogs };
+  return { schedule, callback, refer, disqualify, callbackBusy, dialogs };
 }

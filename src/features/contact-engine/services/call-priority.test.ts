@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
+import { INTEREST_DISPOSITIONS,
   CALL_PRIORITY_MODEL_VERSION,
   EFFORT_MAX,
   REPLY_FLOOR,
@@ -221,5 +221,18 @@ describe('ordenação', () => {
       NOW,
     );
     expect(r.map((x) => x.leadId)).toEqual(['a', 'c', 'b']);
+  });
+});
+
+describe('computeCallPriority: referred_contact', () => {
+  const at = new Date('2026-11-26T15:00:00Z');
+  const score = (disposition: string) =>
+    computeCallPriority([{ kind: 'call_outcome', key: 'k', at: at.toISOString(), callId: 'c1', by: 'sdr', disposition }], at);
+
+  it('vale os mesmos pontos do pedido de retorno e entra no pré-filtro de interesse', () => {
+    expect(score('referred_contact').interest).toBe(score('callback_requested').interest);
+    expect(score('referred_contact').interest).toBeGreaterThan(0);
+    expect(score('referred_contact').reasons.some((r) => r.label.includes('indicou outro contato'))).toBe(true);
+    expect(INTEREST_DISPOSITIONS).toContain('referred_contact');
   });
 });

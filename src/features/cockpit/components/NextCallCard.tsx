@@ -18,6 +18,7 @@ import type { NextCallCardData } from '../types';
 import { relativeTimePt, sourceLabel, summarizeContext } from '../utils/call-approach';
 
 import { CallOutcomePanel } from './CallOutcomePanel';
+import { CallbackContactNotice } from './CallbackContactNotice';
 import { NextCallCardWithEngine } from './NextCallCardWithEngine';
 
 const NO_DATA = 'sem dados';
@@ -83,7 +84,8 @@ export function NextCallCardBody({
     inFlight.current = true;
     setCalling(true);
     try {
-      const result = await initiateApi4ComCall({ phone, leadId: ctx.leadId });
+      const contactId = card.callbackContact?.contactId;
+      const result = await initiateApi4ComCall({ phone, leadId: ctx.leadId, ...(contactId ? { contactId } : {}) });
       if (result.success) {
         toast.success('Ligação iniciada');
         if (outcomesEnabled) {
@@ -125,6 +127,7 @@ export function NextCallCardBody({
           <p className="text-sm" data-testid="why-now">
             <span className="font-medium">Por que ligar agora:</span> {ctx.whyNow.label}
           </p>
+          <CallbackContactNotice contact={card.callbackContact} />
         </div>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">

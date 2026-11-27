@@ -16,6 +16,8 @@ export interface LeadContactInput {
   job_title: string | null;
   emails: LeadEmail[];
   phones: LeadPhone[];
+  /** Só na criação: não vira principal nem quando é o primeiro contato (o espelho do lead fica como está). */
+  neverPrimary?: boolean;
 }
 
 /** Drop entries with empty email/numero so we never persist blank rows. */
@@ -111,7 +113,7 @@ export async function upsertLeadContact(input: LeadContactInput): Promise<Action
     .eq('lead_id', input.leadId)
     .eq('org_id', orgId)) as { count: number | null };
 
-  const isPrimary = (count ?? 0) === 0;
+  const isPrimary = !input.neverPrimary && (count ?? 0) === 0;
 
   const { data, error } = (await from(supabase, 'lead_contacts')
     .insert({

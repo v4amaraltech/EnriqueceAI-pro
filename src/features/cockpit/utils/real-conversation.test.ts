@@ -82,3 +82,9 @@ describe('hadRealConversation', () => {
     expect(hadRealConversation([])).toBe(false);
   });
 });
+
+describe('isRealConversation: referred_contact', () => {
+  it('conversa curta em que indicaram outro contato é conversa real (não religa hoje)', () => {
+    expect(isRealConversation({ sdr_disposition: 'referred_contact', duration_seconds: 8, answered_at: null })).toBe(true);
+  });
+});

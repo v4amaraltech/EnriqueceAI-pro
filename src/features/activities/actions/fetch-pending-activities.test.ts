@@ -382,7 +382,7 @@ describe('fetchPendingActivities', () => {
       message_templates: { data: [mockTemplate] },
       scheduled_activities: {
         data: [
-          { ...base, id: 'sa-ret', channel: 'phone', kind: 'return', notes: 'ligar 14h' },
+          { ...base, id: 'sa-ret', channel: 'phone', kind: 'return', notes: 'ligar 14h', contact_id: 'c-1' },
           {
             ...base,
             id: 'sa-limbo',
@@ -401,7 +401,8 @@ describe('fetchPendingActivities', () => {
     if (!result.success) return;
     const ret = result.data.find((a) => a.enrollmentId === 'scheduled:sa-ret');
     const limbo = result.data.find((a) => a.enrollmentId === 'scheduled:sa-limbo');
-    expect(ret).toMatchObject({ scheduledKind: 'return', activityName: 'Retorno: ligar 14h' });
+    expect(ret).toMatchObject({ scheduledKind: 'return', returnContactId: 'c-1', activityName: 'Retorno: ligar 14h' });
+    expect(limbo).not.toHaveProperty('returnContactId');
     expect(limbo).toMatchObject({
       scheduledKind: 'limbo_followup',
       cadenceName: 'Definir destino',
