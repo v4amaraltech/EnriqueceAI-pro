@@ -96,6 +96,32 @@ const ANSWERED_VERDICT_RETRY_MS = 2_000;
 export const NOT_ANSWERED_NOTICE = 'Não atendeu: volta para a fila';
 export const VOICEMAIL_NOTICE = 'Caixa postal: volta para a fila';
 
+/** Mensagens da religação ("Ligar de novo"). A tela continua no desfecho do mesmo lead em todos os casos. */
+export const REDIAL_PREVIOUS_ALIVE_MESSAGE = 'A ligação anterior ainda está ativa. Desligue antes de ligar de novo.';
+export const REDIAL_NOT_ANSWERED_MESSAGE = 'A religação não foi atendida. Registre o desfecho da conversa ou ligue de novo.';
+export const REDIAL_UNKNOWN_MESSAGE = 'Não recebemos o resultado da religação. Registre o desfecho ou ligue de novo.';
+export const REDIAL_UNSURE_MESSAGE = 'Não sei se a operadora criou a ligação. Confira o ramal antes de tentar de novo.';
+export const REDIAL_SESSION_MISSING_MESSAGE =
+  'O webphone desta aba não entrou na ligação. Se ela aparecer, desligue antes de ligar de novo.';
+export const REDIAL_RAMAL_BUSY_MESSAGE = 'O ramal está ocupado na operadora. Aguarde alguns segundos e tente de novo.';
+export const REDIAL_PAUSE_LATER_MESSAGE = 'A discagem vai pausar depois do desfecho deste lead.';
+
+const REDIAL_REFUSALS: Partial<Record<AutoDialGateCode, string>> = {
+  redial_unavailable: 'Passou do prazo para ligar de novo por aqui (60 min), ou a ligação anterior não foi atendida.',
+  too_soon: 'Há uma ligação sua em curso ou recém-iniciada. Aguarde alguns segundos e tente de novo.',
+  outside_hours: 'Fora do horário de discagem (seg–sex 8h–20h).',
+  holiday: 'Feriado: a discagem não liga.',
+  daily_cap: 'Teto de ligações da discagem no dia atingido.',
+  held: 'Lead com bloqueio de contato.',
+  not_owner: 'Este lead não está mais na sua carteira.',
+  lead_unavailable: 'O status ou o motivo de perda deste lead não permite ligar.',
+  no_phone: 'Não encontrei o número da ligação anterior.',
+  flag_off: 'A discagem está desligada.',
+  live_mismatch: LIVE_MISMATCH_MESSAGE,
+  card_changed: 'O número do lead mudou. Registre o desfecho e ligue pelo cadastro.',
+};
+const REDIAL_REFUSED_FALLBACK = 'O servidor recusou a religação. Tente de novo em instantes.';
+
 const BLOCK_CODES: ReadonlySet<AutoDialGateCode> = new Set<AutoDialBlockCode>(['outside_hours', 'holiday', 'daily_cap']);
 /** Mudou entre a escolha e a discagem: o lead sai desta sessão e o motor escolhe outro (FR-10). */
 const SKIP_CODES: ReadonlySet<AutoDialGateCode> = new Set<AutoDialGateCode>([
@@ -160,6 +186,13 @@ export interface UseCockpitAutoDialResult {
    * caixa postal/não atendeu). O lead NÃO sai da sessão: segue a regra normal da fila. Simulado: só segue.
    */
   notConversation?: () => void;
+  /**
+   * "Ligar de novo" (a ligação caiu): em `awaiting-sdr`, liga agora para o mesmo número e, ao terminar (atendida ou não),
+   * volta ao desfecho do MESMO lead. O desfecho passa para a ligação nova só se ela tiver conversa.
+   */
+  redial?: () => void;
+  /** Por que a última religação não levou a uma conversa (recusa, falha, não atendeu). */
+  redialMessage?: string | null;
   /** Aviso curto da última ligação que voltou para a fila sozinha (já somado ao `statusText` durante a contagem). */
   notice?: string | null;
 }
@@ -244,6 +277,12 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   // Fase mais recente: o painel conclui o lead depois de diálogos/awaits e a ligação pode ter mudado de fase nesse meio tempo.
   const phaseRef = useRef<CockpitAutoDialState['phase']>('off');
   const pauseWhenFree = useRef<string | null>(null);
+  // Religação em curso: a ligação (e a tentativa) onde o desfecho fica se a nova não tiver conversa.
+  const redialRef = useRef<{ keepCallId: string; keepAttemptNo: number } | null>(null);
+  // Última ligação nascida de religação deste lead: é a âncora da próxima.
+  const redialAnchor = useRef<string | null>(null);
+  const pauseAfterOutcome = useRef(false);
+  const [redialedLeadId, setRedialedLeadId] = useState<string | null>(null);
   useEffect(() => {
     phaseRef.current = state.phase;
   }, [state.phase]);
@@ -395,6 +434,9 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       setDialToken(reserved.token);
     }
     confirmedRef.current = false;
+    redialAnchor.current = null;
+    redialRef.current = null;
+    setRedialedLeadId(null);
 
     const result = await dialAutoLeadAction({
       leadId: lead.leadId,
@@ -485,6 +527,12 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
 
     // Ligação REAL (as 3 flags, decidido no servidor).
     ramalBusyFirstAtRef.current = null;
+    attachLiveCall(lead, r, reserved);
+    applyDeferredConclusion(r.callId);
+  });
+
+  /** A ligação real nasceu: publica o contexto no webphone e acompanha a sessão desta aba. */
+  const attachLiveCall = useEffectEvent((lead: CurrentLead, r: { callId: string; providerCallId: string }, reserved: { token: string; seq: number } | null) => {
     dialedCall.current = { leadId: lead.leadId, callId: r.callId };
     setCallId(r.callId);
     if (reserved) {
@@ -515,11 +563,104 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       setCallPhase('awaiting-session');
       dispatch({ type: 'awaiting_session' });
     }
-    applyDeferredConclusion(r.callId);
+  });
+
+  /** "Ligar de novo": o motor já está em `dialing` (marcado como religação). Falhou = volta ao desfecho, nunca repete sozinho. */
+  const onRedial = useEffectEvent(async () => {
+    const lead = current.current;
+    const redial = redialRef.current;
+    if (!lead || !redial) return;
+    const fail = (message: string) => {
+      dispatch({ type: 'dial_failed', message });
+      // O SDR concluiu o lead pelo painel enquanto discava: o desfecho vai para a ligação que teve a conversa e o motor segue.
+      if (concluded.current.has(lead.leadId) && pendingConclusion.current) {
+        const { kind } = pendingConclusion.current;
+        pendingConclusion.current = null;
+        redialRef.current = null;
+        concludedCalls.current.add(redial.keepCallId);
+        void recordConclusion(live, { callId: redial.keepCallId, kind });
+        setCallPhase('idle');
+        dispatch({ type: 'concluded_externally' });
+      }
+    };
+    /** A ligação nova nasceu: se o lead foi concluído no meio, a conversa recebe o desfecho já e a nova, ao terminar. */
+    const born = (newCallId: string) => {
+      setRedialedLeadId(lead.leadId);
+      if (!concluded.current.has(lead.leadId) || !pendingConclusion.current) return;
+      const { kind } = pendingConclusion.current;
+      pendingConclusion.current = { callId: newCallId, kind };
+      redialRef.current = null;
+      concludedCalls.current.add(redial.keepCallId);
+      concludedCalls.current.add(newCallId);
+      void recordConclusion(live, { callId: redial.keepCallId, kind });
+      dispatch({ type: 'concluded_externally' });
+    };
+
+    if (!live) {
+      const no = (simulatedAttempts.current[lead.leadId]?.length ?? 0) + 1;
+      simulatedAttempts.current = { ...simulatedAttempts.current, [lead.leadId]: [...(simulatedAttempts.current[lead.leadId] ?? []), new Date().toISOString()] };
+      const sim = simulateDial({ leadId: lead.leadId, attemptNo: no, script });
+      if (sim.kind === 'ramal_busy') return fail(REDIAL_RAMAL_BUSY_MESSAGE);
+      if (sim.kind === 'failed') return fail(sim.message);
+      attemptNoRef.current = no;
+      setAttemptNo(no);
+      dialedCall.current = { leadId: lead.leadId, callId: sim.callId };
+      setCallId(sim.callId);
+      dispatch({ type: 'dial_started' });
+      born(sim.callId);
+      runSimulatedCall(lead.leadId, no, sim.answered, sim.endsAfterMs);
+      return;
+    }
+
+    const reserved = lead.phone ? reserveWebphoneDial(lead.phone) : null;
+    if (reserved) {
+      dialTokenRef.current = reserved.token;
+      setDialToken(reserved.token);
+    }
+    const result = await dialAutoLeadAction({
+      leadId: lead.leadId,
+      expectLive: live,
+      redialOf: redialAnchor.current ?? redial.keepCallId,
+      ...(lead.phone ? { expectPhone: normalizePhone(lead.phone) } : {}),
+      ...(queue === 'recovery' ? { queue } : {}),
+    }).catch(() => null);
+    const r = result?.success ? result.data : null;
+    if (!r || r.status !== 'dialed') {
+      if (reserved) cancelWebphoneDial(reserved.token);
+      if (!r) return fail(result && !result.success ? result.error : REDIAL_UNSURE_MESSAGE);
+      if (r.status === 'refused') return fail(REDIAL_REFUSALS[r.code] ?? REDIAL_REFUSED_FALLBACK);
+      if (r.status === 'ramal_busy' || r.status === 'invalid_number') return fail(r.error);
+      return fail(LIVE_MISMATCH_MESSAGE);
+    }
+    redialAnchor.current = r.callId;
+    attemptNoRef.current = r.attemptNo;
+    setAttemptNo(r.attemptNo);
+    attachLiveCall(lead, r, reserved);
+    born(r.callId);
+  });
+
+  const runDial = useEffectEvent(() => void (state.redialFrom ? onRedial() : onDial()));
+  useEffect(() => {
+    if (state.phase === 'dialing') runDial();
+  }, [state.phase]);
+
+  // Voltou da religação sem conversa na ligação nova: o desfecho (e as anotações) ficam na ligação que teve a conversa.
+  const settleRedial = useEffectEvent(() => {
+    if (state.phase !== 'awaiting-sdr' || !state.redial) return;
+    const redial = redialRef.current;
+    if (!redial) return;
+    redialRef.current = null;
+    setCallPhase('idle');
+    if (state.redial === 'conversed') return;
+    const lead = current.current;
+    if (lead) dialedCall.current = { leadId: lead.leadId, callId: redial.keepCallId };
+    setCallId(redial.keepCallId);
+    setAttemptNo(redial.keepAttemptNo);
+    attemptNoRef.current = redial.keepAttemptNo;
   });
   useEffect(() => {
-    if (state.phase === 'dialing') void onDial();
-  }, [state.phase]);
+    settleRedial();
+  }, [state]);
 
   // 424 confirmado: uma espera até a folga do ramal e um único POST seguinte (FR-15).
   useEffect(() => {
@@ -538,7 +679,6 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     if (!live) return;
     if (localRelation === 'live' && callPhase === 'awaiting-session') {
       confirmedRef.current = true;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- espelha a sessão SIP desta aba
       setCallPhase('connected');
       dispatch({ type: 'session_confirmed' });
       return;
@@ -574,8 +714,9 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       }
       if (tokenAtStart) cancelWebphoneDial(tokenAtStart);
       setCallPhase('idle');
-      markSessionLost();
-      dispatch({ type: 'session_missing', message: COCKPIT_SESSION_MISSING_MESSAGE });
+      // Na religação o motor não pausa: volta ao desfecho do mesmo lead, que segue com o painel aberto.
+      if (!redialRef.current) markSessionLost();
+      dispatch({ type: 'session_missing', message: redialRef.current ? REDIAL_SESSION_MISSING_MESSAGE : COCKPIT_SESSION_MISSING_MESSAGE });
     }, COCKPIT_SESSION_GRACE_MS);
     return () => clearTimeout(t);
   }, [live, callPhase, localRelation]);
@@ -591,7 +732,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
         // O servidor encerrou a ligação antes de a sessão entrar: ela NÃO vai aparecer depois, então o painel não fica aberto
         // (a marca `callLostLeadId` e a mensagem "pode ainda aparecer" são só do estouro do prazo).
         setCallPhase('idle');
-        dispatch({ type: 'session_missing', message: SESSION_MISSING_MESSAGE });
+        dispatch({ type: 'session_missing', message: redialRef.current ? REDIAL_SESSION_MISSING_MESSAGE : SESSION_MISSING_MESSAGE });
         return;
       }
       sessionEndedAtRef.current = Date.now();
@@ -762,12 +903,24 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   // Conclusão pelo painel (Agendar reunião / Desqualificar)
   // ---------------------------------------------------------------------------
 
-  /** O caminho do botão "Pausar" (barra do motor). */
-  const pause = () => dispatch({ type: 'pause', reason: 'user' });
+  /** O caminho do botão "Pausar" (barra do motor). Durante a religação a pausa espera o desfecho, para ele não se perder. */
+  const pause = () => {
+    if (redialRef.current) {
+      pauseAfterOutcome.current = true;
+      toast.info(REDIAL_PAUSE_LATER_MESSAGE);
+      return;
+    }
+    dispatch({ type: 'pause', reason: 'user' });
+  };
   const pauseAndTellToCall = useEffectEvent((name: string) => pauseAndTell(name));
 
   // Pausa pedida com a ligação ainda em curso: vale quando o motor ficar livre (antes de discar o próximo). Não corta a ligação.
   useEffect(() => {
+    if (pauseAfterOutcome.current && (state.phase === 'countdown' || state.phase === 'advancing' || state.phase === 'waiting')) {
+      pauseAfterOutcome.current = false;
+      dispatch({ type: 'pause', reason: 'user' });
+      return;
+    }
     const name = pauseWhenFree.current;
     if (!name) return;
     if (state.phase === 'countdown' || state.phase === 'advancing' || state.phase === 'waiting') {
@@ -817,6 +970,13 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
       pendingConclusion.current = { callId: null, kind };
       return;
     }
+    // Religação em curso: a ligação que teve a conversa (já terminada) recebe o desfecho agora.
+    const redial = redialRef.current;
+    if (redial && redial.keepCallId !== leadCallId) {
+      redialRef.current = null;
+      concludedCalls.current.add(redial.keepCallId);
+      void recordConclusion(live, { callId: redial.keepCallId, kind });
+    }
     if (onAir) pendingConclusion.current = { callId: leadCallId, kind }; // grava quando a ligação terminar (o fim da sessão SIP ainda é observado)
     else {
       setCallPhase('idle');
@@ -837,6 +997,28 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     if (live && callId) notConversationCalls.current.add(callId);
     setNoticeState({ callId, text: NOT_ANSWERED_NOTICE });
     dispatch({ type: 'not_conversation', attemptNo: attemptNoRef.current });
+  }
+
+  function redial() {
+    const lead = current.current;
+    if (state.phase !== 'awaiting-sdr' || !lead || !callId) return;
+    if (concluded.current.has(lead.leadId) || concludedCalls.current.has(callId)) return;
+    if (live) {
+      const wp = getWebphoneState();
+      if (wp.call && wp.call.phase !== 'ended') {
+        toast.error(REDIAL_PREVIOUS_ALIVE_MESSAGE);
+        return;
+      }
+      const blocked = dialingBlockReason(wp);
+      if (blocked) {
+        toast.error(blocked);
+        return;
+      }
+    }
+    redialRef.current = { keepCallId: callId, keepAttemptNo: attemptNo ?? attemptNoRef.current };
+    confirmedRef.current = false;
+    setCallPhase('idle');
+    dispatch({ type: 'redial' });
   }
 
   async function start() {
@@ -867,6 +1049,10 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     callbackScheduledCalls.current = new Set();
     pendingConclusion.current = null;
     pauseWhenFree.current = null;
+    pauseAfterOutcome.current = false;
+    redialRef.current = null;
+    redialAnchor.current = null;
+    setRedialedLeadId(null);
     refusalsRef.current = 0;
     ramalBusyFirstAtRef.current = null;
     clearSessionLost();
@@ -978,6 +1164,15 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     return { ok: true };
   }
 
+  // Depois de religar um lead que já tinha conversado, "Não foi conversa" some: houve conversa.
+  const conversedBeforeRedial = state.phase === 'awaiting-sdr' && state.reason === 'answered' && redialedLeadId !== null && redialedLeadId === card?.context.leadId;
+  let redialMessage: string | null = null;
+  if (state.phase === 'awaiting-sdr' && state.redial) {
+    if (state.redial === 'not_answered') redialMessage = REDIAL_NOT_ANSWERED_MESSAGE;
+    else if (state.redial === 'unknown') redialMessage = REDIAL_UNKNOWN_MESSAGE;
+    else if (state.redial === 'failed') redialMessage = state.redialError ?? REDIAL_REFUSED_FALLBACK;
+  }
+
   const baseStatusText = describeCockpitAutoDial(state);
   const noticeVisible =
     noticeState !== null && noticeState.callId === callId && (state.phase === 'advancing' || state.phase === 'countdown' || state.phase === 'auto-completing' || state.phase === 'waiting');
@@ -998,13 +1193,17 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     pause,
     resume: () => {
       pauseWhenFree.current = null;
+      pauseAfterOutcome.current = false;
+      redialRef.current = null;
       clearSessionLost();
       dispatch({ type: 'resume' });
     },
     confirmOutcome,
     concludeExternally,
     scheduleCallback,
-    notConversation,
+    notConversation: conversedBeforeRedial ? undefined : notConversation,
+    redial,
+    redialMessage,
     notice,
     startError,
     leadCardExtras,

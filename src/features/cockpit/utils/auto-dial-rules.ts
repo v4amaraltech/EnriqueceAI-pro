@@ -221,3 +221,10 @@ export function evaluateDialSpacing(calls: readonly RecentUserCall[], now: Date,
   }
   return { allowed: true };
 }
+
+/**
+ * "Ligar de novo" (ligação que caiu no meio da conversa): até quanto tempo depois de a ligação anterior ser CRIADA o
+ * servidor aceita religar fora das regras de repetição. 60 min cobre uma conversa longa mais a internet voltar, e não
+ * abre um passe livre: passado o prazo, valem as regras normais.
+ */
+export const REDIAL_WINDOW_MS = 60 * 60 * 1000;

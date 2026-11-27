@@ -10,6 +10,7 @@ import { normalizePhone } from '@/lib/utils/phone';
 import { initiateApi4ComCall } from '@/features/calls/actions/initiate-api4com-call';
 import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metadata';
 import { DISPOSITION_OPTIONS } from '@/features/calls/disposition';
+import { sameDialedPhone } from '@/features/integrations/webphone/webphone-dial-correlation';
 
 import type {
   AutoDialCarrierHangup,
@@ -59,6 +60,10 @@ const dialSchema = z.object({
   expectContactPhone: z.string().max(40).optional(),
   /** Número do indicado recusado: ligar para o principal. Só pode levar ao telefone do próprio lead. */
   ignoreContact: z.boolean().optional(),
+  /** "Ligar de novo": a ligação anterior que caiu. O servidor confere antes de aceitar. */
+  redialOf: uuid.optional(),
+  /** Número que o cartão mostra na religação. Só conferência (nunca é discado nem vai para log). */
+  expectPhone: z.string().max(40).optional(),
 });
 const callSchema = z.object({ callId: uuid });
 const noAnswerSchema = z.object({ callId: uuid, notConversation: z.boolean().optional() });
@@ -150,8 +155,8 @@ export async function dialAutoLeadAction(input: unknown): Promise<ActionResult<A
   const { orgId, userId, role, supabase } = auth.data;
 
   const now = new Date();
-  const { ignoreContact } = parsed.data;
-  const gate = await checkDialGate({ orgId, userId, leadId: parsed.data.leadId, now, queue: parsed.data.queue, ignoreContact });
+  const { ignoreContact, redialOf, expectPhone } = parsed.data;
+  const gate = await checkDialGate({ orgId, userId, leadId: parsed.data.leadId, now, queue: parsed.data.queue, ignoreContact, ...(redialOf ? { redialOf } : {}) });
   if (!gate.ok) return { success: true, data: { status: 'refused', code: gate.code } };
 
   // A página e o servidor precisam concordar no modo (simulado/real) ANTES de qualquer ligação: se as flags mudaram
@@ -160,6 +165,10 @@ export async function dialAutoLeadAction(input: unknown): Promise<ActionResult<A
 
   // O cartão tem de mostrar o número que será discado: se o retorno venceu ou o contato mudou depois de montado, recusa.
   const { expectContactId, expectContactPhone } = parsed.data;
+  // Religação: o número é o da ligação anterior; se o cartão mostra outro, o webphone não reconheceria a chamada.
+  if (redialOf && expectPhone !== undefined && !sameDialedPhone(expectPhone, gate.phone)) {
+    return { success: true, data: { status: 'refused', code: 'card_changed' } };
+  }
   if (
     (expectContactId !== undefined && expectContactId !== (gate.contactId ?? null)) ||
     // Telefone do indicado editado depois de montado o cartão: o webphone espera o número antigo.
@@ -189,7 +198,7 @@ export async function dialAutoLeadAction(input: unknown): Promise<ActionResult<A
   // Marca a ligação como do motor: o teto de 400/dia conta só estas (C-2). Falha aqui não desfaz a ligação (já foi feita);
   // tenta de novo uma vez. Se ainda falhar, essa ligação não entra no teto, mas o motor SEGUE e confirm/conclude/não atendeu
   // aceitam a ligação do próprio usuário criada há pouco mesmo sem o marcador.
-  const marker = { [AUTO_DIAL_METADATA_KEY]: { attempt_no: gate.attemptNo, started_at: now.toISOString() } };
+  const marker = { [AUTO_DIAL_METADATA_KEY]: { attempt_no: gate.attemptNo, started_at: now.toISOString(), ...(redialOf ? { redial_of: redialOf } : {}) } };
   let marked = await mergeCallsMetadata(supabase, callId, marker, { orgId });
   if (marked.error) marked = await mergeCallsMetadata(supabase, callId, marker, { orgId });
   if (marked.error) console.error('[cockpit-auto-dial] marcador do motor:', marked.error);

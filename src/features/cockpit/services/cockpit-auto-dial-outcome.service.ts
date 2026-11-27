@@ -70,6 +70,12 @@ async function loadMotorCall(
   return marked || recent ? data : null;
 }
 
+/** Religação ("Ligar de novo"): sem atendimento ela NUNCA recebe desfecho; já houve conversa na ligação anterior. */
+function isRedialCall(call: MotorCallRow): boolean {
+  const marker = call.metadata?.[AUTO_DIAL_METADATA_KEY];
+  return Boolean(marker && typeof marker === 'object' && (marker as { redial_of?: unknown }).redial_of);
+}
+
 /** Veredito "conversou?" a partir da linha da ligação (answered_at, duração e a previsão da escuta ao vivo). */
 function verdictOfCall(call: MotorCallRow): AnsweredVerdict {
   const amd = extractAmd(call.metadata);
@@ -153,6 +159,7 @@ export async function resolveMotorNoAnswer(input: {
     const call = await loadMotorCall(supabase, orgId, userId, callId);
     if (call === 'error') return { status: 'error' };
     if (!call || !call.lead_id) return { status: 'refused' };
+    if (isRedialCall(call)) return { status: 'refused' };
     // Atendida: só segue como não atendida se NÃO conversou (máquina, caixa postal, curtíssima) ou se o SDR disse que não foi conversa.
     const verdict = call.answered_at ? verdictOfCall(call) : null;
     // O "Não foi conversa" vem do navegador: só vale para ligação recente (nunca reabre uma antiga).
@@ -243,6 +250,7 @@ export async function concludeMotorCallExternally(input: {
     if (!call) return { status: 'refused' };
     const answered = call.answered_at != null;
     if (!answered && !call.hangup_cause) return { status: 'pending' };
+    if (!answered && isRedialCall(call)) return { status: 'refused' };
 
     const disposition = dispositionForExternalConclusion(kind, answered);
     const written = await applySdrCallResult(supabase, {

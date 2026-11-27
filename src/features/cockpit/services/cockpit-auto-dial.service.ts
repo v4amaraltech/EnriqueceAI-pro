@@ -11,6 +11,7 @@ import type { CockpitViewer } from '../types';
 import {
   AUTO_DIAL_RULES,
   DIAL_SPACING,
+  REDIAL_WINDOW_MS,
   brtStartOfDay,
   evaluateDialSpacing,
   evaluateLeadEligibility,
@@ -74,16 +75,18 @@ export async function loadMotorHolidays(client: SupabaseClient): Promise<Set<str
   return out;
 }
 
+type UserCall = RecentUserCall & { leadId: string | null };
+
 /** Ligações recentes DO PRÓPRIO usuário (qualquer origem), para a trava `too_soon`. `null` = falha de leitura. */
-async function loadRecentUserCalls(client: SupabaseClient, orgId: string, userId: string, now: Date): Promise<RecentUserCall[] | null> {
+async function loadRecentUserCalls(client: SupabaseClient, orgId: string, userId: string, now: Date): Promise<UserCall[] | null> {
   const since = new Date(now.getTime() - DIAL_SPACING.ongoingMaxAgeMs).toISOString();
   const { data, error } = (await from(client, 'calls')
-    .select('id, created_at, hangup_cause, metadata')
+    .select('id, lead_id, created_at, hangup_cause, metadata')
     .eq('org_id', orgId)
     .eq('user_id', userId)
-    .gte('created_at', since)) as Rows<{ id: string; created_at: string; hangup_cause: string | null; metadata: Record<string, unknown> | null }>;
+    .gte('created_at', since)) as Rows<{ id: string; lead_id: string | null; created_at: string; hangup_cause: string | null; metadata: Record<string, unknown> | null }>;
   if (error || !data) return null;
-  return data.map((c) => ({ created_at: c.created_at, hangup_cause: c.hangup_cause, isMotor: c.metadata?.[AUTO_DIAL_METADATA_KEY] != null }));
+  return data.map((c) => ({ created_at: c.created_at, hangup_cause: c.hangup_cause, isMotor: c.metadata?.[AUTO_DIAL_METADATA_KEY] != null, leadId: c.lead_id }));
 }
 
 /** Colunas que `isRealConversation` precisa (desfecho do SDR, IA e telemetria). */
@@ -461,6 +464,55 @@ export async function pickAutoDialLead(input: {
 }
 
 // ---------------------------------------------------------------------------
+// "Ligar de novo"
+// ---------------------------------------------------------------------------
+
+export interface RedialAnchor {
+  /** Número e contato da ligação anterior: a religação liga para os mesmos. NUNCA vão para log. */
+  phone: string | null;
+  contactId: string | null;
+  createdAt: number;
+}
+
+/**
+ * A exceção do "Ligar de novo" nasce AQUI, nunca do navegador: a ligação anterior tem de ser deste usuário, para este
+ * lead, do motor e criada há menos de `REDIAL_WINDOW_MS`; e nessa janela tem de haver conversa possível (alguma ligação
+ * do motor atendida ou com conversa real, ou a anterior ainda sem término, quando o resultado não chegou).
+ */
+export async function loadRedialAnchor(
+  client: SupabaseClient,
+  input: { orgId: string; userId: string; leadId: string; callId: string; now: Date },
+): Promise<RedialAnchor | 'none' | 'error'> {
+  const since = new Date(input.now.getTime() - REDIAL_WINDOW_MS).toISOString();
+  const { data, error } = (await from(client, 'calls')
+    .select(`${CALL_DAY_COLUMNS}, destination, contact_id, hangup_cause`)
+    .eq('org_id', input.orgId)
+    .eq('user_id', input.userId)
+    .eq('lead_id', input.leadId)
+    .gte('created_at', since)) as Rows<CallDayRow & { destination: string | null; contact_id: string | null; hangup_cause: string | null }>;
+  if (error || !data) return 'error';
+  const motor = data.filter((c) => (c.metadata as Record<string, unknown> | null)?.[AUTO_DIAL_METADATA_KEY] != null);
+  const previous = motor.find((c) => c.id === input.callId);
+  if (!previous) return 'none';
+  if (previous.hangup_cause && !motor.some((c) => c.answered_at != null || isRealConversation(c))) return 'none';
+  return { phone: previous.destination?.trim() || null, contactId: previous.contact_id ?? null, createdAt: Date.parse(previous.created_at) };
+}
+
+/** Há retorno de ligação pendente já vencido, consumido ou não? `null` = falha de leitura. */
+async function hasPendingPastReturn(client: SupabaseClient, orgId: string, leadId: string, now: Date): Promise<boolean | null> {
+  const { data, error } = (await from(client, 'scheduled_activities')
+    .select('lead_id')
+    .eq('org_id', orgId)
+    .eq('lead_id', leadId)
+    .eq('status', 'pending')
+    .eq('channel', 'phone')
+    .eq('kind', 'return')
+    .lte('scheduled_at', now.toISOString())) as Rows<{ lead_id: string }>;
+  if (error || !data) return null;
+  return data.length > 0;
+}
+
+// ---------------------------------------------------------------------------
 // Portão da discagem
 // ---------------------------------------------------------------------------
 
@@ -473,6 +525,10 @@ export type DialGateResult =
  * flags do motor → janela/feriado (FR-11) → teto do motor (FR-12) → dono do lead e telefone → bloqueios (FR-10)
  * → tentativas, intervalo e atendido hoje (FR-4/5/9b). Qualquer erro de leitura = `error` (não disca, NFR-4).
  * `live` sai das flags lidas aqui, NUNCA do navegador.
+ *
+ * Com `redialOf` ("Ligar de novo", ver `loadRedialAnchor`) deixam de valer: intervalo de 1 h, 3 por dia, atendido hoje,
+ * conversa depois da perda, conversa sem ação, retorno futuro e a trava da PRÓPRIA ligação que caiu. Continuam: flags,
+ * janela, feriado, teto do motor, dono, status e motivo de perda, bloqueios e a trava de disparo duplo.
  */
 export async function checkDialGate(input: {
   orgId: string;
@@ -483,6 +539,8 @@ export async function checkDialGate(input: {
   queue?: AutoDialQueue;
   /** Ligar para o telefone do lead mesmo com contato no retorno (número do indicado recusado). */
   ignoreContact?: boolean;
+  /** Ligação anterior que caiu: religa para o mesmo número. O servidor confere (ver `loadRedialAnchor`). */
+  redialOf?: string;
   holidays?: ReadonlySet<string> | readonly string[];
   rules?: AutoDialRules;
   client?: SupabaseClient;
@@ -497,7 +555,7 @@ export async function checkDialGate(input: {
 
     const client = input.client ?? createServiceRoleClient();
     // Leituras independentes em paralelo (antes eram uma atrás da outra); as recusas continuam avaliadas na MESMA ordem abaixo.
-    const [holidays, motorCalls, recent, leadRes, holds, callStats, callbacks, target] = await Promise.all([
+    const [holidays, motorCalls, recent, leadRes, holds, callStats, callbacks, target, anchor] = await Promise.all([
       input.holidays ?? loadMotorHolidays(client),
       countMotorCallsToday(client, orgId, userId, now),
       // Trava suave contra disparo duplo (duas abas, cliques rápidos): ligação recente ou do motor ainda sem término.
@@ -526,7 +584,8 @@ export async function checkDialGate(input: {
       loadLeadCallStats(client, orgId, leadId, now),
       loadDueCallbacks(client, orgId, [leadId], now),
       // Contato do retorno vencido; nunca recusa (falha = principal).
-      input.ignoreContact ? null : loadCallbackTarget({ orgId, leadId, now, client }),
+      input.ignoreContact || input.redialOf ? null : loadCallbackTarget({ orgId, leadId, now, client }),
+      input.redialOf ? loadRedialAnchor(client, { orgId, userId, leadId, callId: input.redialOf, now }) : null,
     ]);
 
     const window = isWithinDialWindow(now, holidays, rules);
@@ -535,8 +594,17 @@ export async function checkDialGate(input: {
     if (motorCalls === null) return refuse('error');
     if (isDailyCapReached(motorCalls, rules)) return refuse('daily_cap');
 
+    if (anchor === 'error') return refuse('error');
+    if (anchor === 'none') return refuse('redial_unavailable');
+    const redial = anchor;
+
     if (!recent) return refuse('error');
-    const spacing = evaluateDialSpacing(recent, now);
+    // Religação: a ligação que caiu (e as anteriores dela a este lead) não travam só porque o webhook não chegou.
+    // Qualquer ligação MAIS NOVA (clique duplo, outra aba, outro lead) continua travando.
+    const spacing = evaluateDialSpacing(
+      redial ? recent.filter((c) => !(c.leadId === leadId && Date.parse(String(c.created_at)) <= redial.createdAt)) : recent,
+      now,
+    );
     if (!spacing.allowed) return refuse(spacing.code);
 
     if (leadRes.error) return refuse('error');
@@ -551,7 +619,7 @@ export async function checkDialGate(input: {
     }
     // `contactId` só quando o número discado é o do contato do retorno.
     const contactPhone = target?.phone ?? null;
-    const phone = contactPhone ?? lead.telefone?.trim();
+    const phone = redial ? redial.phone : (contactPhone ?? lead.telefone?.trim());
     if (!phone) return refuse('no_phone');
 
     if (holds.error || !holds.data) return refuse('error');
@@ -559,7 +627,14 @@ export async function checkDialGate(input: {
     if (!callbacks) return refuse('error');
 
     // Fila normal: lead qualificado (reunião marcada) não entra, salvo retorno vencido; conversa sem ação final fica 7 dias fora.
-    if (!recovery) {
+    if (!recovery && redial) {
+      // Qualificado continua fora, salvo o retorno vencido que a própria ligação anterior já "consumiu".
+      if (lead.status === QUALIFIED_LEAD_STATUS && !callbacks.has(leadId)) {
+        const due = await hasPendingPastReturn(client, orgId, leadId, now);
+        if (due === null) return refuse('error');
+        if (!due) return refuse('lead_unavailable');
+      }
+    } else if (!recovery) {
       if (lead.status === QUALIFIED_LEAD_STATUS && !callbacks.has(leadId)) return refuse('lead_unavailable');
       // Retorno marcado para depois (sem um vencido em aberto): não liga antes da hora. Código próprio: o lead NÃO sai
       // da sessão, porque volta quando o retorno vencer.
@@ -592,12 +667,13 @@ export async function checkDialGate(input: {
         orgId,
         [{ leadId, lostAt: lead.lost_at as string, reasonName, returnDue: callbacks.has(leadId) }],
         now,
+        { ignoreFutureReturn: Boolean(redial) },
       );
       if (!held) return refuse('error');
       if (held.has(leadId)) return refuse('lead_unavailable');
     }
     // Recuperação: conversa real depois da perda (A-D4, salvo retorno vencido).
-    if (recovery) {
+    if (recovery && !redial) {
       if (!callbacks.has(leadId)) {
         const since = (await from(client, 'calls')
           .select(CALL_DAY_COLUMNS)
@@ -609,15 +685,17 @@ export async function checkDialGate(input: {
       }
     }
 
+    const holdTypes = holds.data.map((h) => h.tipo);
     const decision = evaluateLeadEligibility(
-      { ...callStats, holdTypes: holds.data.map((h) => h.tipo), callbackDue: callbacks.has(leadId) },
+      // Religação: das regras do lead só sobra o bloqueio de contato.
+      redial ? { callsToday: 0, lastCallAt: null, conversationToday: false, holdTypes } : { ...callStats, holdTypes, callbackDue: callbacks.has(leadId) },
       now,
       rules,
     );
     if (!decision.allowed) return refuse(decision.code);
 
     // Conversa sem ação final nos últimos 7 dias (depois das regras do dia, para "conversa hoje" seguir como `answered_today`).
-    if (!recovery) {
+    if (!recovery && !redial) {
       const noAction = await loadNoActionLeadIds(client, orgId, [leadId], now);
       if (!noAction) return refuse('error');
       if (noAction.has(leadId)) return refuse('lead_unavailable');
@@ -630,6 +708,7 @@ export async function checkDialGate(input: {
       attemptNo: callStats.callsToday + 1,
       leadId,
       ...(contactPhone && target ? { contactId: target.contactId } : {}),
+      ...(redial?.contactId ? { contactId: redial.contactId } : {}),
     };
   } catch (err) {
     console.error('[cockpit-auto-dial] gate:', err instanceof Error ? err.message : 'erro');
