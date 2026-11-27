@@ -20,7 +20,13 @@ import {
   mapJevResponse,
 } from './jev.client';
 import { aggregateDaily } from './monitoring';
-import { type EngineDeps, processEngineCall } from './orchestrator';
+import {
+  type EngineDeps,
+  buildCallTranscriptMirror,
+  findBacklogCallIds,
+  findDrainCandidates,
+  processEngineCall,
+} from './orchestrator';
 import { triggerTranscriptionEngine } from './trigger';
 
 type Row = Record<string, unknown>;
@@ -132,9 +138,10 @@ function makeDeps(db: unknown, over: Partial<EngineDeps> = {}) {
     assemblyAi: () => assembly,
     jev: () => jev,
     now: () => Date.now(),
+    mirrorToCall: vi.fn().mockResolvedValue(undefined),
     ...over,
   };
-  return { deps, transcribe, qualify };
+  return { deps, transcribe, qualify, mirrorToCall: deps.mirrorToCall as ReturnType<typeof vi.fn> };
 }
 
 describe('processEngineCall', () => {
@@ -176,10 +183,46 @@ describe('processEngineCall', () => {
   });
 
   it('não atendida: sem linha', async () => {
-    const { db, writes } = fakeDb({ ...CALL, answered_at: null });
+    const { db, writes } = fakeDb({ ...CALL, answered_at: null, connected: false });
     const { deps } = makeDeps(db);
     expect(await processEngineCall('call-1', deps)).toBe('not_eligible');
     expect(writes).toHaveLength(0);
+  });
+
+  it('sem answered_at mas connected (criada pela conferência da API4COM): transcreve', async () => {
+    const { db } = fakeDb({ ...CALL, answered_at: null, connected: true });
+    const { deps, transcribe } = makeDeps(db);
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(transcribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('transcrição nova é espelhada em calls com o texto do AssemblyAI', async () => {
+    const { db } = fakeDb(CALL);
+    const { deps, mirrorToCall } = makeDeps(db);
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
+    expect(mirrorToCall).toHaveBeenCalledTimes(1);
+    expect(mirrorToCall.mock.calls[0]?.[0]).toMatchObject({ id: 'call-1' });
+    expect(mirrorToCall.mock.calls[0]?.[1]).toBe('Olá, tudo bem? Pode me ligar amanhã.');
+  });
+
+  it('texto vazio do AssemblyAI não é espelhado', async () => {
+    const { db } = fakeDb(CALL);
+    const transcribe = vi.fn().mockResolvedValue({
+      text: '  ',
+      utterances: [],
+      speakersCount: 0,
+      audioSeconds: 60,
+      model: 'universal-3-5-pro',
+    });
+    const { deps, mirrorToCall } = makeDeps(db, { assemblyAi: () => ({ transcribe }) });
+    await processEngineCall('call-1', deps);
+    expect(mirrorToCall).not.toHaveBeenCalled();
+  });
+
+  it('falha no espelho não muda o resultado do motor', async () => {
+    const { db } = fakeDb(CALL);
+    const { deps } = makeDeps(db, { mirrorToCall: vi.fn().mockRejectedValue(new Error('boom')) });
+    expect(await processEngineCall('call-1', deps)).toBe('completed');
   });
 
   it('divergência de duração: não transcreve e registra duration_mismatch', async () => {
@@ -247,7 +290,7 @@ describe('processEngineCall', () => {
     expect(tables.call_transcripts_v2?.[0]?.error).toBeNull();
   });
 
-  it('caminho feliz: grava as duas linhas e não escreve em calls', async () => {
+  it('caminho feliz: grava as duas linhas; em calls só pelo espelho', async () => {
     const { db, tables, writes } = fakeDb(CALL);
     const { deps } = makeDeps(db);
     expect(await processEngineCall('call-1', deps)).toBe('completed');
@@ -544,6 +587,8 @@ describe('processEngineCall', () => {
     expect(transcribe).not.toHaveBeenCalled();
     expect(qualify).not.toHaveBeenCalled();
     expect(writes).toHaveLength(0);
+    // Rodar de novo uma ligação já transcrita espelha o texto existente (passivo).
+    expect(deps.mirrorToCall).toHaveBeenCalledWith(expect.objectContaining({ id: 'call-1' }), 'texto original');
     expect(tables.call_transcripts_v2?.[0]).toEqual(transcriptRow);
     expect(tables.call_qualifications?.[0]).toEqual(qualRow);
   });
@@ -880,5 +925,147 @@ describe('migration', () => {
     expect(sql).toContain('FORCE ROW LEVEL SECURITY');
     expect(sql).toContain('append-only');
     expect(sql).not.toMatch(/GRANT[^;]*DELETE/i);
+  });
+});
+
+describe('espelho em calls (buildCallTranscriptMirror)', () => {
+  const short = { duration_seconds: 120, metadata: null };
+  const long = { duration_seconds: 400, metadata: null };
+
+  it('não sobrescreve texto existente (Whisper)', () => {
+    expect(
+      buildCallTranscriptMirror({ transcription: 'whisper', transcription_status: 'completed' }, long, 'motor'),
+    ).toBeNull();
+  });
+
+  it('texto vazio do motor: nada a gravar', () => {
+    expect(buildCallTranscriptMirror({ transcription: null, transcription_status: 'skipped' }, short, '  ')).toBeNull();
+  });
+
+  it('skipped (curta para o Whisper): grava texto e completed', () => {
+    expect(
+      buildCallTranscriptMirror({ transcription: null, transcription_status: 'skipped' }, short, 'motor'),
+    ).toEqual({ transcription: 'motor', transcription_status: 'completed', transcription_error: null });
+  });
+
+  it('failed do Whisper (sem crédito): grava texto e completed', () => {
+    expect(
+      buildCallTranscriptMirror({ transcription: '', transcription_status: 'failed' }, long, 'motor'),
+    ).toEqual({ transcription: 'motor', transcription_status: 'completed', transcription_error: null });
+  });
+
+  it('5 min+ ainda pending: só o texto, status fica para o Whisper fazer o BANT', () => {
+    expect(buildCallTranscriptMirror({ transcription: null, transcription_status: 'pending' }, long, 'motor')).toEqual({
+      transcription: 'motor',
+    });
+    expect(buildCallTranscriptMirror({ transcription: null, transcription_status: null }, long, 'motor')).toEqual({
+      transcription: 'motor',
+    });
+  });
+
+  it('pending abaixo de 5 min (Whisper não vai rodar): completed', () => {
+    expect(
+      buildCallTranscriptMirror({ transcription: null, transcription_status: 'pending' }, short, 'motor'),
+    ).toMatchObject({ transcription_status: 'completed' });
+  });
+
+  it('com resultado da IA pendente (piso de 10 s): Whisper ainda roda, só o texto', () => {
+    expect(
+      buildCallTranscriptMirror(
+        { transcription: null, transcription_status: 'pending' },
+        { duration_seconds: 60, metadata: { ai_outcome: { status: 'pending' } } as never },
+        'motor',
+      ),
+    ).toEqual({ transcription: 'motor' });
+  });
+});
+
+/** Builder que registra filtros e devolve linhas fixas por tabela/consulta. */
+function backlogDb(opts: {
+  flag: { enabled: boolean; allow_org_ids: string[] | null } | null;
+  answered?: Array<{ id: string; started_at: string }>;
+  connected?: Array<{ id: string; started_at: string }>;
+}) {
+  const queries: Array<{ table: string; ops: Array<[string, unknown[]]> }> = [];
+  const db = {
+    from(table: string) {
+      const ops: Array<[string, unknown[]]> = [];
+      queries.push({ table, ops });
+      const result = () => {
+        if (table === 'app_flags') return { data: opts.flag ? [opts.flag] : [], error: null };
+        if (table === 'calls') {
+          const isConnected = ops.some(([m, a]) => m === 'eq' && a[0] === 'connected');
+          return { data: isConnected ? (opts.connected ?? []) : (opts.answered ?? []), error: null };
+        }
+        return { data: [], error: null };
+      };
+      const b: Record<string, unknown> = {};
+      for (const m of ['select', 'eq', 'gte', 'lt', 'is', 'in', 'not', 'order', 'limit']) {
+        b[m] = (...args: unknown[]) => (ops.push([m, args]), b);
+      }
+      b.then = (res: (v: unknown) => unknown) => Promise.resolve(result()).then(res);
+      return b;
+    },
+  };
+  return { db: db as never, queries };
+}
+
+describe('recuperação (findBacklogCallIds)', () => {
+  const NOW = Date.parse('2026-11-23T18:00:00Z');
+
+  it('flag desligada sem orgs: não consulta calls', async () => {
+    const { db, queries } = backlogDb({ flag: { enabled: false, allow_org_ids: [] } });
+    expect(await findBacklogCallIds(db, 5, NOW)).toEqual([]);
+    expect(queries.some((q) => q.table === 'calls')).toBe(false);
+  });
+
+  it('filtra pelas orgs da flag, janela de 30 dias, 30 min de idade, 30 s e sem linha no motor', async () => {
+    const { db, queries } = backlogDb({
+      flag: { enabled: false, allow_org_ids: ['org-1'] },
+      answered: [{ id: 'a', started_at: '2026-11-20T10:00:00Z' }],
+    });
+    await findBacklogCallIds(db, 5, NOW);
+    const calls = queries.filter((q) => q.table === 'calls');
+    expect(calls).toHaveLength(2);
+    for (const q of calls) {
+      expect(q.ops).toContainEqual(['in', ['org_id', ['org-1']]]);
+      expect(q.ops).toContainEqual(['gte', ['started_at', '2026-10-24T18:00:00.000Z']]);
+      expect(q.ops).toContainEqual(['lt', ['started_at', '2026-11-23T17:30:00.000Z']]);
+      expect(q.ops).toContainEqual(['gte', ['duration_seconds', 30]]);
+      expect(q.ops).toContainEqual(['is', ['call_transcripts_v2', null]]);
+    }
+    expect(calls[0]?.ops).toContainEqual(['not', ['answered_at', 'is', null]]);
+    expect(calls[1]?.ops).toContainEqual(['eq', ['connected', true]]);
+  });
+
+  it('flag global: sem filtro de org', async () => {
+    const { db, queries } = backlogDb({ flag: { enabled: true, allow_org_ids: null } });
+    await findBacklogCallIds(db, 5, NOW);
+    const calls = queries.filter((q) => q.table === 'calls');
+    expect(calls.every((q) => !q.ops.some(([m]) => m === 'in'))).toBe(true);
+  });
+
+  it('junta as duas consultas sem repetir, mais recentes primeiro, até o limite', async () => {
+    const { db } = backlogDb({
+      flag: { enabled: false, allow_org_ids: ['org-1'] },
+      answered: [
+        { id: 'a', started_at: '2026-11-20T10:00:00Z' },
+        { id: 'b', started_at: '2026-11-18T10:00:00Z' },
+      ],
+      connected: [
+        { id: 'a', started_at: '2026-11-20T10:00:00Z' },
+        { id: 'c', started_at: '2026-11-22T10:00:00Z' },
+      ],
+    });
+    expect(await findBacklogCallIds(db, 2, NOW)).toEqual(['c', 'a']);
+    expect(await findBacklogCallIds(db, 0, NOW)).toEqual([]);
+  });
+
+  it('findDrainCandidates usa a recuperação nas vagas que sobram', async () => {
+    const { db } = backlogDb({
+      flag: { enabled: false, allow_org_ids: ['org-1'] },
+      answered: [{ id: 'novo', started_at: '2026-11-20T10:00:00Z' }],
+    });
+    expect(await findDrainCandidates(db, 5, NOW)).toEqual(['novo']);
   });
 });
