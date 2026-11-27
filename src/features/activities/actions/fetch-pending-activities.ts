@@ -462,7 +462,7 @@ async function mergeWithScheduledReturns(
     ? `${SCHEDULED_LEAD_COLUMNS}, lost_at, loss_notes, loss_reason_id`
     : SCHEDULED_LEAD_COLUMNS;
   let scheduledQuery = from(supabase, 'scheduled_activities')
-    .select(`id, lead_id, channel, call_provider, kind, scheduled_at, notes, leads!inner(${scheduledLeadColumns})`)
+    .select(`id, lead_id, channel, call_provider, kind, scheduled_at, notes, contact_id, leads!inner(${scheduledLeadColumns})`)
     .eq('status', 'pending');
   if (ownerFilter) scheduledQuery = scheduledQuery.eq('leads.assigned_to', ownerFilter);
   const scheduledResult = (await scheduledQuery
@@ -475,6 +475,7 @@ async function mergeWithScheduledReturns(
       kind: ScheduledActivityKind | null;
       scheduled_at: string;
       notes: string | null;
+      contact_id: string | null;
       leads: RawLead;
     }> | null; error: { message: string } | null };
 
@@ -511,6 +512,7 @@ async function mergeWithScheduledReturns(
       callScript: row.notes,
       callProvider: (row.call_provider ?? null) as PendingActivity['callProvider'],
       scheduledKind: isLimbo ? 'limbo_followup' : isAntiNoShow ? 'anti_no_show' : 'return',
+      ...(!isLimbo && !isAntiNoShow && row.channel === 'phone' && row.contact_id ? { returnContactId: row.contact_id } : {}),
     };
   });
 

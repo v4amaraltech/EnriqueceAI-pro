@@ -1,6 +1,6 @@
 # Story: Cockpit — o retorno guarda o contato indicado
 
-**Status:** InProgress (entrega 2 de 3)
+**Status:** InProgress (entrega 3 de 3)
 
 ## Contexto
 Em "Indicou outra pessoa" o indicado é cadastrado como contato, mas o retorno não sabe quem é: o motor disca o contato principal. O Vini aprovou a opção completa, em 3 entregas.
@@ -29,7 +29,23 @@ Em "Indicou outra pessoa" o indicado é cadastrado como contato, mas o retorno n
 - [ ] Teste em tela com ligação real.
 
 ### B3 — aba Retornos / Atividades
-- [ ] O número do contato do retorno vem pré-selecionado.
+- [x] Tarefa de retorno com contato (gaveta de execução e painel lateral): o número do indicado vem selecionado, com "Retorno com {nome}"; o SDR pode trocar.
+- [x] Mesma regra da discagem (`loadCallbackTarget`): sem contato, apagado, sem telefone (avisa) ou erro = principal; indicado já atendeu após o horário do retorno = principal.
+- [x] Tarefa aberta antes do horário: já vem com o indicado.
+- [x] Ligação pela tarefa (API4COM e WhatsApp) grava `calls.contact_id` do número escolhido.
+- [x] Trocar de tarefa não carrega contato/telefone da anterior.
+- [x] Busca que falha ou passa de 10 s: abre no principal com o aviso "Não consegui carregar o contato do retorno. Ligando para o principal.".
+- [ ] Teste em tela com ligação real.
+
+Fora do escopo: mensagem de WhatsApp (segue abrindo no principal, com os contatos para escolher), Power Dialer, telefone mostrado nas listas.
+
+### Arquivos da B3
+- `src/features/activities/actions/fetch-return-contact.ts` (novo, + teste), `fetch-pending-activities.ts` (+ teste)
+- `src/features/activities/hooks/useReturnContact.ts` (novo)
+- `src/features/activities/components/ReturnContactNotice.tsx` (novo), `ReturnContact.test.tsx` (novo), `ActivityExecutionSheetContent.tsx` (+ teste)
+- `src/features/activities/types/index.ts`
+- `src/features/cockpit/components/CallSidePanel.tsx`
+- `src/features/cockpit/services/callback-contact.service.ts` (`returnId`, + teste)
 
 ## Pontos para B3 / depois
 - Não herdam: retorno novo que não é de ligação (cancela o anterior) e os caminhos do feedback da reunião / reabertura.
