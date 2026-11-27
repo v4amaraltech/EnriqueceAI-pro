@@ -113,14 +113,6 @@ describe('contato do retorno vencido', () => {
 
   it.each([
     ['sem contato', { scheduled_activities: [ret({ contact_id: null })] }],
-    [
-      'retorno futuro',
-      {
-        scheduled_activities: [
-          ret({ scheduled_at: new Date(NOW.getTime() + 60_000).toISOString() }),
-        ],
-      },
-    ],
     ['retorno concluído', { scheduled_activities: [ret({ status: 'completed' })] }],
     ['contato apagado', { lead_contacts: [] }],
     ['contato de outro lead', { lead_contacts: [contact({ lead_id: 'B' })] }],
@@ -130,6 +122,13 @@ describe('contato do retorno vencido', () => {
     const r = await gate(client);
     expect(r).toMatchObject({ ok: true, phone: MAIN });
     expect(r).not.toHaveProperty('contactId');
+  });
+
+  it('retorno futuro: o contato ainda não vale e o motor espera a hora', async () => {
+    const future = new Date(NOW.getTime() + 60_000).toISOString();
+    const client = setup({ scheduled_activities: [ret({ scheduled_at: future })] });
+    expect(await target(client)).toBeNull();
+    expect(await gate(client)).toEqual({ ok: false, code: 'return_scheduled' });
   });
 
   it('erro ao ler o contato não recusa o lead', async () => {

@@ -40,6 +40,32 @@ type Rows<T> = { data: T[] | null; error: { message: string } | null };
 export const POSTGREST_MAX_ROWS = 1000;
 
 /**
+ * Leads com retorno de LIGAÇÃO ainda por vencer (`scheduled_activities` pendente, telefone, `kind='return'`,
+ * `scheduled_at` > agora). Usada pelas duas filas do motor. Em blocos, sempre com `org_id`. `null` = falha de leitura.
+ */
+export async function loadFutureReturnLeadIds(
+  client: SupabaseClient,
+  orgId: string,
+  leadIds: string[],
+  now: Date,
+): Promise<Set<string> | null> {
+  const out = new Set<string>();
+  for (const part of chunk(leadIds, SIGNAL_CHUNK_SIZE)) {
+    const { data, error } = (await from(client, 'scheduled_activities')
+      .select('lead_id')
+      .eq('org_id', orgId)
+      .eq('status', 'pending')
+      .eq('channel', 'phone')
+      .eq('kind', 'return')
+      .in('lead_id', part)
+      .gt('scheduled_at', now.toISOString())) as Rows<{ lead_id: string }>;
+    if (error || !data || data.length >= POSTGREST_MAX_ROWS) return null;
+    for (const r of data) out.add(r.lead_id);
+  }
+  return out;
+}
+
+/**
  * Leads que ficam FORA da recuperação por regra de TypeScript (a função SQL não muda):
  *  1) "Sem interesse" por 90 dias. A data de referência NÃO é só `leads.lost_at`: ela só é carimbada quando o lead ENTRA
  *     em perdido (trigger `set_qualified_at`), então trocar o motivo de quem já estava perdido não a move. Vale o que
@@ -81,18 +107,9 @@ export async function loadRecoveryHoldoutLeadIds(
   }
 
   // 2) Retorno futuro pendente.
-  for (const part of chunk(subject.map((l) => l.leadId), SIGNAL_CHUNK_SIZE)) {
-    const { data, error } = (await from(client, 'scheduled_activities')
-      .select('lead_id')
-      .eq('org_id', orgId)
-      .eq('status', 'pending')
-      .eq('channel', 'phone')
-      .eq('kind', 'return')
-      .in('lead_id', part)
-      .gt('scheduled_at', now.toISOString())) as Rows<{ lead_id: string }>;
-    if (error || !data || data.length >= POSTGREST_MAX_ROWS) return null;
-    for (const r of data) out.add(r.lead_id);
-  }
+  const future = await loadFutureReturnLeadIds(client, orgId, subject.map((l) => l.leadId), now);
+  if (!future) return null;
+  for (const id of future) out.add(id);
   return out;
 }
 

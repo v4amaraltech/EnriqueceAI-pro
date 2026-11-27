@@ -31,6 +31,28 @@ export interface ScheduleCallbackInput {
   notes?: string;
 }
 
+export interface PendingReturn {
+  id: string;
+  scheduled_at: string;
+  created_at: string;
+}
+
+/** Retornos de LIGAÇÃO pendentes do lead. `null` = falha de leitura (quem chama não pode cancelar nada). */
+export async function loadPendingReturns(supabase: SupabaseClient, orgId: string, leadId: string): Promise<PendingReturn[] | null> {
+  const { data, error } = (await from(supabase, 'scheduled_activities' as never)
+    .select('id, scheduled_at, created_at')
+    .eq('org_id', orgId)
+    .eq('lead_id', leadId)
+    .eq('status', 'pending')
+    .eq('channel', 'phone')
+    .eq('kind', 'return')) as { data: PendingReturn[] | null; error: { message: string } | null };
+  if (error || !data) {
+    console.error('[schedule-callback] pending returns:', error?.message ?? 'sem dados', 'leadId=', leadId);
+    return null;
+  }
+  return data;
+}
+
 export async function scheduleCallbackActivity(
   supabase: SupabaseClient,
   input: ScheduleCallbackInput,
@@ -95,7 +117,7 @@ export async function scheduleCallbackActivity(
  * com retomada agendada mais cedo (nunca encurta; pausa sem data não é tocada).
  * Devolve a data de retomada se pausou/empurrou alguma.
  */
-async function pauseCadencesUntilReturn(
+export async function pauseCadencesUntilReturn(
   supabase: SupabaseClient,
   params: { orgId: string; leadId: string; userId: string; scheduledAt: string; scheduledActivityId: string },
 ): Promise<string | undefined> {

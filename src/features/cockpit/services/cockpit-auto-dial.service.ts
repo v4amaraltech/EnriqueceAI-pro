@@ -27,7 +27,7 @@ import { RECOVERY_BLOCKED_REASON_NAMES, isNoResumeReason, type AutoDialQueue } f
 import { ACTION_DISPOSITIONS, NO_ACTION_DISPOSITIONS, noActionCooldownCutoff } from '../utils/no-action-cooldown';
 import { isRealConversation } from '../utils/real-conversation';
 import { fetchCockpitCandidates } from './cockpit-candidates.service';
-import { POSTGREST_MAX_ROWS, fetchRecoveryCandidates, loadRecoveryHoldoutLeadIds } from './cockpit-recovery-candidates.service';
+import { POSTGREST_MAX_ROWS, fetchRecoveryCandidates, loadFutureReturnLeadIds, loadRecoveryHoldoutLeadIds } from './cockpit-recovery-candidates.service';
 import { isCockpitAutoDialEnabled, isCockpitAutoDialLive } from './cockpit-auto-dial-flag';
 import { loadSignalsInChunks } from './next-call-card.service';
 import { loadCallbackTarget } from './callback-contact.service';
@@ -377,6 +377,11 @@ export async function pickAutoDialLead(input: {
       const noAction = await loadNoActionLeadIds(client, viewer.orgId, cheap.map((r) => r.leadId).filter((id) => !unavailable.has(id)), now);
       if (!noAction) return { kind: 'error' };
       for (const id of noAction) unavailable.add(id);
+      // Retorno marcado para depois: o lead espera a hora (um retorno VENCIDO ainda não atendido continua valendo).
+      const notDue = cheap.map((r) => r.leadId).filter((id) => !unavailable.has(id) && !callbacks.has(id));
+      const future = await loadFutureReturnLeadIds(client, viewer.orgId, notDue, now);
+      if (!future) return { kind: 'error' };
+      for (const id of future) unavailable.add(id);
     }
     const live = cheap.filter((r) => !unavailable.has(r.leadId));
     const ids = live.map((r) => r.leadId);
@@ -556,6 +561,13 @@ export async function checkDialGate(input: {
     // Fila normal: lead qualificado (reunião marcada) não entra, salvo retorno vencido; conversa sem ação final fica 7 dias fora.
     if (!recovery) {
       if (lead.status === QUALIFIED_LEAD_STATUS && !callbacks.has(leadId)) return refuse('lead_unavailable');
+      // Retorno marcado para depois (sem um vencido em aberto): não liga antes da hora. Código próprio: o lead NÃO sai
+      // da sessão, porque volta quando o retorno vencer.
+      if (!callbacks.has(leadId)) {
+        const future = await loadFutureReturnLeadIds(client, orgId, [leadId], now);
+        if (!future) return refuse('error');
+        if (future.has(leadId)) return refuse('return_scheduled');
+      }
     }
 
     // Motivo de perda, nas DUAS filas (o navegador escolhe a fila e o lead; nada vale só porque veio da escolha):

@@ -6,7 +6,7 @@ import { AI_OUTCOME_REVIEW_CONFIDENCE, readAiOutcome, type AiOutcome } from '../
 import { applySdrCallResult } from './apply-sdr-call-result';
 import { mergeCallsMetadata } from './merge-calls-metadata';
 import { classifyCallOutcome, type CallOutcomeClassification, type CallOutcomeInput } from './call-outcome-classifier';
-import { scheduleCallbackActivity } from './schedule-callback.service';
+import { loadPendingReturns, pauseCadencesUntilReturn, scheduleCallbackActivity, type PendingReturn } from './schedule-callback.service';
 
 export interface AiOutcomeCall {
   id: string;
@@ -61,11 +61,27 @@ export function composeAiNotes(summary: string, sdrNotes: string | null): string
 }
 
 /**
+ * Qual retorno pendente vale mais que o da IA (`null` = a IA agenda como sempre):
+ *  - marcado depois do início desta ligação: o SDR já decidiu para esta conversa, mesmo que a IA tenha ouvido um horário;
+ *  - ainda por vencer e a IA NÃO ouviu data/hora (usaria o padrão): fica o combinado.
+ */
+export function returnToKeep(
+  pending: readonly PendingReturn[],
+  input: { timeFromLead: boolean; callStartedAt: string; now: Date },
+): PendingReturn | null {
+  const newestFirst = [...pending].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const duringCall = newestFirst.find((r) => Date.parse(r.created_at) >= Date.parse(input.callStartedAt));
+  if (duringCall) return duringCall;
+  if (input.timeFromLead) return null;
+  return newestFirst.find((r) => Date.parse(r.scheduled_at) > input.now.getTime()) ?? null;
+}
+
+/**
  * Se a ligação espera o resultado da IA (`ai_outcome.status = 'pending'`),
  * classifica a transcrição e aplica:
  *  - `sdr_disposition` (só se o SDR ainda não marcou nada);
  *  - `notes` = resumo da IA + anotação do SDR;
- *  - `callback_requested` → retorno por telefone agendado;
+ *  - `callback_requested` → retorno por telefone agendado, salvo se já houver um que vale mais (`returnToKeep`);
  *  - `metadata.ai_outcome = { status: 'done', ... }` (ou `failed` + Revisar).
  *
  * Trava contra rodar 2x (webhook + cron): só segue quem conseguir mudar o
@@ -160,22 +176,47 @@ export async function applyAiCallOutcome(
   }
 
   let scheduledActivityId: string | null = null;
+  let callbackAt = result.callback_at;
   if (result.disposition === 'callback_requested' && result.callback_at && sdrAlreadyMarked) {
     // O SDR já registrou o desfecho (e o retorno dele): agendar aqui cancelaria o horário que ele marcou.
     console.warn(`[ai-outcome] ligação ${call.id}: o SDR já marcou o desfecho; retorno da IA não agendado`);
   } else if (result.disposition === 'callback_requested' && result.callback_at) {
     if (call.lead_id && call.user_id) {
       try {
-        const scheduled = await scheduleCallbackActivity(supabase, {
-          orgId: call.org_id,
-          leadId: call.lead_id,
-          userId: call.user_id,
-          scheduledAt: result.callback_at,
-          notes: result.callback_time_from_lead
-            ? 'Retorno pedido pelo lead (identificado pela IA)'
-            : 'Lead pediu retorno sem horário — agendado para o próximo dia útil 9h (IA)',
+        const pending = await loadPendingReturns(supabase, call.org_id, call.lead_id);
+        // Sem saber o que já está marcado, não cria nem cancela: fica para o SDR revisar.
+        if (!pending) throw new Error('callback_existing_check_failed');
+        const keep = returnToKeep(pending, {
+          timeFromLead: result.callback_time_from_lead,
+          callStartedAt: call.started_at ?? call.created_at,
+          now: now(),
         });
-        scheduledActivityId = scheduled.id;
+        if (keep) {
+          scheduledActivityId = keep.id;
+          callbackAt = keep.scheduled_at;
+          console.warn(`[ai-outcome] ligação ${call.id}: mantido o retorno já marcado; a IA não reagendou`);
+          // Cadência ativa apesar do retorno futuro: pausa até o dia útil seguinte ao retorno que ficou.
+          if (Date.parse(keep.scheduled_at) > now().getTime()) {
+            await pauseCadencesUntilReturn(supabase, {
+              orgId: call.org_id,
+              leadId: call.lead_id,
+              userId: call.user_id,
+              scheduledAt: keep.scheduled_at,
+              scheduledActivityId: keep.id,
+            });
+          }
+        } else {
+          const scheduled = await scheduleCallbackActivity(supabase, {
+            orgId: call.org_id,
+            leadId: call.lead_id,
+            userId: call.user_id,
+            scheduledAt: result.callback_at,
+            notes: result.callback_time_from_lead
+              ? 'Retorno pedido pelo lead (identificado pela IA)'
+              : 'Lead pediu retorno sem horário — agendado para o próximo dia útil 9h (IA)',
+          });
+          scheduledActivityId = scheduled.id;
+        }
       } catch (err) {
         needsReview = true;
         error = err instanceof Error ? err.message : String(err);
@@ -191,7 +232,7 @@ export async function applyAiCallOutcome(
     disposition: result.disposition,
     confidence: result.confidence,
     summary: result.summary,
-    callback_at: result.callback_at,
+    callback_at: callbackAt,
     scheduled_activity_id: scheduledActivityId,
     model: result.model,
     needs_review: needsReview,
