@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 const events = vi.hoisted(() => ({ logLeadEvent: vi.fn(() => Promise.resolve()) }));
 vi.mock('@/features/leads/actions/log-lead-event', () => events);
 
-import { scheduleCallbackActivity } from './schedule-callback.service';
+import { loadPendingReturns, scheduleCallbackActivity } from './schedule-callback.service';
 
 type Op = { table: string; op: string; payload?: Record<string, unknown>; filters: Array<[string, string, unknown]> };
 
@@ -106,5 +106,30 @@ describe('scheduleCallbackActivity — herança do contato (IA)', () => {
       expect(await scheduleCallbackActivity(client as never, input)).toEqual({ id: 'sa-1' });
       expect(inserted(ops)).not.toHaveProperty('contact_id');
     }
+  });
+});
+
+describe('loadPendingReturns', () => {
+  const fake = (result: unknown) => {
+    const filters: Array<[string, unknown]> = [];
+    const chain: Record<string, unknown> = {};
+    chain.select = () => chain;
+    chain.eq = (col: string, val: unknown) => {
+      filters.push([col, val]);
+      return chain;
+    };
+    chain.then = (r: (v: unknown) => void) => r(result);
+    return { client: { from: () => chain } as never, filters };
+  };
+
+  it('lê só retornos de ligação pendentes do lead e da org', async () => {
+    const { client, filters } = fake({ data: [], error: null });
+    expect(await loadPendingReturns(client, 'org', 'lead-1')).toEqual([]);
+    expect(filters).toEqual([['org_id', 'org'], ['lead_id', 'lead-1'], ['status', 'pending'], ['channel', 'phone'], ['kind', 'return']]);
+  });
+
+  it('erro de leitura devolve null', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(await loadPendingReturns(fake({ data: null, error: { message: 'x' } }).client, 'org', 'lead-1')).toBeNull();
   });
 });

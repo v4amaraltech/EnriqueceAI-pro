@@ -177,3 +177,38 @@ describe('portão com retorno vencido', () => {
     expect(await gate(client)).toEqual({ ok: false, code: 'error' });
   });
 });
+
+describe('retorno marcado para depois fica fora da fila normal', () => {
+  const later = (leadId: string, over: Row = {}): Row => callback(leadId, -60, { id: `fut-${leadId}`, ...over });
+  const rows = [rpcRow('A', { cold_rank: 1 }), rpcRow('B', { cold_rank: 2 })];
+  const gate = (client: never) => checkDialGate({ orgId: ORG, userId: ME, leadId: 'A', now: NOW, client });
+
+  it('a escolha pula o lead e o portão recusa', async () => {
+    expect(await pickAutoDialLead({ viewer, now: NOW, client: setup(rows, { scheduled_activities: [later('A')] }) })).toMatchObject({ leadId: 'B' });
+    expect(await gate(setup(rows, { scheduled_activities: [later('A')] }))).toEqual({ ok: false, code: 'return_scheduled' });
+    expect(db.reads.filter((r) => r.table === 'scheduled_activities').every((r) => r.eq.org_id === ORG)).toBe(true);
+  });
+
+  it('um vencido ainda não atendido continua valendo, mesmo com outro futuro', async () => {
+    const tables = { scheduled_activities: [later('A'), callback('A', 30)] };
+    expect(await pickAutoDialLead({ viewer, now: NOW, client: setup(rows, tables) })).toMatchObject({ leadId: 'A', callback: true });
+    expect(await gate(setup(rows, tables))).toMatchObject({ ok: true });
+  });
+
+  it.each([
+    ['de outra org', { org_id: 'outra' }],
+    ['de outro canal', { channel: 'email' }],
+    ['de outro tipo', { kind: 'limbo_followup' }],
+    ['já concluído', { status: 'completed' }],
+  ])('futuro %s não segura o lead', async (_n, over) => {
+    expect(await pickAutoDialLead({ viewer, now: NOW, client: setup(rows, { scheduled_activities: [later('A', over)] }) })).toMatchObject({ leadId: 'A' });
+    expect(await gate(setup(rows, { scheduled_activities: [later('A', over)] }))).toMatchObject({ ok: true });
+  });
+
+  it('erro ao ler os retornos: não escolhe e não disca', async () => {
+    const client = setup(rows);
+    db.failReads.add('scheduled_activities');
+    expect(await pickAutoDialLead({ viewer, now: NOW, client })).toEqual({ kind: 'error' });
+    expect(await gate(client)).toEqual({ ok: false, code: 'error' });
+  });
+});

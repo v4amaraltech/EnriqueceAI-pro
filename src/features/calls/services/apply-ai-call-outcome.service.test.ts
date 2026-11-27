@@ -2,14 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 vi.mock('./apply-sdr-call-result', () => ({ applySdrCallResult: vi.fn() }));
-vi.mock('./schedule-callback.service', () => ({ scheduleCallbackActivity: vi.fn() }));
+vi.mock('./schedule-callback.service', () => ({
+  scheduleCallbackActivity: vi.fn(),
+  loadPendingReturns: vi.fn(),
+  pauseCadencesUntilReturn: vi.fn(),
+}));
 
 import { applyMergeCallsMetadataRpc, type MergeCallsMetadataArgs } from '@tests/mocks/merge-calls-metadata';
 
 import { applySdrCallResult } from './apply-sdr-call-result';
 import { applyAiCallOutcome, composeAiNotes } from './apply-ai-call-outcome.service';
 import type { CallOutcomeClassification } from './call-outcome-classifier';
-import { scheduleCallbackActivity } from './schedule-callback.service';
+import { loadPendingReturns, pauseCadencesUntilReturn, scheduleCallbackActivity } from './schedule-callback.service';
 
 const CALL = {
   id: 'call-1',
@@ -77,6 +81,8 @@ describe('applyAiCallOutcome', () => {
   beforeEach(() => {
     vi.mocked(applySdrCallResult).mockReset().mockResolvedValue({ success: true, data: { callId: CALL.id, leadId: 'lead-1', notesApplied: true } });
     vi.mocked(scheduleCallbackActivity).mockReset().mockResolvedValue({ id: 'sched-1' });
+    vi.mocked(loadPendingReturns).mockReset().mockResolvedValue([]);
+    vi.mocked(pauseCadencesUntilReturn).mockReset().mockResolvedValue(undefined);
   });
 
   it('sem ai_outcome pendente → não faz nada', async () => {
@@ -248,6 +254,59 @@ describe('applyAiCallOutcome', () => {
       const out = await applyAiCallOutcome(client, CALL, 'me liga amanhã', { classify: async () => callbackAi(), now: NOW });
       expect(scheduleCallbackActivity).toHaveBeenCalledTimes(1);
       expect(out).toMatchObject({ scheduled_activity_id: 'sched-1' });
+    });
+  });
+
+  describe('data já marcada × IA', () => {
+    // Ligação em 05/11 14:00 BRT (17:00Z); agora 17:05Z.
+    const OLD = { id: 'sa-old', scheduled_at: '2026-11-12T14:00:00.000Z', created_at: '2026-11-03T12:00:00.000Z' };
+    const AI_AT = '2026-11-06T12:00:00.000Z';
+
+    async function run(timeFromLead: boolean) {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { client } = fakeCalls({ metadata: { ai_outcome: { status: 'pending' } } });
+      return applyAiCallOutcome(client, CALL, 'me liga depois', {
+        classify: async () =>
+          classification({ disposition: 'callback_requested', callback_at: AI_AT, callback_time_from_lead: timeFromLead }),
+        now: NOW,
+      });
+    }
+
+    it('sem data dita pelo lead: mantém o retorno futuro e pausa a cadência por ele', async () => {
+      vi.mocked(loadPendingReturns).mockResolvedValue([OLD]);
+      const out = await run(false);
+      expect(scheduleCallbackActivity).not.toHaveBeenCalled();
+      expect(out).toMatchObject({ status: 'done', disposition: 'callback_requested', scheduled_activity_id: 'sa-old', callback_at: OLD.scheduled_at, needs_review: false });
+      expect(vi.mocked(pauseCadencesUntilReturn).mock.calls[0]?.[1]).toMatchObject({ leadId: 'lead-1', scheduledAt: OLD.scheduled_at, scheduledActivityId: 'sa-old' });
+      expect(applySdrCallResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('com data dita pelo lead: substitui o retorno antigo', async () => {
+      vi.mocked(loadPendingReturns).mockResolvedValue([OLD]);
+      expect(await run(true)).toMatchObject({ scheduled_activity_id: 'sched-1', callback_at: AI_AT });
+      expect(vi.mocked(scheduleCallbackActivity).mock.calls[0]?.[1]).toMatchObject({ scheduledAt: AI_AT });
+    });
+
+    it('marcado depois do início da ligação: fica o do SDR, mesmo com data dita', async () => {
+      vi.mocked(loadPendingReturns).mockResolvedValue([OLD, { ...OLD, id: 'sa-sdr', created_at: '2026-11-05T17:02:00.000Z' }]);
+      expect(await run(true)).toMatchObject({ scheduled_activity_id: 'sa-sdr' });
+      expect(scheduleCallbackActivity).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['sem retorno', []],
+      ['só um vencido', [{ ...OLD, scheduled_at: '2026-11-04T12:00:00.000Z' }]],
+    ])('%s: a IA agenda como antes', async (_n, pending) => {
+      vi.mocked(loadPendingReturns).mockResolvedValue(pending);
+      expect(await run(false)).toMatchObject({ scheduled_activity_id: 'sched-1' });
+      expect(pauseCadencesUntilReturn).not.toHaveBeenCalled();
+    });
+
+    it('falha ao ler o retorno existente: não cria nem cancela, marca para revisar', async () => {
+      vi.mocked(loadPendingReturns).mockResolvedValue(null);
+      const out = await run(false);
+      expect(scheduleCallbackActivity).not.toHaveBeenCalled();
+      expect(out).toMatchObject({ needs_review: true, scheduled_activity_id: null, error: 'callback_existing_check_failed' });
     });
   });
 

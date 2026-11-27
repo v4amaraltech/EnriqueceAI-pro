@@ -14,6 +14,8 @@ export type AutoDialGateCode =
   | 'live_mismatch'
   /** O número do cartão (contato do retorno ou principal) mudou depois de montado: recarrega o cartão. */
   | 'card_changed'
+  /** Há retorno marcado para depois: não liga antes da hora. */
+  | 'return_scheduled'
   | 'error';
 
 /** Recusas que levam o motor a Bloqueado (FR-11/FR-12). */
