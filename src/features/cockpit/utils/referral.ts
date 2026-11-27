@@ -53,7 +53,7 @@ export function referralCallNote(r: Referral): string {
   return [`Indicou ${who(r)}`, r.phone ? `tel ${r.phone}` : null, r.email].filter(Boolean).join(' – ');
 }
 
-/** Observação do retorno: o motor ainda disca o contato principal, então o contato do indicado vai aqui. */
+/** Observação do retorno: o contato do indicado também fica à vista na tarefa. */
 export function referralReturnNote(r: Referral): string {
   return [`Retorno com ${who(r)}`, r.phone ? `tel ${r.phone}` : r.email].filter(Boolean).join(' – ');
 }

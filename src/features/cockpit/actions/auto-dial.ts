@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { getAuthOrgIdResult } from '@/lib/auth/get-org-id';
 import { createServiceRoleClient } from '@/lib/supabase/service';
+import { normalizePhone } from '@/lib/utils/phone';
 
 import { initiateApi4ComCall } from '@/features/calls/actions/initiate-api4com-call';
 import { mergeCallsMetadata } from '@/features/calls/services/merge-calls-metadata';
@@ -42,6 +43,8 @@ const nextSchema = z.object({
   /** Fila do motor: 'normal' (padrão) ou 'recovery' (perdidos). */
   queue: queueSchema,
   excludeLeadIds: z.array(uuid).max(2000).default([]),
+  /** Leads cujo número do indicado a operadora recusou nesta sessão: o cartão volta ao principal. */
+  ignoreContactLeadIds: z.array(uuid).max(2000).optional(),
   /** Só do modo simulado: tentativas de mentira desta sessão (não há linha em `calls`). */
   simulatedAttempts: z.record(uuid, z.array(z.string().datetime()).max(10)).optional(),
 });
@@ -50,6 +53,12 @@ const dialSchema = z.object({
   queue: queueSchema,
   /** O modo que a página/hook ACREDITA estar (true = ligação real). Se o servidor decidir outro, recusa sem discar. */
   expectLive: z.boolean(),
+  /** Contato que o cartão mostra (null = telefone principal). Só conferência: o número nunca vem do navegador. */
+  expectContactId: uuid.nullable().optional(),
+  /** Dígitos do indicado que o cartão mostra. Só conferência (nunca é discado nem vai para log). */
+  expectContactPhone: z.string().max(40).optional(),
+  /** Número do indicado recusado: ligar para o principal. Só pode levar ao telefone do próprio lead. */
+  ignoreContact: z.boolean().optional(),
 });
 const callSchema = z.object({ callId: uuid });
 const noAnswerSchema = z.object({ callId: uuid, notConversation: z.boolean().optional() });
@@ -114,6 +123,7 @@ export async function getNextAutoDialCardAction(input: unknown): Promise<ActionR
     now,
     ranked: picked.result,
     tier: parsed.data.queue === 'recovery' ? undefined : picked.tier,
+    ...(parsed.data.ignoreContactLeadIds?.includes(picked.leadId) ? { ignoreContact: true } : {}),
   });
   if (card.status === 'error') return { success: false, error: card.error };
   if (card.status === 'disabled') return { success: true, data: { status: 'disabled' } };
@@ -140,21 +150,38 @@ export async function dialAutoLeadAction(input: unknown): Promise<ActionResult<A
   const { orgId, userId, role, supabase } = auth.data;
 
   const now = new Date();
-  const gate = await checkDialGate({ orgId, userId, leadId: parsed.data.leadId, now, queue: parsed.data.queue });
+  const { ignoreContact } = parsed.data;
+  const gate = await checkDialGate({ orgId, userId, leadId: parsed.data.leadId, now, queue: parsed.data.queue, ignoreContact });
   if (!gate.ok) return { success: true, data: { status: 'refused', code: gate.code } };
 
   // A página e o servidor precisam concordar no modo (simulado/real) ANTES de qualquer ligação: se as flags mudaram
   // com a página aberta, recusa e pede para recarregar (nada é discado).
   if (gate.live !== parsed.data.expectLive) return { success: true, data: { status: 'refused', code: 'live_mismatch' } };
 
+  // O cartão tem de mostrar o número que será discado: se o retorno venceu ou o contato mudou depois de montado, recusa.
+  const { expectContactId, expectContactPhone } = parsed.data;
+  if (
+    (expectContactId !== undefined && expectContactId !== (gate.contactId ?? null)) ||
+    // Telefone do indicado editado depois de montado o cartão: o webphone espera o número antigo.
+    (expectContactPhone !== undefined && normalizePhone(expectContactPhone) !== normalizePhone(gate.phone))
+  ) {
+    return { success: true, data: { status: 'refused', code: 'card_changed' } };
+  }
+
   // Sem a 3ª flag: simulado. NADA de rede, NADA em `calls`.
   if (!gate.live) return { success: true, data: { status: 'simulated', attemptNo: gate.attemptNo } };
 
-  const result = await initiateApi4ComCall({ phone: gate.phone, leadId: gate.leadId });
+  const result = await initiateApi4ComCall({
+    phone: gate.phone,
+    leadId: gate.leadId,
+    ...(gate.contactId ? { contactId: gate.contactId } : {}),
+  });
   if (!result.success) {
     if (result.code === 'ramal_busy') return { success: true, data: { status: 'ramal_busy', error: result.error } };
     // A-D12: número inválido (422) pula o lead em vez de pausar o motor. Só dá para reconhecer pela mensagem.
-    if (isInvalidNumberError(result.error)) return { success: true, data: { status: 'invalid_number', error: result.error } };
+    if (isInvalidNumberError(result.error)) {
+      return { success: true, data: { status: 'invalid_number', error: result.error, ...(gate.contactId ? { contactRefused: true } : {}) } };
+    }
     return { success: false, error: result.error };
   }
   const { callId, api4comId } = result.data;

@@ -13,6 +13,7 @@ import { callNoteKey, readCallNote, writeCallNote } from '../utils/call-note-dra
 import { formatLostAgo } from '../utils/lead-card';
 import { leadCardFromCallContext } from '../utils/lead-card-from-context';
 
+import { CallbackContactNotice } from './CallbackContactNotice';
 import { CallHistoryList } from './CallHistoryList';
 import { CallLeadCard } from './CallLeadCard';
 import { LeadQuickActions } from './LeadQuickActions';
@@ -124,6 +125,7 @@ export function MotorLeadSidePanel({
               {contact}
               {ctx.decisionMaker.phone ? ` · ${ctx.decisionMaker.phone}` : ''}
             </p>
+            <CallbackContactNotice contact={card.callbackContact} />
             {showsRecoveryTag({ queue, status: ctx.company.status }) && (
               <div className="mt-1.5">
                 <RecoveryTag reason={extras?.lossReasonName} />

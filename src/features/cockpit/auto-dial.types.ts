@@ -12,6 +12,8 @@ export type AutoDialGateCode =
   | 'lead_unavailable'
   /** O servidor decidiu um modo (simulado/real) diferente do que a página esperava: nada é discado (A-F11). */
   | 'live_mismatch'
+  /** O número do cartão (contato do retorno ou principal) mudou depois de montado: recarrega o cartão. */
+  | 'card_changed'
   | 'error';
 
 /** Recusas que levam o motor a Bloqueado (FR-11/FR-12). */
@@ -45,7 +47,8 @@ export type AutoDialDialResult =
   | { status: 'refused'; code: AutoDialGateCode }
   | { status: 'ramal_busy'; error: string }
   /** Número inválido (erro 422 da API4COM): o lead sai da sessão e o motor segue (A-D12). */
-  | { status: 'invalid_number'; error: string };
+  /** `contactRefused`: o número recusado era o do contato do retorno (o lead não sai; a próxima vai ao principal). */
+  | { status: 'invalid_number'; error: string; contactRefused?: boolean };
 
 /** Fim de ligação sem atendimento (`resolveAutoDialNoAnswerAction`, FR-6/FR-7). */
 export type AutoDialNoAnswerResult =

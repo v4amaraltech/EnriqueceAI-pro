@@ -94,7 +94,7 @@ describe('ReferContactDialog: salvar e próximo passo', () => {
     expect(appendCallNote).toHaveBeenCalledWith('lead-1', LINE);
     expect(scheduleCallback).not.toHaveBeenCalled();
     expect(screen.getByText('Isso cancela qualquer retorno já agendado para este lead.')).toBeInTheDocument();
-    expect(screen.getByText(/o motor ainda disca o contato principal/)).toBeInTheDocument();
+    expect(screen.getByText(/a discagem liga para José Lima; sem telefone, liga para o contato principal/)).toBeInTheDocument();
 
     await click('refer-continue');
     expect(scheduleCallback).toHaveBeenCalledWith({
