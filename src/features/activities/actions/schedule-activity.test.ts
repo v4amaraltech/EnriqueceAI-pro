@@ -29,7 +29,7 @@ function makeClient(respond: (call: Call) => unknown) {
       const call: Call = { table, ops: [] };
       calls.push(call);
       const chain: Record<string, unknown> = {};
-      for (const m of ['insert', 'update', 'select', 'eq', 'neq', 'in', 'lt']) {
+      for (const m of ['insert', 'update', 'select', 'eq', 'neq', 'in', 'lt', 'not', 'order', 'limit']) {
         chain[m] = (...args: unknown[]) => {
           call.ops.push([m, args]);
           return chain;
@@ -239,7 +239,7 @@ describe('scheduleActivity — contato do retorno', () => {
   const schedule = (contactId?: string) =>
     scheduleActivity({ leadId: LEAD, channel: 'phone', scheduledAt: RETURN_AT, ...(contactId ? { contactId } : {}) });
   const inserted = () =>
-    client.calls.find((c) => c.table === 'scheduled_activities')!.ops.find(([o]) => o === 'insert')![1][0];
+    client.calls.flatMap((c) => (c.table === 'scheduled_activities' ? c.ops : [])).find(([o]) => o === 'insert')![1][0];
   const contactCalls = () => client.calls.filter((c) => c.table === 'lead_contacts');
 
   it('com contato do lead, grava contact_id (conferindo lead e org)', async () => {
@@ -273,5 +273,86 @@ describe('scheduleActivity — contato do retorno', () => {
     expect(contactCalls()).toHaveLength(0);
     expect(inserted()).not.toHaveProperty('contact_id');
     expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('scheduleActivity — herança do contato do retorno substituído', () => {
+  const CONTACT = '44444444-4444-4444-4444-444444444444';
+  let client: ReturnType<typeof makeClient>;
+  let previous: { contact_id: string } | null;
+  let previousFails: boolean;
+  let contactRow: { id: string } | null;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    previous = { contact_id: CONTACT };
+    previousFails = false;
+    contactRow = { id: CONTACT };
+    client = makeClient((call) => {
+      if (call.table === 'scheduled_activities') {
+        if (call.ops.some(([o]) => o === 'insert')) return { data: { id: 'sa-1' }, error: null };
+        if (previousFails) throw new Error('boom');
+        return { data: previous, error: null };
+      }
+      if (call.table === 'leads') return { data: { id: LEAD }, error: null };
+      if (call.table === 'lead_contacts') return { data: contactRow, error: null };
+      return { data: null, error: null };
+    });
+    service.createServiceRoleClient.mockReturnValue(makeClient(() => ({ data: null, error: null })));
+    auth.getAuthOrgIdResult.mockResolvedValue({
+      success: true,
+      data: { orgId: 'org-1', userId: 'u1', supabase: client },
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const run = (channel: 'phone' | 'email' = 'phone', contactId?: string) =>
+    scheduleActivity({ leadId: LEAD, channel, scheduledAt: RETURN_AT, ...(contactId ? { contactId } : {}) });
+  const activityCalls = () => client.calls.filter((c) => c.table === 'scheduled_activities');
+  const inserted = () => activityCalls().flatMap((c) => c.ops).find(([o]) => o === 'insert')![1][0];
+
+  it('herda o contato do retorno de ligação pendente, lendo antes do insert', async () => {
+    await run();
+    expect(inserted()).toMatchObject({ contact_id: CONTACT });
+    const read = activityCalls()[0]!;
+    for (const [col, value] of [['org_id', 'org-1'], ['lead_id', LEAD], ['status', 'pending'], ['channel', 'phone'], ['kind', 'return']]) {
+      expect(has(read, 'eq', col, value)).toBe(true);
+    }
+    expect(read.ops.some(([o]) => o === 'insert')).toBe(false);
+  });
+
+  it('sem retorno anterior com contato, o insert é o de sempre', async () => {
+    previous = null;
+    await run();
+    expect(inserted()).not.toHaveProperty('contact_id');
+  });
+
+  it('retorno que não é de ligação não herda nem consulta', async () => {
+    await run('email');
+    expect(inserted()).not.toHaveProperty('contact_id');
+    expect(activityCalls()).toHaveLength(1);
+  });
+
+  it('contato herdado que não é mais do lead: grava sem contato', async () => {
+    contactRow = null;
+    const r = await run();
+    expect(r.success).toBe(true);
+    expect(inserted()).not.toHaveProperty('contact_id');
+  });
+
+  it('falha na leitura da herança não perde o retorno', async () => {
+    previousFails = true;
+    const r = await run();
+    expect(r.success).toBe(true);
+    expect(inserted()).not.toHaveProperty('contact_id');
+  });
+
+  it('contato novo vale mais que o herdado: nem lê o anterior', async () => {
+    await run('phone', CONTACT);
+    expect(activityCalls()).toHaveLength(1);
   });
 });

@@ -118,6 +118,8 @@ export interface CallApproach {
 }
 
 export interface NextCallCardData {
+  /** Retorno vencido com contato indicado. `contactId` null = sem telefone válido: o número do cartão é o principal. */
+  callbackContact?: { name: string; contactId: string | null; refused?: boolean };
   context: CallContext;
   approach: CallApproach;
   /** Instante de geração (ISO), para tempos relativos estáveis entre servidor e cliente. */

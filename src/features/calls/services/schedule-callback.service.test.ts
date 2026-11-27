@@ -7,7 +7,10 @@ import { scheduleCallbackActivity } from './schedule-callback.service';
 
 type Op = { table: string; op: string; payload?: Record<string, unknown>; filters: Array<[string, string, unknown]> };
 
-function fakeSupabase(updateResults: Array<Array<{ id: string; cadence_id: string }>>) {
+function fakeSupabase(
+  updateResults: Array<Array<{ id: string; cadence_id: string }>>,
+  inherit: { previous?: { contact_id: string }; contact?: { id: string }; fails?: boolean } = {},
+) {
   const ops: Op[] = [];
   let enrollmentUpdates = 0;
   const client = {
@@ -19,13 +22,17 @@ function fakeSupabase(updateResults: Array<Array<{ id: string; cadence_id: strin
         if (table === 'cadence_enrollments' && op.op === 'update') return { data: updateResults[enrollmentUpdates++] ?? [], error: null };
         return { data: null, error: null };
       };
-      for (const m of ['eq', 'neq', 'lt']) {
+      for (const m of ['eq', 'neq', 'lt', 'not', 'order', 'limit']) {
         chain[m] = (col: string, val: unknown) => {
           op.filters.push([m, col, val]);
           return chain;
         };
       }
       chain.select = () => chain;
+      chain.maybeSingle = () => {
+        if (inherit.fails) return Promise.reject(new Error('boom'));
+        return Promise.resolve({ data: (table === 'lead_contacts' ? inherit.contact : inherit.previous) ?? null, error: null });
+      };
       chain.single = () => Promise.resolve(result());
       chain.insert = (payload: Record<string, unknown>) => {
         op.op = 'insert';
@@ -79,5 +86,25 @@ describe('scheduleCallbackActivity — pausa a cadência até o retorno', () => 
 
     expect(r).toEqual({ id: 'sa-1' });
     expect(events.logLeadEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('scheduleCallbackActivity — herança do contato (IA)', () => {
+  const CONTACT = '44444444-4444-4444-4444-444444444444';
+  const inserted = (ops: Op[]) => ops.find((o) => o.table === 'scheduled_activities' && o.op === 'insert')!.payload!;
+
+  it('herda o contato do retorno pendente substituído', async () => {
+    const { client, ops } = fakeSupabase([[], []], { previous: { contact_id: CONTACT }, contact: { id: CONTACT } });
+    await scheduleCallbackActivity(client as never, input);
+    expect(inserted(ops)).toMatchObject({ contact_id: CONTACT });
+  });
+
+  it('sem anterior, contato inválido ou erro: agenda igual, sem contact_id', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const inherit of [{}, { previous: { contact_id: CONTACT } }, { fails: true }]) {
+      const { client, ops } = fakeSupabase([[], []], inherit);
+      expect(await scheduleCallbackActivity(client as never, input)).toEqual({ id: 'sa-1' });
+      expect(inserted(ops)).not.toHaveProperty('contact_id');
+    }
   });
 });

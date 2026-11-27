@@ -123,7 +123,7 @@ describe('motor simulado (FR-18)', () => {
     expect(result.current.state).toMatchObject({ phase: 'countdown', secondsLeft: 5 });
     expect(getNextAutoDialCardAction).toHaveBeenCalledWith({ excludeLeadIds: [], simulatedAttempts: {} });
     await advance(5000);
-    expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: false });
+    expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: false, expectContactId: null });
     expect(result.current.state.phase).toBe('in-call');
     expect(result.current.callId).toBe('sim-A-1');
     await advance(8000);
@@ -305,7 +305,7 @@ describe('fila (queue)', () => {
     await startIt(result);
     await advance(5000);
     expect(getNextAutoDialCardAction).toHaveBeenCalledWith({ excludeLeadIds: [], simulatedAttempts: {} });
-    expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: false });
+    expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: false, expectContactId: null });
     first.unmount(); // uma aba só: solta o lock antes de abrir outro motor
     const explicit = renderHook(() => useCockpitAutoDial({ enabled: true, live: false, queue: 'normal' }));
     await startIt(explicit.result);
@@ -317,7 +317,7 @@ describe('fila (queue)', () => {
     await startIt(result);
     await advance(5000);
     expect(getNextAutoDialCardAction).toHaveBeenCalledWith(expect.objectContaining({ queue: 'recovery', excludeLeadIds: [] }));
-    expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: false, queue: 'recovery' });
+    expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: false, expectContactId: null, queue: 'recovery' });
   });
 });
 
@@ -349,7 +349,7 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     await startIt(result);
     await advance(5000);
     // o navegador manda só o leadId; o telefone é lido no servidor
-    expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: true });
+    expect(dialAutoLeadAction).toHaveBeenCalledWith({ leadId: 'A', expectLive: true, expectContactId: null });
     expect(setWebphoneCallContext).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call-1', ownerHandlesResult: true, hideNotes: true, dialToken: 'tok' }));
     expect(result.current.state.phase).toBe('awaiting-session');
 
@@ -478,6 +478,27 @@ describe('motor real (as 3 flags), com a discagem MOCKADA', () => {
     expect(result.current.state).toMatchObject({ phase: 'countdown' });
     expect(result.current.skippedLeads).toEqual([{ leadId: 'A', reason: 'API4COM POST /calls failed (422): numero invalido' }]);
     expect(vi.mocked(getNextAutoDialCardAction).mock.calls[1]?.[0]).toMatchObject({ excludeLeadIds: ['A'] });
+  });
+
+  it('422 no número do INDICADO: o lead fica; a próxima vai ao principal; se o principal também recusar, aí sai', async () => {
+    const withContact = ok('A');
+    (withContact.data.card as { callbackContact?: unknown }).callbackContact = { name: 'José', contactId: 'c-1' };
+    const refused = ok('A');
+    (refused.data.card as { callbackContact?: unknown }).callbackContact = { name: 'José', contactId: null, refused: true };
+    vi.mocked(getNextAutoDialCardAction).mockResolvedValueOnce(withContact).mockResolvedValueOnce(refused).mockResolvedValue(ok('B'));
+    vi.mocked(dialAutoLeadAction)
+      .mockResolvedValueOnce({ success: true, data: { status: 'invalid_number', error: 'failed (422)', contactRefused: true } })
+      .mockResolvedValueOnce({ success: true, data: { status: 'invalid_number', error: 'failed (422)' } });
+    const { result } = renderHook(() => useCockpitAutoDial({ enabled: true, live: true }));
+    await startIt(result);
+    await advance(5000);
+    expect(vi.mocked(dialAutoLeadAction).mock.calls[0]?.[0]).toMatchObject({ expectContactId: 'c-1', expectContactPhone: '11999990000' });
+    expect(result.current.skippedLeads).toEqual([]);
+    expect(vi.mocked(getNextAutoDialCardAction).mock.calls[1]?.[0]).toMatchObject({ excludeLeadIds: [], ignoreContactLeadIds: ['A'] });
+    await advance(5000);
+    expect(dialAutoLeadAction).toHaveBeenLastCalledWith({ leadId: 'A', expectLive: true, expectContactId: null, ignoreContact: true });
+    expect(result.current.skippedLeads).toEqual([{ leadId: 'A', reason: 'failed (422)' }]);
+    expect(vi.mocked(getNextAutoDialCardAction).mock.calls[2]?.[0]).toMatchObject({ excludeLeadIds: ['A'] });
   });
 
   it('vários 422 seguidos pausam o motor (guarda contra laço)', async () => {

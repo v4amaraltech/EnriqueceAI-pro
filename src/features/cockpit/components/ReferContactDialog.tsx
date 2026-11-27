@@ -144,7 +144,7 @@ function NextStep({
         </p>
       )}
       <p className="rounded-md border border-amber-500/60 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">{WARNING_CANCELS}</p>
-      <p className="text-muted-foreground text-xs">Quando o retorno vencer, ligue para {name} pelo lead; o motor ainda disca o contato principal.</p>
+      <p className="text-muted-foreground text-xs">Quando o retorno vencer, a discagem liga para {name}; sem telefone, liga para o contato principal.</p>
       {error && (
         <p className="text-destructive text-xs" role="alert" data-testid="refer-error">
           {error}

@@ -12,11 +12,11 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAppUrl } from '@/lib/utils/app-url';
-import { isUuid } from '@/lib/utils/uuid';
 import { getCalendarConnection, createCalendarEvent } from '@/features/integrations/services/calendar.service';
 import { logLeadEvent } from '@/features/leads/actions/log-lead-event';
 
 import { cadenceResumeAfterReturn } from '../utils/callback-resume';
+import { inheritReturnContactId, resolveReturnContactId } from '../utils/return-contact';
 
 const scheduleActivitySchema = z.object({
   leadId: z.string().uuid(),
@@ -63,7 +63,12 @@ export async function scheduleActivity(
     .maybeSingle()) as { data: { id: string } | null };
   if (!ownLead) return { success: false, error: 'Lead não encontrado' };
 
-  const returnContactId = contactId ? await resolveReturnContactId(supabase, orgId, leadId, contactId) : null;
+  // Sem contato novo, um retorno de LIGAÇÃO herda o do pendente que ele substitui (lido antes do insert/cancelamento).
+  const returnContactId = contactId
+    ? await resolveReturnContactId(supabase, orgId, leadId, contactId)
+    : channel === 'phone'
+      ? await inheritReturnContactId(supabase, orgId, leadId)
+      : null;
 
   // Create scheduled activity
   const { data, error } = (await from(supabase, 'scheduled_activities' as never)
@@ -150,27 +155,6 @@ export async function scheduleActivity(
   revalidatePath(`/leads/${leadId}`);
 
   return { success: true, data: { id: data.id, calendarFailed, cadencePausedUntil } };
-}
-
-/** O contato só vale se for deste lead e desta org; senão o retorno segue sem ele. */
-async function resolveReturnContactId(
-  supabase: SupabaseClient,
-  orgId: string,
-  leadId: string,
-  contactId: string,
-): Promise<string | null> {
-  if (isUuid(contactId)) {
-    const { data, error } = (await from(supabase, 'lead_contacts')
-      .select('id')
-      .eq('id', contactId)
-      .eq('lead_id', leadId)
-      .eq('org_id', orgId)
-      .maybeSingle()) as { data: { id: string } | null; error: { message: string } | null };
-    if (data) return data.id;
-    if (error) console.warn('[schedule-activity] contact check failed:', error.message, 'leadId=', leadId);
-  }
-  console.warn('[schedule-activity] return saved without contact (not found for this lead). leadId=', leadId);
-  return null;
 }
 
 /**

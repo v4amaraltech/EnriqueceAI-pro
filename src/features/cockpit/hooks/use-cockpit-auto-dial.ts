@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { scheduleActivity } from '@/features/activities/actions/schedule-activity';
 import { useCallHangupDetection } from '@/features/calls/hooks/use-call-hangup-detection';
 import type { CallDisposition } from '@/features/calls/types';
+import { normalizePhone } from '@/lib/utils/phone';
 import { AUTO_DIAL_ANSWER_TIMEOUT_MS, AUTO_DIAL_COUNTDOWN_SECONDS } from '@/features/activities/utils/auto-dialer';
 import {
   RAMAL_BUSY_PAUSE_MESSAGE,
@@ -202,6 +203,8 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   const webphone = useApi4ComWebphone();
 
   const excluded = useRef(new Set<string>());
+  // Leads cujo número do indicado foi recusado nesta sessão: seguem na fila, ligando para o principal.
+  const ignoreContact = useRef(new Set<string>());
   const simulatedAttempts = useRef<Record<string, string[]>>({});
   const current = useRef<CurrentLead | null>(null);
   const loading = useRef<Promise<CurrentLead | null> | null>(null);
@@ -255,6 +258,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     const result = await getNextAutoDialCardAction({
       ...(queue === 'recovery' ? { queue } : {}),
       excludeLeadIds: [...excluded.current],
+      ...(ignoreContact.current.size ? { ignoreContactLeadIds: [...ignoreContact.current] } : {}),
       ...(live ? {} : { simulatedAttempts: simulatedAttempts.current }),
     }).catch(() => null);
     if (!result || !result.success) {
@@ -354,10 +358,17 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
   });
 
   /** 422: pula o lead (fica excluído da sessão com o motivo) e segue; conta no limite de recusas seguidas. */
-  const skipForInvalidNumber = useEffectEvent((leadId: string, reason: string) => {
-    excluded.current.add(leadId);
-    setSkippedLeads((prev) => [...prev, { leadId, reason }]);
-    toast.info('Número inválido: lead pulado nesta sessão.');
+  const skipForInvalidNumber = useEffectEvent((leadId: string, reason: string, contactRefused?: boolean) => {
+    // Número do INDICADO recusado: o lead fica; a próxima tentativa liga para o principal. Só acontece uma vez por lead
+    // (com `ignoreContact` o servidor não devolve mais `contactRefused`), então não há laço.
+    if (contactRefused && !ignoreContact.current.has(leadId)) {
+      ignoreContact.current.add(leadId);
+      toast.info('Número do indicado recusado, ligando para o principal na próxima tentativa.');
+    } else {
+      excluded.current.add(leadId);
+      setSkippedLeads((prev) => [...prev, { leadId, reason }]);
+      toast.info('Número inválido: lead pulado nesta sessão.');
+    }
     refusalsRef.current += 1;
     if (refusalsRef.current >= MAX_CONSECUTIVE_REFUSALS) {
       dispatch({ type: 'dial_failed', message: 'Vários números inválidos seguidos. A discagem parou para conferência.' });
@@ -385,7 +396,14 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     }
     confirmedRef.current = false;
 
-    const result = await dialAutoLeadAction({ leadId: lead.leadId, expectLive: live, ...(queue === 'recovery' ? { queue } : {}) }).catch(() => null);
+    const result = await dialAutoLeadAction({
+      leadId: lead.leadId,
+      expectLive: live,
+      expectContactId: lead.card.callbackContact?.contactId ?? null,
+      ...(lead.card.callbackContact?.contactId && lead.phone ? { expectContactPhone: normalizePhone(lead.phone) } : {}),
+      ...(ignoreContact.current.has(lead.leadId) ? { ignoreContact: true } : {}),
+      ...(queue === 'recovery' ? { queue } : {}),
+    }).catch(() => null);
     if (!result || !result.success) {
       if (reserved) cancelWebphoneDial(reserved.token);
       // Não se sabe se a operadora criou a chamada: não repetir sozinho.
@@ -402,7 +420,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     if (r.status === 'invalid_number') {
       // A-D12 (422): número inválido. O lead sai da sessão, com o motivo, e o motor segue para o próximo.
       if (reserved) cancelWebphoneDial(reserved.token);
-      skipForInvalidNumber(lead.leadId, r.error);
+      skipForInvalidNumber(lead.leadId, r.error, r.contactRefused);
       return;
     }
     refusalsRef.current = 0;
@@ -843,6 +861,7 @@ export function useCockpitAutoDial({ enabled, live, script = DEFAULT_SIMULATED_S
     setStartError(null);
     tooSoonRef.current = 0;
     excluded.current = new Set();
+    ignoreContact.current = new Set();
     concluded.current = new Set();
     concludedCalls.current = new Set();
     callbackScheduledCalls.current = new Set();
