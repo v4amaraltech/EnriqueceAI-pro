@@ -35,11 +35,13 @@ No histórico do lead, as abas **WhatsApp** e **Email** apareciam vazias ("Nenhu
 - Ficaram de fora (o SDR preenche): `[Link do Case]`, `[Selecione um Case]`, `[Seu Nome]`.
 - Scripts para desfazer: `docs/runbooks/2026-11-28-templates-*-VOLTAR.sql` — PR #699 MESCLADO (`aadfde8`, squash).
 
+## Conferido na tela de produção (28/11)
+- Lavanderia Santa Tereza (contato Brenda), em app.enriqueceai.com.br: a aba **WhatsApp** mostra as mensagens de 26/11 e 27/11; a aba **Email** mostra o e-mail de 25/11 como "Falhou".
+- Esses WhatsApps antigos aparecem com "Bom dia, [Nome]!" porque foram gravados com o texto do modelo antigo. Só os envios novos usam `{{primeiro_nome}}`.
+
 ## Pendências
-- **Ver a tela em produção:** a correção não foi vista no navegador (o login local no painel do app não funcionou). Abrir a Lavanderia Santa Tereza e conferir as duas abas.
 - `lead_messages` continua sem gravar WhatsApp manual e respostas de WhatsApp. As abas agora compensam pela linha do tempo, mas a captura em si não foi mexida.
 
 ## Fora de escopo e intactos
-- Cópia principal do repo na branch `feat/marcar-por-cima-closer-ocupado` (já mesclada no #681), com mudanças locais do Cockpit não tocadas. Nela ficaram os commits locais `b105e84c` e `24aba6a1` (mesmo conteúdo do #697 e #699).
-- Worktrees no scratchpad: `wt-chat` (`fix/conversa-junta-linha-do-tempo`, mesclado) e `wt-runbooks` (`docs/runbooks-modelos-variaveis`, PR #699).
-- Este handoff não foi commitado.
+- Cópia principal do repo na branch `feat/marcar-por-cima-closer-ocupado` (já mesclada no #681), com mudanças locais do Cockpit não tocadas. Nela ficaram os commits locais `b105e84c`, `24aba6a1` e `6555630f` (mesmo conteúdo do #697, #699 e #700).
+- Este handoff entrou no main pelo PR #700 (`e3fdc10`). Worktrees do scratchpad e branches dos PRs #697/#699/#700 (locais e no GitHub) foram apagados.
