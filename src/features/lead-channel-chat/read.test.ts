@@ -4,6 +4,8 @@ const state = vi.hoisted(() => ({
   enabled: true,
   capture: false,
   rows: [] as unknown[],
+  timeline: [] as unknown[],
+  refs: [] as unknown[],
   events: [] as unknown[],
   error: null as { message: string } | null,
   filters: [] as string[],
@@ -16,7 +18,12 @@ function chain(table: string) {
     state.filters.push(`${name}:${args.map(String).join(',')}`);
     return c;
   };
-  for (const name of ['select', 'eq', 'order', 'limit', 'or', 'in', 'maybeSingle']) c[name] = pass(name);
+  let refsQuery = false;
+  for (const name of ['select', 'eq', 'order', 'limit', 'or', 'in', 'maybeSingle', 'lte']) c[name] = pass(name);
+  c.gte = (...args: unknown[]) => {
+    refsQuery = true;
+    return pass('gte')(...args);
+  };
   c.then = (resolve: (value: unknown) => unknown) => {
     state.reads += 1;
     const data = table === 'leads'
@@ -25,7 +32,11 @@ function chain(table: string) {
         ? []
         : table === 'lead_message_status_events'
           ? state.events
-          : state.rows;
+          : table === 'interactions' && state.capture
+            ? state.timeline
+            : table === 'lead_messages' && refsQuery
+              ? state.refs
+              : state.rows;
     const error = table === 'leads' || table === 'lead_contacts' ? null : state.error;
     return Promise.resolve({ data, error }).then(resolve);
   };
@@ -57,6 +68,8 @@ beforeEach(() => {
   state.enabled = true;
   state.capture = false;
   state.rows = [];
+  state.timeline = [];
+  state.refs = [];
   state.events = [];
   state.error = null;
   state.filters = [];
@@ -99,7 +112,7 @@ describe('leitura da conversa', () => {
       message_content: `m${index}`,
       metadata: null,
       ai_generated: false,
-      created_at: `2026-11-10T${String(index % 24).padStart(2, '0')}:00:00.000Z`,
+      created_at: new Date(Date.UTC(2026, 10, 10, 23, 59) - index * 60_000).toISOString(),
     }));
     const result = await fetchLeadChannelPage({ leadId: LEAD, channel: 'whatsapp' });
     if (!result.success || !result.data.enabled) throw new Error('pagina');
@@ -168,6 +181,56 @@ describe('leitura da conversa', () => {
     const result = await fetchLeadChannelPage({ leadId: LEAD, channel: 'whatsapp' });
     if (!result.success || !result.data.enabled) throw new Error('pagina');
     expect(result.data.messages.map((message) => message.text)).toEqual(['Oi Roberta, tudo bem?']);
+  });
+
+  it('com a captura ligada mostra o WhatsApp que só está na linha do tempo', async () => {
+    state.capture = true;
+    state.rows = [{
+      id: '44444444-4444-4444-8444-444444444444',
+      channel: 'whatsapp',
+      direction: 'outbound',
+      body_text: 'Mensagem gravada',
+      body_html: null,
+      subject: null,
+      media: null,
+      thread_id: null,
+      ai_generated: false,
+      occurred_at: '2026-11-20T15:00:00.000Z',
+    }];
+    state.refs = [{
+      id: '44444444-4444-4444-8444-444444444444',
+      provider_message_id: 'wamid-1',
+      direction: 'outbound',
+      occurred_at: '2026-11-20T15:00:00.000Z',
+    }];
+    state.timeline = [
+      {
+        id: '55555555-5555-4555-8555-555555555555',
+        type: 'sent',
+        channel: 'whatsapp',
+        message_content: 'Mensagem gravada',
+        metadata: null,
+        ai_generated: false,
+        created_at: '2026-11-20T15:00:01.000Z',
+        external_id: 'wamid-1',
+      },
+      {
+        id: '66666666-6666-4666-8666-666666666666',
+        type: 'sent',
+        channel: 'whatsapp',
+        message_content: 'Enviada pelo SDR, sem gravação',
+        metadata: null,
+        ai_generated: false,
+        created_at: '2026-11-26T14:46:07.000Z',
+        external_id: null,
+      },
+    ];
+    const result = await fetchLeadChannelPage({ leadId: LEAD, channel: 'whatsapp' });
+    if (!result.success || !result.data.enabled) throw new Error('pagina');
+    expect(result.data.messages.map((message) => message.text)).toEqual([
+      'Mensagem gravada',
+      'Enviada pelo SDR, sem gravação',
+    ]);
   });
 
   it('recusa lead inválido sem consultar', async () => {
