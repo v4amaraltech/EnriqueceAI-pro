@@ -4,6 +4,7 @@ import { from } from '@/lib/supabase/from';
 import { createServiceRoleClient } from '@/lib/supabase/service';
 
 import { applySdrCallResult } from '@/features/calls/services/apply-sdr-call-result';
+import { undoAiReturnAfterRedial } from '@/features/calls/services/undo-ai-return-after-redial.service';
 import type { CallDisposition } from '@/features/calls/types';
 
 import type { AutoDialAnsweredClassification, AutoDialCarrierHangup, AutoDialConcludeResult, AutoDialNoAnswerResult } from '../auto-dial.types';
@@ -223,6 +224,7 @@ export async function confirmMotorOutcome(input: {
       via: 'webphone',
     });
     if (!written.success || !(await dispositionWasWritten(supabase, orgId, callId, input.disposition))) return { status: 'error' };
+    await undoAiReturnAfterRedial(supabase, { orgId, userId, call, disposition: input.disposition });
     return { status: 'confirmed' };
   } catch (err) {
     console.error('[cockpit-auto-dial] confirm:', err instanceof Error ? err.message : 'erro');
@@ -262,6 +264,7 @@ export async function concludeMotorCallExternally(input: {
       via: 'webphone',
     });
     if (!written.success || !(await dispositionWasWritten(supabase, orgId, callId, disposition))) return { status: 'error' };
+    await undoAiReturnAfterRedial(supabase, { orgId, userId, call, disposition });
     return { status: 'recorded', disposition };
   } catch (err) {
     console.error('[cockpit-auto-dial] conclude:', err instanceof Error ? err.message : 'erro');
