@@ -18,9 +18,17 @@ import {
   type ChatChannel,
   type ChatCursor,
   type ChatMessage,
-  type ChatSourceRow,
   type StoredLeadMessage,
 } from './model';
+import {
+  alreadyStoredIds,
+  isStatusOnly,
+  mergeStreams,
+  SAME_MESSAGE_WINDOW_MS,
+  type StoredRef,
+  type StreamPage,
+  type TimelineRow,
+} from './merge';
 
 export interface ChannelPage {
   enabled: true;
@@ -103,6 +111,9 @@ function quote(value: string): string {
   return `"${sanitizeFilterValue(value).replace(/"/g, '')}"`;
 }
 
+type Db = Parameters<typeof from>[0];
+type PageInput = { leadId: string; channel: ChatChannel; before?: ChatCursor | null };
+
 export async function fetchLeadChannelPage(input: {
   leadId: string;
   channel: ChatChannel;
@@ -122,24 +133,32 @@ export async function fetchLeadChannelPage(input: {
     return { success: true, data: { enabled: false } };
   }
 
-  const audience = await loadAudience(auth.data.supabase, auth.data.orgId, input.leadId);
+  const { supabase, orgId } = auth.data;
+  const audience = await loadAudience(supabase, orgId, input.leadId);
 
-  if (await isLeadMessagesCaptureEnabled(auth.data.orgId)) {
-    const stored = await fetchStoredMessages(auth.data.supabase, auth.data.orgId, input, audience);
-    if (stored) return stored;
+  const timeline = await fetchTimeline(supabase, orgId, input);
+  if (!timeline) return { success: false, error: CHAT_COPY.error };
+
+  if (await isLeadMessagesCaptureEnabled(orgId)) {
+    const stored = await fetchStored(supabase, orgId, input, audience);
+    if (stored) {
+      const merged = await mergeWithTimeline(supabase, orgId, input, audience, stored, timeline);
+      return { success: true, data: { enabled: true, ...merged, messages: chronological(merged.messages) } };
+    }
   }
 
-  return fetchInteractions(auth.data.supabase, auth.data.orgId, input, audience);
+  const page = mergeStreams([timelineStream(timeline, input.channel, audience, null)], CHANNEL_PAGE_SIZE);
+  return { success: true, data: { enabled: true, ...page, messages: chronological(page.messages) } };
 }
 
-async function fetchInteractions(
-  supabase: Parameters<typeof from>[0],
-  orgId: string,
-  input: { leadId: string; channel: ChatChannel; before?: ChatCursor | null },
-  audience: LeadAudience,
-): Promise<ActionResult<ChannelPage>> {
-  let query = from(supabase, 'interactions')
-    .select('id, type, channel, message_content, metadata, ai_generated, created_at')
+interface TimelineFetch {
+  rows: TimelineRow[];
+  hasMore: boolean;
+}
+
+async function fetchTimeline(db: Db, orgId: string, input: PageInput): Promise<TimelineFetch | null> {
+  let query = from(db, 'interactions')
+    .select('id, type, channel, message_content, metadata, ai_generated, created_at, external_id')
     .eq('lead_id', input.leadId)
     .eq('org_id', orgId)
     .eq('channel', input.channel)
@@ -154,40 +173,46 @@ async function fetchInteractions(
   }
 
   const { data, error } = (await query) as {
-    data: ChatSourceRow[] | null;
+    data: TimelineRow[] | null;
     error: { message: string } | null;
   };
-  if (error) return { success: false, error: CHAT_COPY.error };
-
+  if (error) return null;
   const rows = data ?? [];
-  const hasMore = rows.length > CHANNEL_PAGE_SIZE;
-  const page = rows.slice(0, CHANNEL_PAGE_SIZE);
-  const messages = chronological(
-    page.flatMap((row) => {
-      const message = toChatMessage({ ...row, channel: input.channel }, audience);
-      return message ? [message] : [];
-    }),
-  );
-  const oldest = page[page.length - 1];
+  return { rows: rows.slice(0, CHANNEL_PAGE_SIZE), hasMore: rows.length > CHANNEL_PAGE_SIZE };
+}
+
+/** `covered`: linhas que a conversa gravada já mostra. Nulo = só linha do tempo (captura desligada). */
+function timelineStream(
+  timeline: TimelineFetch,
+  channel: ChatChannel,
+  audience: LeadAudience,
+  covered: Set<string> | null,
+): StreamPage {
   return {
-    success: true,
-    data: {
-      enabled: true,
-      messages,
-      hasMore,
-      cursor: oldest ? { createdAt: oldest.created_at, id: oldest.id } : null,
-    },
+    hasMore: timeline.hasMore,
+    entries: timeline.rows.map((row) => {
+      const hidden = covered !== null && (covered.has(row.id) || isStatusOnly(row.type));
+      return {
+        at: row.created_at,
+        id: row.id,
+        message: hidden ? null : toChatMessage({ ...row, channel }, audience),
+      };
+    }),
   };
 }
 
-async function fetchStoredMessages(
-  supabase: Parameters<typeof from>[0],
+interface StoredFetch {
+  stream: StreamPage;
+}
+
+async function fetchStored(
+  db: Db,
   orgId: string,
-  input: { leadId: string; channel: ChatChannel; before?: ChatCursor | null },
+  input: PageInput,
   audience: LeadAudience,
-): Promise<ActionResult<ChannelPage> | null> {
+): Promise<StoredFetch | null> {
   try {
-    let query = from(supabase, 'lead_messages')
+    let query = from(db, 'lead_messages')
       .select('id, channel, direction, body_text, body_html, subject, media, thread_id, ai_generated, occurred_at, lead_address')
       .eq('lead_id', input.leadId)
       .eq('org_id', orgId)
@@ -209,12 +234,11 @@ async function fetchStoredMessages(
     if (error) return null;
 
     const rows = data ?? [];
-    const hasMore = rows.length > CHANNEL_PAGE_SIZE;
     const page = rows.slice(0, CHANNEL_PAGE_SIZE);
     const ids = page.map((row) => row.id);
     const statuses = new Map<string, string>();
     if (ids.length > 0) {
-      const { data: events } = (await from(supabase, 'lead_message_status_events')
+      const { data: events } = (await from(db, 'lead_message_status_events')
         .select('message_id, status, occurred_at')
         .in('message_id', ids)
         .order('occurred_at', { ascending: false })) as {
@@ -225,26 +249,67 @@ async function fetchStoredMessages(
       }
     }
 
-    const oldest = page[page.length - 1];
     return {
-      success: true,
-      data: {
-        enabled: true,
-        messages: chronological(page.flatMap((row) => {
-          if (!isLeadConversation({
+      stream: {
+        hasMore: rows.length > CHANNEL_PAGE_SIZE,
+        entries: page.map((row) => ({
+          at: row.occurred_at,
+          id: row.id,
+          message: isLeadConversation({
             channel: input.channel,
             content: row.body_text,
             explicitAddress: row.lead_address,
             ...audience,
-          })) return [];
-          return [storedLeadMessageToChat({ ...row, channel: input.channel }, statuses.get(row.id) ?? null)];
+          })
+            ? storedLeadMessageToChat({ ...row, channel: input.channel }, statuses.get(row.id) ?? null)
+            : null,
         })),
-        hasMore,
-        cursor: oldest ? { createdAt: oldest.occurred_at, id: oldest.id } : null,
       },
     };
   } catch (err) {
     console.error('[lead-messages] leitura caiu para interactions:', err instanceof Error ? err.message : err);
     return null;
   }
+}
+
+/**
+ * Mensagens gravadas perto dos registros da página, para não mostrar o mesmo envio duas vezes.
+ * Consulta à parte: a mensagem gravada pode estar na página seguinte da outra fonte.
+ */
+async function storedRefsAround(db: Db, orgId: string, input: PageInput, rows: TimelineRow[]): Promise<StoredRef[]> {
+  const times = rows.map((row) => Date.parse(row.created_at)).filter((time) => !Number.isNaN(time));
+  if (times.length === 0) return [];
+  const start = new Date(Math.min(...times) - SAME_MESSAGE_WINDOW_MS).toISOString();
+  const end = new Date(Math.max(...times) + SAME_MESSAGE_WINDOW_MS).toISOString();
+  const { data, error } = (await from(db, 'lead_messages')
+    .select('id, provider_message_id, direction, occurred_at')
+    .eq('lead_id', input.leadId)
+    .eq('org_id', orgId)
+    .eq('channel', input.channel)
+    .gte('occurred_at', start)
+    .lte('occurred_at', end)) as { data: StoredRef[] | null; error: { message: string } | null };
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+async function mergeWithTimeline(
+  db: Db,
+  orgId: string,
+  input: PageInput,
+  audience: LeadAudience,
+  stored: StoredFetch,
+  timeline: TimelineFetch,
+) {
+  let covered: Set<string>;
+  try {
+    covered = alreadyStoredIds(timeline.rows, await storedRefsAround(db, orgId, input, timeline.rows));
+  } catch (err) {
+    // Sem como casar: mostra só a conversa gravada, como antes, em vez de duplicar.
+    console.error('[lead-chat] casamento com a linha do tempo:', err instanceof Error ? err.message : err);
+    return mergeStreams([stored.stream], CHANNEL_PAGE_SIZE);
+  }
+  return mergeStreams(
+    [stored.stream, timelineStream(timeline, input.channel, audience, covered)],
+    CHANNEL_PAGE_SIZE,
+  );
 }
